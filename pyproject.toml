@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fMRI"
+version = "0.0.1"
+description = "Functional PCA on fMRI data to extract dominant temporal components."
+readme = "README.rst"
+authors = [
+    { name = "Refael Kohen", email = "refael.kohen@gmail.com" }
+]
+maintainers = [
+    { name = "Refael Kohen", email = "refael.kohen@gmail.com" }
+]
+classifiers = [
+    # Add any classifiers you need.
+]
+license = { text = "GNU General Public License v3" }
+dependencies = [
+    "pip",
+    "bump2version==0.5.11",
+    "wheel==0.33.6",
+    "watchdog==6.0.0",
+    "tox==3.14.0",
+    "coverage==4.5.4",
+    "Sphinx==7.2.6",
+    "twine==5.0.0",
+    "ruff==0.3.5",
+    "pytest==6.2.4",
+    "matplotlib==3.10.1",
+    "nibabel==5.3.2",
+    "numpy==2.2.3",
+    "scipy==1.15.2"
+]
+
+
+[project.scripts]
+fmri-main = "fmri.cli.fmri_main:main"
+nifti-viewer = "fmri.cli.nifti_viewer:main"
+
+[project.optional-dependencies]
+dev = [
+    "coverage", # for testing
+    "mypy", # for type-checking
+    "pytest", # for testing
+    "ruff"       # for linting
+]
+
+[project.urls]
+bugs = "https://github.com/yanivassf-lab/fMRI/issues"
+changelog = "https://github.com/yanivassf-lab/fMRI/blob/master/changelog.md"
+homepage = "https://github.com/yanivassf-lab/fMRI"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.package-data]
+"*" = ["*.*"]
+
+[tool.mypy]
+files = "."
+strict = true
+warn_unreachable = true
+warn_no_return = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+allow_untyped_defs = true
+disable_error_code = "attr-defined"
