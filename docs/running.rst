@@ -15,7 +15,10 @@ Synopsis
              [--n-basis <INT>] \
              [--threshold <FLOAT>] \
              [--num-pca-comp <INT>] \
-             [--batch-size <INT>]
+             [--batch-size <INT>] \
+             [--TR <FLOAT>] \
+             [--processed <BOOL>] \
+             [--calc-penalty-accurately <optional>]
 
 Arguments
 ---------
@@ -43,6 +46,16 @@ Arguments
 
 \-\-batch-size `<INT>`
   Number of voxels processed per batch (default: 200).
+
+\-\-TR `<FLOAT>`
+  Repetition time (TR) in seconds. If not specified, the TR will be inferred from the NIfTI header (default: None).
+
+\-\-processed `<BOOL>`
+  If `True`, the input data is assumed to be preprocessed (e.g., motion-corrected, normalized).
+  If `False`, the pipeline will apply basic preprocessing steps (default: `False`).
+
+\-\-calc-penalty-accurately `<optional>`
+  If specified, the penalty matrix will be calculated with higher accuracy. (default: not set).
 
 Examples
 --------

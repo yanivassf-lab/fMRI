@@ -6,8 +6,7 @@ Console script for fmri
 import argparse
 import os
 
-# import fmri # make sure your fmri module is importable
-from src.fmri.fmri import FunctionalMRI  # if fMRI is defined there
+from fmri.fmri import FunctionalMRI
 
 
 def main():
@@ -22,7 +21,12 @@ def main():
     parser.add_argument("--batch-size", type=int, default=200, help="Batch size for processing voxels (default: 200).")
     parser.add_argument("--output-folder", type=str, required=True,
                         help="Path to a existing folder where output files will be saved.")
-
+    parser.add_argument("--TR", type=float, default=None,
+                        help="Repetition time (TR) in seconds. If not provided, it will be extracted from the NIfTI header.")
+    parser.add_argument("--processed", action='store_true',
+                        help="If set, the data is already preprocessed. If not set, preprocessing will be applied.")
+    parser.add_argument("--calc-penalty-accurately", action='store_true',
+                        help="If set, the penalty matrix will be calculated using an accurate method. If not set, an approximate method will be used.")
     args = parser.parse_args()
 
     if not os.path.exists(args.output_folder):
@@ -33,7 +37,8 @@ def main():
     # Create an instance of fMRI and set the output folder.
     fmri_instance = FunctionalMRI(nii_file=args.nii_file, mask_file=args.mask_file, degree=args.degree,
                                   n_basis=args.n_basis, threshold=args.threshold, num_pca_comp=args.num_pca_comp,
-                                  batch_size=args.batch_size, output_folder=args.output_folder)
+                                  batch_size=args.batch_size, output_folder=args.output_folder, TR=args.TR,
+                                  processed=args.processed, calc_penalty_accurately=args.calc_penalty_accurately)
 
     # Run the analysis.
     fmri_instance.log_data()

@@ -1,5 +1,8 @@
+from typing import Tuple, Any
+
 import nibabel as nib
 import numpy as np
+from numpy import ndarray, dtype, float64
 from scipy.ndimage import uniform_filter
 from scipy.signal import butter, filtfilt
 
@@ -9,74 +12,55 @@ class LoadData:
         self.nii_file = nii_file
         self.mask_file = mask_file
 
-    def run_preprocessing(self) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, float]:
+
+    def load_data(self, TR: float = None, processed: bool = True) -> tuple[
+        ndarray[tuple[Any, int], dtype[float64]], Any, Any, float | Any]:
         """
-        Preprocess fMRI data for functional Principal Component Analysis (fPCA).
+        Load and preprocess fMRI data from a NIfTI file.
+        This function loads 4D fMRI data and a binary brain mask from specified NIfTI files.
+        It applies spatial smoothing and temporal filtering to the fMRI data if not already processed.
+        The function returns the processed time series data, the mask, the affine transformation matrix,
+        and the repetition time (TR).
+
+        Parameters:
+            filename: Path to the NIfTI file containing fMRI data.
+            TR: Repetition time in seconds. If None, it will be extracted from the NIfTI header.
+            processed: If True, returns preprocessed data; otherwise, applies preprocessing steps.
 
         Returns:
-        tuple:
-            - fdata_flat (ndarray): Filtered fMRI data, Time series extracted from masked voxels (shape: n_timepoints, n_voxels)
-            - fdata (ndarray): Filtered 4D fMRI data.
-            - srdata (ndarray): Spatially smoothed fMRI data.
-            - mask (ndarray): Binary mask array indicating brain voxels (same shape as volume).
-            - nii (Nifti1Image): The loaded fMRI NIfTI image object.
-            - TR (float): Repetition time (in seconds), used to determine Nyquist frequency.
-            # - rawdat (ndarray): Time series extracted from masked voxels (shape: n_timepoints, n_voxels).
-
-
-
-        Pipeline Steps:
-        1. Load subject's 4D fMRI data (NIfTI format).
-        2. Load brain mask indicating voxels of interest.
-        3. Apply 3D box smoothing to each time frame.
-        4. Extract voxel-wise time series using the mask.
-        5. Apply temporal bandpass filtering (0.01–0.4 Hz).
-
-        Notes:
-        - The function assumes file naming follows pattern: `{subjno}_drc144images.nii` and `{subjno}_mask.nii`
-        - Prepares data for functional PCA, which requires denoised, preprocessed time series data.
+            tuple: A tuple containing:
+                - data_flat: 2D array of time series data (shape: [time, voxels]).
+                - mask: 3D binary mask array indicating brain voxels.
+                - affine: Affine transformation matrix from the NIfTI header.
+                - TR: Repetition time in seconds.
         """
-        # nii_file = f"{subjno}_drc144images.nii"
-        nii, rdata = self.load_nifti_data(self.nii_file)  # Load the 4D fMRI data
-        sx, sy, sz, st = rdata.shape  # Extract shape for later use
 
-        bsl = rdata[..., 0]  # First time frame often used as baseline or reference image
-        TR = 1  # Assumed repetition time in seconds (can be changed if known)
+        nii_rdata, data = self.load_nifti_data(self.nii_file)  # Load the 4D fMRI data
+        sx, sy, sz, st = data.shape  # Extract shape for later use
 
         # Load binary brain mask (1 = brain voxel, 0 = background)
-        # mask_file = f"{subjno}_mask.nii"
-        nii, mask = self.load_nifti_data(self.mask_file)
+        nii_mask, mask = self.load_nifti_data(self.mask_file)
+        if not TR:
+            zoom = nii_rdata.header.get_zooms()
+            TR = zoom[3] if len(zoom) >= 4 else 2.0
 
         # Identify the coordinates of voxels within the mask
         xlocs, ylocs, zlocs = np.where(mask == 1)
 
-        # Initialize smoothed data array
-        srdata = np.zeros_like(rdata)
-
-        # Apply 3D smoothing to each time point independently
-        for i in range(st):
-            vol1 = rdata[..., i]
-            srdata[..., i] = self.smooth3_box(vol1)  # Spatial smoothing
-
-        # Extract raw time series data from voxels inside the mask
-        rawdat = np.zeros((st, len(xlocs)))  # [time, voxels]
-        for i in range(len(xlocs)):
-            rawdat[:, i] = srdata[xlocs[i], ylocs[i], zlocs[i], :]
-
-        # Apply temporal filtering
-        fdata = self.filter_fMRI(srdata, TR)
+        if not processed:
+            # Apply 3D smoothing to each time point independently
+            srdata = np.zeros_like(data)
+            for i in range(st):
+                vol1 = data[..., i]
+                srdata[..., i] = self.smooth3_box(vol1)  # Spatial smoothing
+            # Apply temporal filtering
+            data = self.filter_fMRI(srdata, TR)
 
         # Extract raw time series data from voxels inside the mask
-        fdata_flat = np.zeros((st, len(xlocs)))  # [time, voxels]
+        data_flat = np.zeros((st, len(xlocs)))  # [time, voxels]
         for i in range(len(xlocs)):
-            fdata_flat[:, i] = fdata[xlocs[i], ylocs[i], zlocs[i], :]
-
-        # TODO: original code. check if srdata need to be after mask
-        # return nii, fdata_flat.T, fdata, rawdat.T, srdata, mask
-        zoom = nii.header.get_zooms()
-        TR = zoom[3] if len(zoom) >= 4 else 2.0
-
-        return fdata_flat.T, fdata, srdata, rawdat.T, mask, nii.affine, TR
+            data_flat[:, i] = data[xlocs[i], ylocs[i], zlocs[i], :]
+        return data_flat.T, mask, nii_mask.affine, TR
 
     def load_nifti_data(self, filename: str):
         """
