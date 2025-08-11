@@ -8,7 +8,7 @@ Below is the step-by-step mathematical description of the method. The equations 
 
 B-Spline Representation of the Signal
 ---------------------------------------
-Let :math:`N` is number of the timepoints, and :math:`N` is the nuber of the voxels. Each voxel’s time series, denoted by
+Let :math:`n` is number of the timepoints, and :math:`N` is the nuber of the voxels. Each voxel’s time series, denoted by
 
 .. math::
 
@@ -59,7 +59,7 @@ The minimizer :math:`c` satisfies the penalized normal equations:
 
 Selection of :math:`\lambda` for each voxel using Generalized Cross-Validation (GCV)
 ------------------------------------------------------------------------------------
-For selection of :math:`\lambda`, the following is calculated separately for each voxel. The hat matrix :math:`H_\lambda` is calculated
+For selection of :math:`\lambda`, the following is calculated separately for each voxel. The hat matrix :math:`H_\lambda \in \mathbb{R}^{n \times n}` is calculated
 
 .. math::
 
@@ -97,7 +97,7 @@ The fPCA steps are as follows:
 
       \tilde{C} = C - \mu,\quad \text{with}\quad \mu = \frac{1}{N} \sum_{i=1}^{N} C_{i,:}.
 
-2. Compute the Penalized Covariance Matrix in the Spline Basis:
+2. Compute the Penalized Covariance Matrix :math:`\Sigma \in \mathbb{R}^{K \times K}` in the Spline Basis:
 
    .. math::
 
@@ -125,7 +125,7 @@ where the Gram matrix :math:`U \in \mathbb{R}^{K \times K}` is defined as:
 
    .. math::
 
-      \text{scores}_i = c_i\, U\, \phi.
+      \text{scores}_i = \tilde{c}_i\, U\, \phi.
 
    - The computed score indicates the contribution or importance of that voxel for the corresponding principal component.
    - Using the spatial information from the original brain mask, these voxel scores are then mapped back to a volume of the brain. This produces an importance map, saved as a file with the brain’s dimensions, where each voxel’s value indicates its contribution to the fPCA component.
@@ -137,9 +137,9 @@ where the Gram matrix :math:`U \in \mathbb{R}^{K \times K}` is defined as:
 
    .. math::
 
-      \psi(t) = F\, \phi.
+      \psi = F\, \phi.
 
-   The resulting function :math:`\psi(t)` is plotted as a graph (intensity plot) that illustrates the time-course of the fPCA component across the entire brain.
+   The resulting function :math:`\psi(t)=F_{t,:}\,\cdot \, \phi` is plotted as a graph (intensity plot) that illustrates the time-course of the fPCA component across the entire brain.
 
 
 

@@ -68,7 +68,7 @@ Run with all defaults (except output folder):
      --output-folder results/sub-01
 
 
-The argumen *threshold*:
+The argument *threshold*:
 ------------------------
 
     Maximum allowed mean absolute interpolation error when selecting the number of
