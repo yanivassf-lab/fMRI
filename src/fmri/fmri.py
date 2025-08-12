@@ -89,7 +89,7 @@ class FunctionalMRI:
         self.n_timepoints = self.fmri_data.shape[1]
         self.times = np.arange(self.n_timepoints)
         self.T_min = 0
-        self.T_max = self.n_timepoints * TR
+        self.T_max = (self.n_timepoints-1)  # Assuming time points are indexed from 0 to n_timepoints-1
         self.n_basis = n_basis  # min(20, self.n_timepoints // 10)
 
         ## step 1: load the NIfTI file and mask
