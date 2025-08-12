@@ -194,6 +194,7 @@ class FunctionalMRI:
         Returns:
             G (ndarray): penalty matrix of shape (n_basis, n_basis).
         """
+        logging.info(f"Computing (accurately) penalty matrix for {derivative_order}-th derivative...")
         deriv_funs = basis_funs.derivative(nu=derivative_order)
         n_basis = deriv_funs.c.shape[1]
         G = np.zeros((n_basis, n_basis))
@@ -225,6 +226,7 @@ class FunctionalMRI:
         Returns:
         - G: (n_basis x n_basis) approximated penalty matrix.
         """
+        logging.info(f"Computing (approximately) penalty matrix for {derivative_order}-th derivative...")
         # Compute the derivative of the basis functions
         deriv_funs = basis_funs.derivative(nu=derivative_order)
         x_vals = np.linspace(self.T_min, self.T_max, 1000)
@@ -355,7 +357,7 @@ class FunctionalMRI:
                 eigvecs_sorted[:, i] = -eigvecs_sorted[:, i]
             scores[:, i] = scores_i
         v_max_scores_pos = np.argmax(scores, axis=0)  # maximum score in each component
-        print(v_max_scores_pos, np.max(scores, axis=0))
+        # print(v_max_scores_pos, np.max(scores, axis=0))
         return scores, eigvecs_sorted, eigvals_sorted, v_max_scores_pos
 
     def voxel_index_to_coord(self, k):
