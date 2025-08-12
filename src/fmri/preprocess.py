@@ -1,4 +1,5 @@
-from typing import Tuple, Any
+import logging
+from typing import Any
 
 import nibabel as nib
 import numpy as np
@@ -11,7 +12,6 @@ class LoadData:
     def __init__(self, nii_file: str, mask_file: str):
         self.nii_file = nii_file
         self.mask_file = mask_file
-
 
     def load_data(self, TR: float = None, processed: bool = True) -> tuple[
         ndarray[tuple[Any, int], dtype[float64]], Any, Any, float | Any]:
@@ -48,6 +48,7 @@ class LoadData:
         xlocs, ylocs, zlocs = np.where(mask == 1)
 
         if not processed:
+            logging.info("Applying preprocessing steps: spatial smoothing and temporal filtering...")
             # Apply 3D smoothing to each time point independently
             srdata = np.zeros_like(data)
             for i in range(st):
@@ -55,6 +56,8 @@ class LoadData:
                 srdata[..., i] = self.smooth3_box(vol1)  # Spatial smoothing
             # Apply temporal filtering
             data = self.filter_fMRI(srdata, TR)
+        else:
+            logging.info("Loading data files without additional filtering.")
 
         # Extract raw time series data from voxels inside the mask
         data_flat = np.zeros((st, len(xlocs)))  # [time, voxels]
@@ -113,6 +116,11 @@ class LoadData:
         f_low = 0.4  # upper cutoff frequency in Hz
         nyquist = 1 / (2 * TR)
         Wn = [f_high / nyquist, f_low / nyquist]  # normalized cutoff frequencies
+
+        # Ensure Wn is within (0, 1)
+        if not (0 < Wn[0] < 1 and 0 < Wn[1] < 1):
+            raise ValueError(f"Invalid filter frequencies: Wn={Wn}. Generally it caused because of an incorrect value of "
+                             f"TR. Check TR value.")
 
         order = 3  # Butterworth filter order
         b, a = butter(order, Wn, btype='band')

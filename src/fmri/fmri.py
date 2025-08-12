@@ -92,26 +92,25 @@ class FunctionalMRI:
         self.T_max = self.n_timepoints * TR
         self.n_basis = n_basis  # min(20, self.n_timepoints // 10)
 
-        ##--- שלב 1: טעינת הקובץ ---
+        ## step 1: load the NIfTI file and mask
         # print("Loading NIfTI file...")
         # img = nib.load(nii_file)
-        # data = img.get_fdata()  # צורת הנתונים: (X, Y, Z, Time)
+        # data = img.get_fdata()  # shape: (X, Y, Z, Time)
         # X, Y, Z, T = data.shape
         # print(f"Data shape: {data.shape}")
         #
-        ##--- שלב 2: בניית מסכת מח פשוטה ---
+        ## step 2: build a simple brain mask
         # print("Building brain mask...")
-        # self.mask = np.mean(data, axis=3) > 100  # ערך סף פשוט
+        # self.mask = np.mean(data, axis=3) > 100  # simple threshold to create a mask
         # self.n_voxels = np.sum(self.mask)
         # print(f"Number of brain voxels: {self.n_voxels}")
         #
 
-    ## --- שלב 3: פריסת המידע למטריצה ---
     # print("Reshaping data...")
     ##   data_2d = data[brain_mask].T  # צורת הנתונים: (Time, Voxels)
     # data_2d = data[self.mask]  # צורת הנתונים: (Voxels, Time)
     #
-    ##--- שלב 4: ניקוי בסיסי (למשל Detrend) ---
+    ## step 4: basic preprocessing (e.g., Detrend)
     # print("Preprocessing signals...")
     # from scipy.signal import detrend
     #    # self.fmri_data = detrend(data_2d, axis=0)
@@ -399,7 +398,7 @@ class FunctionalMRI:
             plt.axis('off')
             impmap_fig = os.path.join(self.output_folder, f"eigenfunction_{i}_importance_map.png")
             plt.savefig(impmap_fig, dpi=300, bbox_inches='tight')
-            plt.show()
+            # plt.show()
 
             logging.info(f"Plotting signal intensity for eigenfunction {i}...")
             signal_intensity = F @ eigvecs_sorted[:, i]
@@ -409,9 +408,14 @@ class FunctionalMRI:
             plt.xlabel('Time (scans)')
             plt.ylabel('Intensity')
             plt.grid(True)
+            intence_txt = os.path.join(self.output_folder, f"eigenfunction_{i}_signal_intensity.txt")
+            with open(intence_txt, 'w') as f:
+                f.write(f"#Eigenfunction {i}:\n")
+                f.write(f"#Times:\n{' '.join(map(str,self.times))}\n")
+                f.write(f"#Signal intensity:\n{' '.join(map(str,signal_intensity))}\n")
             intence_fig = os.path.join(self.output_folder, f"eigenfunction_{i}_signal_intensity.png")
             plt.savefig(intence_fig, dpi=300, bbox_inches='tight')
-            plt.show()
+            # plt.show()
 
             v_max_scores_pos_i = v_max_scores_pos[i]
             Y_v_max_score = self.fmri_data[v_max_scores_pos_i]
@@ -439,9 +443,15 @@ class FunctionalMRI:
             # x = xlim[0] + 0.01 * (xlim[1] - xlim[0])  # Slightly inside from the left
             # y = ylim[1] - 0.01 * (ylim[1] - ylim[0])  # Slightly under top
             # plt.text(x, y, f"$x={x_c};y={y_c};z={z_c}$", fontsize=12, ha='left', va='top')
-            intence_fig = os.path.join(self.output_folder, f"eigenfunction_{i}_best_voxel.png")
-            plt.savefig(intence_fig, dpi=300, bbox_inches='tight')
-            plt.show()
+            best_voxel_txt = os.path.join(self.output_folder, f"eigenfunction_{i}_best_voxel.txt")
+            with open(best_voxel_txt, 'w') as f:
+                f.write(f"#Eigenfunction {i}:\n")
+                f.write(f"#Times:\n{' '.join(map(str,self.times))}\n")
+                f.write(f"#Y_estimated:\n{' '.join(map(str,Y_hat_v_max_score))}\n")
+                f.write(f"#Y_real:\n{' '.join(map(str,Y_v_max_score))}\n")
+            best_voxel_fig = os.path.join(self.output_folder, f"eigenfunction_{i}_best_voxel.png")
+            plt.savefig(best_voxel_fig, dpi=300, bbox_inches='tight')
+            # plt.show()
 
         logging.info(f"Plotting original average signal intensity ...")
         signal_intensity = np.average(self.fmri_data, axis=0)
@@ -451,6 +461,10 @@ class FunctionalMRI:
         plt.xlabel('Time (scans)')
         plt.ylabel('Intensity')
         plt.grid(True)
-        intence_fig = os.path.join(self.output_folder, f"original_averaged_signal_intensity.png")
-        plt.savefig(intence_fig, dpi=300, bbox_inches='tight')
-        plt.show()
+        orig_intence_txt = os.path.join(self.output_folder, f"original_averaged_signal_intensity.txt")
+        with open(orig_intence_txt, 'w') as f:
+            f.write(f"#Times:\n{' '.join(map(str, self.times))}\n")
+            f.write(f"#Signal intensity:\n{' '.join(map(str, signal_intensity))}\n")
+        orig_intence_fig = os.path.join(self.output_folder, f"original_averaged_signal_intensity.png")
+        plt.savefig(orig_intence_fig, dpi=300, bbox_inches='tight')
+        # plt.show()
