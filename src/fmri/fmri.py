@@ -147,12 +147,15 @@ class FunctionalMRI:
         self.draw_graphs(C, F, scores, eigvecs_sorted, eigvals_sorted, v_max_scores_pos, best_lambdas)
 
     def calculate_interpolation(self):
-        if self.n_basis:
+        if self.n_basis and np.size(self.n_basis)==1:
             C, F, basis_funs, mean_error, best_lambdas = self.calculate_n_basis_interpolation(self.n_basis)
             return C, F, basis_funs, best_lambdas
         else:  # if user set threshold instead fixed number of n_basis
+            if np.size(self.n_basis)>1:
+                range_n_basis = self.n_basis
+            else:
+                range_n_basis = range(self.degree + 1, self.n_timepoints + 20, 10)
             n_basis_errors = []
-            range_n_basis = range(self.degree + 1, self.n_timepoints + 20, 10)
             n_basis_errors = np.zeros(len(range_n_basis))
             for i, n_basis in enumerate(range_n_basis):  # try increasing
                 C, F, basis_funs, mean_error, best_lambdas = self.calculate_n_basis_interpolation(n_basis)

@@ -50,8 +50,8 @@ Arguments
 \-\-TR `<FLOAT>`
   Repetition time (TR) in seconds. If not specified, the TR will be inferred from the NIfTI header (default: None).
 
-\-\-processed `<BOOL>`
-  If specified, the input data is assumed to be preprocessed (e.g., motion-corrected, normalized), and no additional preprocessing will be applied. If not specified the pipeline will apply basic preprocessing steps (default: not set).
+\-\-processed `<optional>`
+  If specified, the input data is assumed to be post-processed (e.g., smoothing, filtering), and no additional post-processing will be applied. If not specified the pipeline will apply basic post-processing steps (default: not set).
 
 \-\-calc-penalty-accurately `<optional>`
   If specified, the penalty matrix will be calculated with higher accuracy. If not specified, a faster but less accurate method will be used. (default: not set).
