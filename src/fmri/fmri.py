@@ -429,7 +429,7 @@ class FunctionalMRI:
             best_lambda = best_lambdas[v_max_scores_pos_i]
             logging.info(f"Plotting signal intensity for best voxel in eigenfunction {i}...")
             plt.figure(figsize=(10, 4))
-            plt.plot(self.times, signal_intensity, color='blue')
+            plt.plot(self.times, Y_hat_v_max_score, color='blue')
             plt.scatter(self.times, Y_v_max_score, color='red')
             plt.title(f'Signal and best voxel\'s fitted function: Eigenfunction {i}')
             plt.xlabel('Time (scans)')
