@@ -50,7 +50,7 @@ Arguments
 \-\-TR `<FLOAT>`
   Repetition time (TR) in seconds. If not specified, the TR will be inferred from the NIfTI header (default: None).
 
-\-\-processed `<BOOL>`
+\-\-processed `<optional>`
   If specified, the input data is assumed to be post-processed (e.g., smoothing, filtering), and no additional post-processing will be applied. If not specified the pipeline will apply basic post-processing steps (default: not set).
 
 \-\-calc-penalty-accurately `<optional>`
