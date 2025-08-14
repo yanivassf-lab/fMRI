@@ -113,7 +113,7 @@ class LoadData:
         """
         time_series = srdata.reshape(-1, srdata.shape[3])  # reshape to [n_voxels, time]
         f_high = 0.01  # lower cutoff frequency in Hz
-        f_low = 0.4  # upper cutoff frequency in Hz
+        f_low = 0.08  # upper cutoff frequency in Hz
         nyquist = 1 / (2 * TR)
         Wn = [f_high / nyquist, f_low / nyquist]  # normalized cutoff frequencies
 
