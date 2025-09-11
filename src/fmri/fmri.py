@@ -148,7 +148,7 @@ class FunctionalMRI:
 
     def calculate_interpolation(self):
         if self.n_basis and np.size(self.n_basis)==1:
-            C, F, basis_funs, mean_error, best_lambdas = self.calculate_n_basis_interpolation(self.n_basis)
+            C, F, basis_funs, mean_error, best_lambdas = self.calculate_n_basis_interpolation(self.n_basis[0])
             return C, F, basis_funs, best_lambdas
         else:  # if user set threshold instead fixed number of n_basis
             if np.size(self.n_basis)>1:
