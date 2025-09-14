@@ -66,7 +66,7 @@ Output
 
    - intensity plot:
 
-     The intensity values are plotted as a graph (intensity plot) that illustrates the time-course of the fPCA component across the entire brain.
+     The PC temporal profile values are plotted as a graph (intensity plot) that illustrates the time-course of the fPCA component across the entire brain.
 
      .. figure:: _static/eigenfunction_0_signal_intensity.png
         :align: center
