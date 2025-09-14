@@ -53,7 +53,8 @@ class FunctionalMRI:
     """
 
     def __init__(self, nii_file: str, mask_file: str, degree: int, n_basis: int, threshold: float, num_pca_comp: int,
-                 batch_size: int, output_folder: str, TR: float, processed: bool, calc_penalty_accurately: bool) -> None:
+                 batch_size: int, output_folder: str, TR: float, processed: bool,
+                 calc_penalty_accurately: bool) -> None:
         """
         Initialize the fMRI processing pipeline.
 
@@ -83,13 +84,14 @@ class FunctionalMRI:
         self.output_folder = output_folder
         self.calc_penalty_accurately = calc_penalty_accurately
         data = LoadData(nii_file, mask_file)
-        self.fmri_data, self.mask, self.nii_affine, TR = data.load_data(TR=TR, processed=processed)  # Load fMRI data and mask
+        self.fmri_data, self.mask, self.nii_affine, TR = data.load_data(TR=TR,
+                                                                        processed=processed)  # Load fMRI data and mask
         self.orig_n_voxels = self.mask.shape
         self.n_voxels = self.fmri_data.shape[0]
         self.n_timepoints = self.fmri_data.shape[1]
         self.times = np.arange(self.n_timepoints)
         self.T_min = 0
-        self.T_max = (self.n_timepoints-1)  # Assuming time points are indexed from 0 to n_timepoints-1
+        self.T_max = (self.n_timepoints - 1)  # Assuming time points are indexed from 0 to n_timepoints-1
         self.n_basis = n_basis  # min(20, self.n_timepoints // 10)
 
         ## step 1: load the NIfTI file and mask
@@ -142,20 +144,23 @@ class FunctionalMRI:
         C, F, basis_funs, best_lambdas = self.calculate_interpolation()
         logging.info("Performing functional PCA...")
         # Build penalty matrix for fPCA (no derivative)
-        U = self.penalty_matrix(basis_funs, derivative_order=0) if not self.calc_penalty_accurately else self.penalty_matrix_accurate(basis_funs, derivative_order=0)
-        scores, eigvecs_sorted, eigvals_sorted, v_max_scores_pos = self.fPCA(C, U)
-        self.draw_graphs(C, F, scores, eigvecs_sorted, eigvals_sorted, v_max_scores_pos, best_lambdas)
+        if not self.calc_penalty_accurately:
+            U = self.penalty_matrix(basis_funs, derivative_order=0)
+        else:
+            self.penalty_matrix_accurate(basis_funs, derivative_order=0)
+        scores, eigvecs_sorted, eigvals_sorted, v_max_scores_pos, pc_temporal_profiles, total_variance = self.fPCA(C, U, F)
+        self.draw_graphs(C, F, scores, eigvecs_sorted, eigvals_sorted, v_max_scores_pos, best_lambdas,
+                         pc_temporal_profiles, total_variance)
 
     def calculate_interpolation(self):
-        if self.n_basis and np.size(self.n_basis)==1:
+        if self.n_basis and np.size(self.n_basis) == 1:
             C, F, basis_funs, mean_error, best_lambdas = self.calculate_n_basis_interpolation(self.n_basis[0])
             return C, F, basis_funs, best_lambdas
         else:  # if user set threshold instead fixed number of n_basis
-            if np.size(self.n_basis)>1:
+            if np.size(self.n_basis) > 1:
                 range_n_basis = self.n_basis
             else:
                 range_n_basis = range(self.degree + 1, self.n_timepoints + 20, 10)
-            n_basis_errors = []
             n_basis_errors = np.zeros(len(range_n_basis))
             for i, n_basis in enumerate(range_n_basis):  # try increasing
                 C, F, basis_funs, mean_error, best_lambdas = self.calculate_n_basis_interpolation(n_basis)
@@ -174,7 +179,9 @@ class FunctionalMRI:
     def calculate_n_basis_interpolation(self, n_basis):
         basis_funs, _ = spline_base_funs(self.T_min, self.T_max, self.degree, n_basis)
         # Build penalty matrix for regularized regression (second derivative)
-        P = self.penalty_matrix(basis_funs, derivative_order=2) if not self.calc_penalty_accurately else self.penalty_matrix_accurate(basis_funs, derivative_order=2)
+        P = self.penalty_matrix(basis_funs,
+                                derivative_order=2) if not self.calc_penalty_accurately else self.penalty_matrix_accurate(
+            basis_funs, derivative_order=2)
         F = np.nan_to_num(basis_funs(self.times))  # (n_timepoints, n_basis)
         start = time()
         logging.info(f"Calculate coefficients for {n_basis} basis functions...")
@@ -327,19 +334,23 @@ class FunctionalMRI:
             best_lambdas[i:end] = best_lambdas_batch
         return C, best_lambdas
 
-    def fPCA(self, C: np.ndarray, U: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    def fPCA(self, C: np.ndarray, U: np.ndarray, F: np.ndarray) -> tuple[
+        np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, int]:
         """
         Perform functional PCA on the coefficient matrix.
 
         Parameters:
             C (ndarray): coefficient matrix (n_voxels, n_basis).
             U (ndarray): penalty matrix (n_basis, n_basis).
+            F (ndarray): basis matrix (n_timepoints, n_basis).
 
         Returns:
             scores (ndarray): voxel scores on principal components (n_voxels, num_pca_comp).
             eigvecs_sorted (ndarray): basis-space eigenvectors sorted by importance (n_basis, num_pca_comp).
             eigvals_sorted (ndarray): corresponding sorted eigenvalues.
             v_max_scores_pos (ndarray): positions of voxels with maximum score in each component (num_pca_comp, )
+            pc_temporal_profiles (ndarray): temporal profiles of the principal components (n_timepoints, num_pca_comp).
+            total_variance (int): total variance in the data.
         """
         n_voxels, n_basis = C.shape
         C_tilde = C - C.mean(axis=0, keepdims=True)  # mean along the voxels.
@@ -348,9 +359,21 @@ class FunctionalMRI:
         cov_mat = (cov_mat + cov_mat.T) / 2
 
         eigvals, eigvecs = np.linalg.eigh(cov_mat)
+        total_variance = np.sum(eigvals)
+
+        # Sort eigenvalues and eigenvectors in descending order
         sorted_indices = np.argsort(eigvals)[::-1][:self.num_pca_comp]
         eigvecs_sorted = eigvecs[:, sorted_indices]
         eigvals_sorted = eigvals[sorted_indices]
+
+        # Compute temporal profiles
+        pc_temporal_profiles = F @ eigvecs_sorted  # (n_timepoints, num_pca_comp)
+
+        # Flip sign so max absolute value is positive
+        max_idx = np.argmax(np.abs(pc_temporal_profiles), axis=0)
+        flip_mask = pc_temporal_profiles[max_idx, np.arange(self.num_pca_comp)] < 0
+        eigvecs_sorted[:, flip_mask] *= -1
+        pc_temporal_profiles[:, flip_mask] *= -1
 
         scores = np.zeros((n_voxels, self.num_pca_comp))
         for i in range(self.num_pca_comp):
@@ -361,7 +384,7 @@ class FunctionalMRI:
             scores[:, i] = scores_i
         v_max_scores_pos = np.argmax(scores, axis=0)  # maximum score in each component
         # print(v_max_scores_pos, np.max(scores, axis=0))
-        return scores, eigvecs_sorted, eigvals_sorted, v_max_scores_pos
+        return scores, eigvecs_sorted, eigvals_sorted, v_max_scores_pos, pc_temporal_profiles, total_variance
 
     def voxel_index_to_coord(self, k):
         flat_indices = np.flatnonzero(self.mask)
@@ -369,7 +392,8 @@ class FunctionalMRI:
         return np.unravel_index(flat_index, self.mask.shape)
 
     def draw_graphs(self, C: np.ndarray, F: np.ndarray, scores: np.ndarray, eigvecs_sorted: np.ndarray,
-                    eigvals_sorted: np.ndarray, v_max_scores_pos: np.ndarray, best_lambdas: np.ndarray) -> None:
+                    eigvals_sorted: np.ndarray, v_max_scores_pos: np.ndarray, best_lambdas: np.ndarray,
+                    pc_temporal_profiles: np.ndarray, total_variance: int) -> None:
         """
         Generate and save voxel importance maps and eigenfunction intensity plots.
 
@@ -380,10 +404,12 @@ class FunctionalMRI:
             eigvals_sorted (ndarray): corresponding sorted eigenvalues.
             v_max_scores_pos (ndarray): positions of voxels with maximum score in each component (num_pca_comp, )
             best_lambdas (ndarray): best lambdas for each voxel (n_voxels,)
+            pc_temporal_profiles (ndarray): temporal profiles of the principal components.
+            total_variance (int): total variance in the data.
         """
 
         for i in range(self.num_pca_comp):
-            explained_vairance_i = (eigvals_sorted[i] * 100) / np.sum(eigvals_sorted)
+            explained_vairance_i = (eigvals_sorted[i] * 100) / total_variance
             logging.info(f"Saving voxel-wise importance map for first eigenfunction {i}...")
             importance_map = np.zeros(self.orig_n_voxels)
             importance_map[self.mask > 0] = scores[:, i]
@@ -405,20 +431,19 @@ class FunctionalMRI:
             plt.savefig(impmap_fig, dpi=300, bbox_inches='tight')
             # plt.show()
 
-            logging.info(f"Plotting signal intensity for eigenfunction {i}...")
-            signal_intensity = F @ eigvecs_sorted[:, i]
+            logging.info(f"Plotting temporal profile of eigenfunction {i}...")
             plt.figure(figsize=(10, 4))
-            plt.plot(self.times, signal_intensity, color='blue')
-            plt.title(f'Signal Intensity: Eigenfunction {i} ({explained_vairance_i}% var)')
+            plt.plot(self.times, pc_temporal_profiles[:, i], color='blue')
+            plt.title(f'temporal profile of eigenfunction {i} ({explained_vairance_i}% var)')
             plt.xlabel('Time (scans)')
             plt.ylabel('Intensity')
             plt.grid(True)
-            intence_txt = os.path.join(self.output_folder, f"eigenfunction_{i}_signal_intensity.txt")
+            intence_txt = os.path.join(self.output_folder, f"temporal_profile_pc_{i}.txt")
             with open(intence_txt, 'w') as f:
                 f.write(f"#Eigenfunction {i}:\n")
-                f.write(f"#Times:\n{' '.join(map(str,self.times))}\n")
-                f.write(f"#Signal intensity:\n{' '.join(map(str,signal_intensity))}\n")
-            intence_fig = os.path.join(self.output_folder, f"eigenfunction_{i}_signal_intensity.png")
+                f.write(f"#Times:\n{' '.join(map(str, self.times))}\n")
+                f.write(f"#PC temporal profile:\n{' '.join(map(str, pc_temporal_profiles[:, i]))}\n")
+            intence_fig = os.path.join(self.output_folder, f"temporal_profile_pc_{i}.png")
             plt.savefig(intence_fig, dpi=300, bbox_inches='tight')
             # plt.show()
 
@@ -441,8 +466,10 @@ class FunctionalMRI:
             # Compute position near bottom-right
             x = xlim[1] - 0.01 * (xlim[1] - xlim[0])  # Slightly inside from right
             y = ylim[0] + 0.01 * (ylim[1] - ylim[0])  # Slightly above bottom
-            x_c,y_c,z_c = self.voxel_index_to_coord(v_max_scores_pos_i)
-            plt.text(x, y, rf"$\lambda={best_lambda}, score: {scores[v_max_scores_pos_i, i]:.2f}, x={x_c};y={y_c};z={z_c}$", fontsize=12, ha='right', va='bottom')
+            x_c, y_c, z_c = self.voxel_index_to_coord(v_max_scores_pos_i)
+            plt.text(x, y,
+                     rf"$\lambda={best_lambda}, score: {scores[v_max_scores_pos_i, i]:.2f}, x={x_c};y={y_c};z={z_c}$",
+                     fontsize=12, ha='right', va='bottom')
             # Compute position near upper-left
             # x_c,y_c,z_c = self.voxel_index_to_coord(v_max_scores_pos_i)
             # x = xlim[0] + 0.01 * (xlim[1] - xlim[0])  # Slightly inside from the left
@@ -451,9 +478,9 @@ class FunctionalMRI:
             best_voxel_txt = os.path.join(self.output_folder, f"eigenfunction_{i}_best_voxel.txt")
             with open(best_voxel_txt, 'w') as f:
                 f.write(f"#Eigenfunction {i}:\n")
-                f.write(f"#Times:\n{' '.join(map(str,self.times))}\n")
-                f.write(f"#Y_estimated:\n{' '.join(map(str,Y_hat_v_max_score))}\n")
-                f.write(f"#Y_real:\n{' '.join(map(str,Y_v_max_score))}\n")
+                f.write(f"#Times:\n{' '.join(map(str, self.times))}\n")
+                f.write(f"#Y_estimated:\n{' '.join(map(str, Y_hat_v_max_score))}\n")
+                f.write(f"#Y_real:\n{' '.join(map(str, Y_v_max_score))}\n")
             best_voxel_fig = os.path.join(self.output_folder, f"eigenfunction_{i}_best_voxel.png")
             plt.savefig(best_voxel_fig, dpi=300, bbox_inches='tight')
             # plt.show()
