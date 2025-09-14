@@ -19,6 +19,15 @@ import nibabel as nib
 import numpy as np
 from scipy.integrate import quad
 from scipy.interpolate import BSpline
+from skfda.representation.basis import BSplineBasis
+from skfda.misc.operators import LinearDifferentialOperator
+from skfda.misc import inner_product_matrix
+from skfda.representation.basis import BSplineBasis
+from skfda import FDataBasis
+from skfda.representation.basis import BSplineBasis
+from skfda import FDataBasis
+from skfda.misc.operators import LinearDifferentialOperator
+from skfda.misc.operators import gram_matrix
 
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
@@ -26,6 +35,7 @@ import matplotlib.pyplot as plt
 from .preprocess import LoadData
 from .b_spline import spline_base_funs
 from .evaluate_lambda import select_lambda, compute_hat_matrices_all_lambda
+
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -53,8 +63,8 @@ class FunctionalMRI:
     """
 
     def __init__(self, nii_file: str, mask_file: str, degree: int, n_basis: int, threshold: float, num_pca_comp: int,
-                 batch_size: int, output_folder: str, TR: float, processed: bool,
-                 calc_penalty_accurately: bool) -> None:
+                 batch_size: int, output_folder: str, TR: float, smooth_size: int, lambda_min: float, lambda_max: float, processed: bool, bad_margin_size:int,
+                 no_penalty: bool, calc_penalty_accurately: bool) -> None:
         """
         Initialize the fMRI processing pipeline.
 
@@ -72,7 +82,12 @@ class FunctionalMRI:
             batch_size (int): batch size of voxels
             output_folder (str): existing folder for output files
             TR (float): repetition time in seconds.
+            smooth_size (int): box size of smoothing kernel.
+            lambda_min (float): minimum lambda value.
+            lambda_max (float): maximum lambda value.
             processed (bool): if True, the data is already preprocessed (e.g., filtered, smoothed).
+            bad_margin_size (int): Size of the margin to ignore in calculating direction of eigvecs.
+            no_penalty (bool): if True, no penalty will be used.
             calc_penalty_accurately (bool): if True, the penalty matrix will be calculated using an accurate method.
                                           If False, an approximate method will be used.
         """
@@ -82,10 +97,14 @@ class FunctionalMRI:
         self.num_pca_comp = num_pca_comp
         self.batch_size = batch_size
         self.output_folder = output_folder
+        self.lambda_min = lambda_min
+        self.lambda_max = lambda_max
+        self.bad_margin_size = bad_margin_size
+        self.no_penalty = no_penalty
         self.calc_penalty_accurately = calc_penalty_accurately
         data = LoadData(nii_file, mask_file)
-        self.fmri_data, self.mask, self.nii_affine, TR = data.load_data(TR=TR,
-                                                                        processed=processed)  # Load fMRI data and mask
+        self.fmri_data, self.mask, self.nii_affine = data.load_data(TR=TR, smooth_size=smooth_size,
+                                                                    processed=processed)  # Load fMRI data and mask
         self.orig_n_voxels = self.mask.shape
         self.n_voxels = self.fmri_data.shape[0]
         self.n_timepoints = self.fmri_data.shape[1]
@@ -93,31 +112,6 @@ class FunctionalMRI:
         self.T_min = 0
         self.T_max = (self.n_timepoints - 1)  # Assuming time points are indexed from 0 to n_timepoints-1
         self.n_basis = n_basis  # min(20, self.n_timepoints // 10)
-
-        ## step 1: load the NIfTI file and mask
-        # print("Loading NIfTI file...")
-        # img = nib.load(nii_file)
-        # data = img.get_fdata()  # shape: (X, Y, Z, Time)
-        # X, Y, Z, T = data.shape
-        # print(f"Data shape: {data.shape}")
-        #
-        ## step 2: build a simple brain mask
-        # print("Building brain mask...")
-        # self.mask = np.mean(data, axis=3) > 100  # simple threshold to create a mask
-        # self.n_voxels = np.sum(self.mask)
-        # print(f"Number of brain voxels: {self.n_voxels}")
-        #
-
-    # print("Reshaping data...")
-    ##   data_2d = data[brain_mask].T  # צורת הנתונים: (Time, Voxels)
-    # data_2d = data[self.mask]  # צורת הנתונים: (Voxels, Time)
-    #
-    ## step 4: basic preprocessing (e.g., Detrend)
-    # print("Preprocessing signals...")
-    # from scipy.signal import detrend
-    #    # self.fmri_data = detrend(data_2d, axis=0)
-    # self.fmri_data = detrend(data_2d, axis=1)
-    #
 
     def __new__(cls, *args, **kwargs):
         instance = super().__new__(cls)
@@ -144,11 +138,15 @@ class FunctionalMRI:
         C, F, basis_funs, best_lambdas = self.calculate_interpolation()
         logging.info("Performing functional PCA...")
         # Build penalty matrix for fPCA (no derivative)
-        if not self.calc_penalty_accurately:
-            U = self.penalty_matrix(basis_funs, derivative_order=0)
+        if self.no_penalty:
+            U = np.eye(basis_funs.n_basis)
         else:
-            self.penalty_matrix_accurate(basis_funs, derivative_order=0)
-        scores, eigvecs_sorted, eigvals_sorted, v_max_scores_pos, pc_temporal_profiles, total_variance = self.fPCA(C, U, F)
+            if self.calc_penalty_accurately:
+                U = self.penalty_matrix_accurate(basis_funs, derivative_order=0)
+            else:
+                U = self.penalty_matrix(basis_funs, derivative_order=0)
+        scores, eigvecs_sorted, eigvals_sorted, v_max_scores_pos, pc_temporal_profiles, total_variance = self.fPCA(C, U,
+                                                                                                                   F)
         self.draw_graphs(C, F, scores, eigvecs_sorted, eigvals_sorted, v_max_scores_pos, best_lambdas,
                          pc_temporal_profiles, total_variance)
 
@@ -179,10 +177,19 @@ class FunctionalMRI:
     def calculate_n_basis_interpolation(self, n_basis):
         basis_funs, _ = spline_base_funs(self.T_min, self.T_max, self.degree, n_basis)
         # Build penalty matrix for regularized regression (second derivative)
-        P = self.penalty_matrix(basis_funs,
-                                derivative_order=2) if not self.calc_penalty_accurately else self.penalty_matrix_accurate(
-            basis_funs, derivative_order=2)
-        F = np.nan_to_num(basis_funs(self.times))  # (n_timepoints, n_basis)
+        if self.no_penalty:
+            P = np.eye(basis_funs.n_basis)
+        else:
+            if self.calc_penalty_accurately:
+                P = self.penalty_matrix_accurate(basis_funs, derivative_order=2)
+            else:
+                P = self.penalty_matrix(basis_funs, derivative_order=2)
+
+        F = np.nan_to_num(basis_funs(self.times)) # (n_basis, n_points, 1)
+        F = F.squeeze().T # (n_timepoints, n_basis)
+        # old code for BSpline package:
+        # F = np.nan_to_num(basis_funs(self.times))  # (n_timepoints, n_basis)
+
         start = time()
         logging.info(f"Calculate coefficients for {n_basis} basis functions...")
         C, best_lambdas = self.calculate_coeff(F, P, n_basis)  # shape: (n_voxels, n_basis)
@@ -193,34 +200,67 @@ class FunctionalMRI:
         logging.info(f"The mean interpolation error for {n_basis} basis functions is {mean_error:.2f}.")
         return C, F, basis_funs, mean_error, best_lambdas
 
-    def penalty_matrix_accurate(self, basis_funs: BSpline, derivative_order: int) -> np.ndarray:
+
+
+    def penalty_matrix_accurate(self, basis_funs: BSplineBasis, derivative_order: int) -> np.ndarray:
         """
-        Compute the penalty matrix by integrating products of k-th derivatives of basis functions.
+        Compute the penalty matrix using scikit-fda (analytical).
 
         Parameters:
-            basis_funs: BSpline object for basis functions.
+            basis_funs: BSplineBasis object for basis functions.
             derivative_order (int): order of derivative to penalize.
 
         Returns:
             G (ndarray): penalty matrix of shape (n_basis, n_basis).
         """
-        logging.info(f"Computing (accurately) penalty matrix for {derivative_order}-th derivative...")
-        deriv_funs = basis_funs.derivative(nu=derivative_order)
-        n_basis = deriv_funs.c.shape[1]
-        G = np.zeros((n_basis, n_basis))
+        logging.info(f"Computing (accurately) penalty matrix for {derivative_order}-th derivative using scikit-fda...")
 
-        for i in range(n_basis):
-            for j in range(i, n_basis):
-                f = lambda t: (
-                    np.nan_to_num(deriv_funs(np.atleast_1d(t))[0, i]) *
-                    np.nan_to_num(deriv_funs(np.atleast_1d(t))[0, j])
-                )
-                integral, _ = quad(f, self.T_min, self.T_max)
-                G[i, j] = integral
-                G[j, i] = integral
+        n_basis = basis_funs.n_basis
 
-        return G
+        # Create a LinearDifferentialOperator for the specified derivative order
+        weights = np.zeros(derivative_order + 1)
+        weights[derivative_order] = 1
+        operator = LinearDifferentialOperator(weights=weights)
 
+        # Use gram_matrix function to compute the penalty matrix
+        penalty_matrix = gram_matrix(operator, basis_funs)
+
+        # Convert to numpy array if it's not already
+        if hasattr(penalty_matrix, 'toarray'):
+            penalty_matrix = penalty_matrix.toarray()
+
+        return penalty_matrix
+
+    # old code for BSpline package:
+    # def penalty_matrix_accurate(self, basis_funs: BSpline, derivative_order: int) -> np.ndarray:
+    #     """
+    #     Compute the penalty matrix by integrating products of k-th derivatives of basis functions.
+
+    #     Parameters:
+    #         basis_funs: BSpline object for basis functions.
+    #         derivative_order (int): order of derivative to penalize.
+
+    #     Returns:
+    #         G (ndarray): penalty matrix of shape (n_basis, n_basis).
+    #     """
+    #     logging.info(f"Computing (accurately) penalty matrix for {derivative_order}-th derivative...")
+    #     deriv_funs = basis_funs.derivative(nu=derivative_order)
+    #     n_basis = deriv_funs.c.shape[1]
+    #     G = np.zeros((n_basis, n_basis))
+
+    #     for i in range(n_basis):
+    #         for j in range(i, n_basis):
+    #             f = lambda t: (
+    #                 np.nan_to_num(deriv_funs(np.atleast_1d(t))[0, i]) *
+    #                 np.nan_to_num(deriv_funs(np.atleast_1d(t))[0, j])
+    #             )
+    #             integral, _ = quad(f, self.T_min, self.T_max)
+    #             G[i, j] = integral
+    #             G[j, i] = integral
+
+    #     return G
+
+    # old code for BSpline package: (don't work for scikit-fda)
     def penalty_matrix(self, basis_funs: BSpline, derivative_order: int) -> np.ndarray:
         """
         Approximate the penalty matrix using discrete integration (trapezoidal rule).
@@ -307,7 +347,8 @@ class FunctionalMRI:
 
         # Precompute the basis matrix and related matrices for efficiency.
         FtF = F.T @ F  # (n_basis, n_basis)
-        lambda_values = np.linspace(0.01, 1.0, 100)
+        lambda_values = np.logspace(self.lambda_min, self.lambda_max, 100) # 100 logarithmically spaced values between 10^-4 and 10^3
+        # lambda_values = np.linspace(self.lambda_min, self.lambda_max, 100) # 100 linear spaced values between 10^-4 and 10^3
 
         # Compute H matrices for all lambda values.
         # H_all_lambda: (n_lambda, n_timepoints, n_timepoints)
@@ -370,8 +411,8 @@ class FunctionalMRI:
         pc_temporal_profiles = F @ eigvecs_sorted  # (n_timepoints, num_pca_comp)
 
         # Flip sign so max absolute value is positive
-        max_idx = np.argmax(np.abs(pc_temporal_profiles), axis=0)
-        flip_mask = pc_temporal_profiles[max_idx, np.arange(self.num_pca_comp)] < 0
+        max_idx = np.argmax(np.abs(pc_temporal_profiles[self.bad_margin_size:-self.bad_margin_size, :]), axis=0)
+        flip_mask = pc_temporal_profiles[max_idx + self.bad_margin_size, np.arange(self.num_pca_comp)] < 0
         eigvecs_sorted[:, flip_mask] *= -1
         pc_temporal_profiles[:, flip_mask] *= -1
 
@@ -430,6 +471,7 @@ class FunctionalMRI:
             impmap_fig = os.path.join(self.output_folder, f"eigenfunction_{i}_importance_map.png")
             plt.savefig(impmap_fig, dpi=300, bbox_inches='tight')
             # plt.show()
+            plt.close()
 
             logging.info(f"Plotting temporal profile of eigenfunction {i}...")
             plt.figure(figsize=(10, 4))
@@ -446,6 +488,7 @@ class FunctionalMRI:
             intence_fig = os.path.join(self.output_folder, f"temporal_profile_pc_{i}.png")
             plt.savefig(intence_fig, dpi=300, bbox_inches='tight')
             # plt.show()
+            plt.close()
 
             v_max_scores_pos_i = v_max_scores_pos[i]
             Y_v_max_score = self.fmri_data[v_max_scores_pos_i]
@@ -484,6 +527,7 @@ class FunctionalMRI:
             best_voxel_fig = os.path.join(self.output_folder, f"eigenfunction_{i}_best_voxel.png")
             plt.savefig(best_voxel_fig, dpi=300, bbox_inches='tight')
             # plt.show()
+            plt.close()
 
         logging.info(f"Plotting original average signal intensity ...")
         signal_intensity = np.average(self.fmri_data, axis=0)
@@ -500,3 +544,4 @@ class FunctionalMRI:
         orig_intence_fig = os.path.join(self.output_folder, f"original_averaged_signal_intensity.png")
         plt.savefig(orig_intence_fig, dpi=300, bbox_inches='tight')
         # plt.show()
+        plt.close()

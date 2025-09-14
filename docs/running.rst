@@ -17,7 +17,12 @@ Synopsis
              [--num-pca-comp <INT>] \
              [--batch-size <INT>] \
              [--TR <FLOAT>] \
+             [--smooth-size <INT>] \
+             [--lambda-min <FLOAT>] \
+             [--lambda-max <FLOAT>] \
              [--processed <BOOL>] \
+             [--bad-margin-size <INT>] \
+             [--no-penalty <BOOL>] \
              [--calc-penalty-accurately <optional>]
 
 Arguments
@@ -50,8 +55,23 @@ Arguments
 \-\-TR `<FLOAT>`
   Repetition time (TR) in seconds. If not specified, the TR will be inferred from the NIfTI header (default: None).
 
+\-\-smooth-size `<INT>`
+Box size of smoothing kernel. Relevant only if --processed is not set (default: 5).
+
+\-\-lambda-min `<FLOAT>`
+Minimum value of lambda in log10 scale (i.e., 10^-4) (default: -4).
+
+\-\-lambda-max `<FLOAT>`
+Maximum value of lambda in log10 scale (i.e., 10^3) (default: 3).
+
 \-\-processed `<optional>`
   If specified, the input data is assumed to be post-processed (e.g., smoothing, filtering), and no additional post-processing will be applied. If not specified the pipeline will apply basic post-processing steps (default: not set).
+
+\-\-bad-margin-size `<INT>`
+  Size of the margin to ignore in calculating direction of eigvecs (default: 50).
+
+\-\-no-penalty `<optional>`
+  If specified, no penalty will be used (default: not set).
 
 \-\-calc-penalty-accurately `<optional>`
   If specified, the penalty matrix will be calculated with higher accuracy. If not specified, a faster but less accurate method will be used. (default: not set).

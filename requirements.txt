@@ -12,7 +12,7 @@
 #nibabel==5.3.2
 #numpy==2.2.3
 #scipy==1.15.2
-
+#scikit-fda==0.10.1
 
 #For readthedocs
 # =============

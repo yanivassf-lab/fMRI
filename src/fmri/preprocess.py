@@ -12,9 +12,11 @@ class LoadData:
     def __init__(self, nii_file: str, mask_file: str):
         self.nii_file = nii_file
         self.mask_file = mask_file
+        self.filtered_file = None
+        self.filtered_nii_rdata = None
 
-    def load_data(self, TR: float = None, processed: bool = True) -> tuple[
-        ndarray[tuple[Any, int], dtype[float64]], Any, Any, float | Any]:
+    def load_data(self, TR: float = None, smooth_size:int = 5, processed: bool = True, save_filtered_file: bool = False) -> tuple[
+        ndarray[tuple[Any, int], dtype[float64]], Any, Any]:
         """
         Load and preprocess fMRI data from a NIfTI file.
         This function loads 4D fMRI data and a binary brain mask from specified NIfTI files.
@@ -25,14 +27,14 @@ class LoadData:
         Parameters:
             filename: Path to the NIfTI file containing fMRI data.
             TR: Repetition time in seconds. If None, it will be extracted from the NIfTI header.
-            processed: If True, returns preprocessed data; otherwise, applies preprocessing steps.
-
+            smooth_size: Box size for smoothing kernel.
+            processed: If True, returns reorganized data without pre-processing; otherwise, applies preprocessing steps.
+            save_filtered_file: If True, store the processed nii file for saving (by calling to save_filtered_data() method).
         Returns:
             tuple: A tuple containing:
                 - data_flat: 2D array of time series data (shape: [time, voxels]).
                 - mask: 3D binary mask array indicating brain voxels.
                 - affine: Affine transformation matrix from the NIfTI header.
-                - TR: Repetition time in seconds.
         """
 
         nii_rdata, data = self.load_nifti_data(self.nii_file)  # Load the 4D fMRI data
@@ -42,20 +44,18 @@ class LoadData:
         nii_mask, mask = self.load_nifti_data(self.mask_file)
         if not TR:
             zoom = nii_rdata.header.get_zooms()
-            TR = zoom[3] if len(zoom) >= 4 else 2.0
+            TR = zoom[3] if len(zoom) >= 4 else 1.0
 
         # Identify the coordinates of voxels within the mask
         xlocs, ylocs, zlocs = np.where(mask == 1)
 
         if not processed:
             logging.info("Applying preprocessing steps: spatial smoothing and temporal filtering...")
-            # Apply 3D smoothing to each time point independently
-            srdata = np.zeros_like(data)
-            for i in range(st):
-                vol1 = data[..., i]
-                srdata[..., i] = self.smooth3_box(vol1)  # Spatial smoothing
-            # Apply temporal filtering
-            data = self.filter_fMRI(srdata, TR)
+            # Apply smoothing and temporal filtering
+            data = self.filter_fMRI(data, TR, smooth_size,st)
+            if save_filtered_file:
+                self.filtered_file = data
+                self.filtered_nii_rdata = nii_rdata if nii_rdata else nii_mask
         else:
             logging.info("Loading data files without additional filtering.")
 
@@ -63,7 +63,7 @@ class LoadData:
         data_flat = np.zeros((st, len(xlocs)))  # [time, voxels]
         for i in range(len(xlocs)):
             data_flat[:, i] = data[xlocs[i], ylocs[i], zlocs[i], :]
-        return data_flat.T, mask, nii_mask.affine, TR
+        return data_flat.T, mask, nii_mask.affine
 
     def load_nifti_data(self, filename: str):
         """
@@ -80,28 +80,15 @@ class LoadData:
         nii = nib.load(filename)
         return nii, nii.get_fdata()
 
-    def smooth3_box(self, volume, size=(5, 5, 5)):
+    def filter_fMRI(self, data, TR, smooth_size, st):
         """
-        Apply 3D box smoothing (mean filter) to a volume.
-
-        Parameters:
-        volume (ndarray): 3D volume to smooth.
-        size (tuple): Size of the smoothing kernel in 3D.
-
-        Returns:
-        ndarray: Smoothed 3D volume.
-        """
-        # Uniform (box) smoothing to reduce noise while preserving spatial structure.
-        # This is often used before temporal filtering to reduce voxel-level noise.
-        return uniform_filter(volume, size=size, mode='nearest')
-
-    def filter_fMRI(self, srdata, TR):
-        """
-        Apply temporal bandpass filtering to fMRI data using a Butterworth filter.
+        Apply smoothing and temporal bandpass filtering to fMRI data using a Butterworth filter.
 
         Parameters:
         srdata (ndarray): 4D fMRI data after spatial smoothing (shape: x, y, z, t).
         TR (float): Repetition time (in seconds), used to determine Nyquist frequency.
+        smooth_size: Box size for smoothing kernel.
+        st: Number of time points.
 
         Returns:
         ndarray: Temporally filtered 4D fMRI data.
@@ -111,6 +98,11 @@ class LoadData:
         - This is a standard preprocessing step to remove physiological noise and low-frequency drift.
         - Equation Reference: See bandpass filtering equations, typically Eq. (3) in many fMRI preprocessing papers.
         """
+        # Apply 3D smoothing to each time point independently
+        srdata = np.zeros_like(data)
+        for i in range(st):
+            srdata[..., i] = uniform_filter(data[..., i], size=smooth_size, mode='nearest')  # Spatial smoothing
+
         time_series = srdata.reshape(-1, srdata.shape[3])  # reshape to [n_voxels, time]
         f_high = 0.01  # lower cutoff frequency in Hz
         f_low = 0.08  # upper cutoff frequency in Hz
@@ -131,6 +123,12 @@ class LoadData:
             filtered[i, :] = filtfilt(b, a, time_series[i, :])
 
         return filtered.reshape(srdata.shape)
+
+    def save_filtered_data(self, path):
+        # Create a NIfTI image object
+        nifti_img = nib.Nifti1Image(self.filtered_file, self.filtered_nii_rdata.affine)
+        # Save the NIfTI image to the specified path
+        nib.save(nifti_img, path)
 
 # if __name__ == '__main__':
 #     Run the pipeline on subject 11001 and print basic output information
