@@ -59,19 +59,19 @@ Arguments
   Repetition time (TR) in seconds. If not specified, the TR will be inferred from the NIfTI header (default: None).
 
 \-\-smooth-size `<INT>`
-Box size of smoothing kernel. Relevant only if --processed is not set (default: 5).
+  Box size of smoothing kernel. Relevant only if --processed is not set (default: 5).
 
 \-\-lambda-min `<FLOAT>`
-Minimum value of lambda in log10 scale (i.e., 10^-4) (default: -4).
+  Minimum value of lambda in log10 scale (i.e., 10^-4) (default: -4).
 
 \-\-lambda-max `<FLOAT>`
-Maximum value of lambda in log10 scale (i.e., 10^3) (default: 3).
+  Maximum value of lambda in log10 scale (i.e., 10^3) (default: 3).
 
 \-\-derivatives-num-p `<INT>`
-Number of derivatives in calculation of penalty matrix P (default: 2)
+  Number of derivatives in calculation of penalty matrix P (default: 2)
 
 \-\-derivatives-num-u `<INT>`
-Number of derivatives in calculation of penalty matrix U (default: 0)
+  Number of derivatives in calculation of penalty matrix U (default: 0)
 
 \-\-processed `<optional>`
   If specified, the input data is assumed to be post-processed (e.g., smoothing, filtering), and no additional post-processing will be applied. If not specified the pipeline will apply basic post-processing steps (default: not set).
