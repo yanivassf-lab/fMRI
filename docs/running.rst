@@ -20,10 +20,13 @@ Synopsis
              [--smooth-size <INT>] \
              [--lambda-min <FLOAT>] \
              [--lambda-max <FLOAT>] \
+             [--derivatives-num-p <INT>] \
+             [--derivatives-num-u <INT>] \
              [--processed <BOOL>] \
              [--bad-margin-size <INT>] \
              [--no-penalty <BOOL>] \
-             [--calc-penalty-accurately <optional>]
+             [--calc-penalty-bspline-accurately <optional>] \
+             [--calc-penalty-skfda <optional>] \
 
 Arguments
 ---------
@@ -64,6 +67,12 @@ Minimum value of lambda in log10 scale (i.e., 10^-4) (default: -4).
 \-\-lambda-max `<FLOAT>`
 Maximum value of lambda in log10 scale (i.e., 10^3) (default: 3).
 
+\-\-derivatives-num-p `<INT>`
+Number of derivatives in calculation of penalty matrix P (default: 2)
+
+\-\-derivatives-num-u `<INT>`
+Number of derivatives in calculation of penalty matrix U (default: 0)
+
 \-\-processed `<optional>`
   If specified, the input data is assumed to be post-processed (e.g., smoothing, filtering), and no additional post-processing will be applied. If not specified the pipeline will apply basic post-processing steps (default: not set).
 
@@ -74,7 +83,10 @@ Maximum value of lambda in log10 scale (i.e., 10^3) (default: 3).
   If specified, no penalty will be used (default: not set).
 
 \-\-calc-penalty-accurately `<optional>`
-  If specified, the penalty matrix will be calculated with higher accuracy. If not specified, a faster but less accurate method will be used. (default: not set).
+  If set, the penalty matrix will be calculated using bspline package with an accurate method. If not set, an approximate method of bspline will be used (default: not set).
+
+\-\-calc-penalty-accurately `<optional>`
+  If set, the penalty matrix will be calculated using skfda package an accurate method. If not set, an approximate method of bsplie will be used (default: not set).
 
 
 Examples

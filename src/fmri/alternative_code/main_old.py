@@ -23,7 +23,7 @@ matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 
 from preprocess import LoadData
-from b_spline import spline_base_funs
+from b_spline_skfda import spline_base_funs
 from evaluate_lambda import select_lambda, compute_hat_matrices_all_lambda
 
 # Set up logging
