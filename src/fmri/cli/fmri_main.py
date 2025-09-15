@@ -29,14 +29,20 @@ def main():
                         help="Minimum value of lambda in log10 scale (i.e., 10^-4) (default: -4)")
     parser.add_argument("--lambda-max", type=float, default=3,
                         help="Maximum value of lambda in log10 scale (i.e., 10^3) (default: 3)")
+    parser.add_argument("--derivatives-num-p", type=int, default=2,
+                        help="Number of derivatives in calculation of penalty matrix P (default: 2)")
+    parser.add_argument("--derivatives-num-u", type=int, default=0,
+                        help="Number of derivatives in calculation of penalty matrix U (default: 0)")
     parser.add_argument("--processed", action='store_true',
                         help="If set, the data is already preprocessed. If not set, preprocessing will be applied.")
     parser.add_argument("--bad-margin-size", type=int, default=50,
                         help="Size of the margin to ignore in calculating direction of eigvecs (default: 50).")
     parser.add_argument("--no-penalty", action='store_true',
                         help="If set, no penalty will be used.")
-    parser.add_argument("--calc-penalty-accurately", action='store_true',
-                        help="If set, the penalty matrix will be calculated using an accurate method. If not set, an approximate method will be used.")
+    parser.add_argument("--calc-penalty-bspline-accurately", action='store_true',
+                        help="If set, the penalty matrix will be calculated using bspline package with an accurate method. If not set, an approximate method of bspline will be used.")
+    parser.add_argument("--calc-penalty-skfda", action='store_true',
+                        help="If set, the penalty matrix will be calculated using skfda package an accurate method. If not set, an approximate method of bsplie will be used.")
     args = parser.parse_args()
 
     if not os.path.exists(args.output_folder):
@@ -49,8 +55,10 @@ def main():
                                   n_basis=args.n_basis, threshold=args.threshold, num_pca_comp=args.num_pca_comp,
                                   batch_size=args.batch_size, output_folder=args.output_folder, TR=args.TR,
                                   smooth_size=args.smooth_size, lambda_min=args.lambda_min, lambda_max=args.lambda_max,
+                                  derivatives_num_p=args.derivatives_num_p, derivatives_num_u=args.derivatives_num_u,
                                   processed=args.processed, bad_margin_size=args.bad_margin_size,
-                                  no_penalty=args.no_penalty, calc_penalty_accurately=args.calc_penalty_accurately)
+                                  no_penalty=args.no_penalty, calc_penalty_bspline_accurately=args.calc_penalty_bspline_accurately,
+                                  calc_penalty_skfda=args.calc_penalty_skfda)
 
     # Run the analysis.
     fmri_instance.log_data()
