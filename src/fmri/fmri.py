@@ -414,13 +414,14 @@ class FunctionalMRI:
         I_minus_H = I - H_all_lambda  # (n_lambda, n_timepoints, n_timepoints)
 
         best_lambdas = np.zeros(self.n_voxels)
+        best_scores = np.zeros(self.n_voxels)
         # Process voxels in batches.
         for i in range(0, self.n_voxels, self.batch_size):
             end = min(i + self.batch_size, self.n_voxels)
             voxel_data_batch = self.fmri_data[i:end]  # (batch_size, n_timepoints)
 
             # Use a vectorized function to select the best lambda for all voxels in the batch.
-            best_lambdas_batch, _, _ = select_lambda(I_minus_H, voxel_data_batch, self.n_timepoints, lambda_values)
+            best_lambdas_batch, best_scores_batch, _ = select_lambda(I_minus_H, voxel_data_batch, self.n_timepoints, lambda_values)
 
             # Compute coefficients for the entire batch in a vectorized way.
             coeff_batch = self.compute_coeff_by_regularized_regression(F, FtF, P, best_lambdas_batch, voxel_data_batch)
@@ -428,7 +429,8 @@ class FunctionalMRI:
             # Store the computed coefficients in the overall array.
             C[i:end, :] = coeff_batch
             best_lambdas[i:end] = best_lambdas_batch
-        logger.info(f"Average best lambdas (over all voxels): {np.average(best_lambdas)} for number of {n_basis} basis fucntion.")
+            best_scores[i:end] = best_scores_batch
+        logger.info(f"Average best lambdas: {np.average(best_lambdas)}, average best GCV scores: {np.average(best_scores)} (over all voxels) for number of {n_basis} basis fucntion.")
 
         return C, best_lambdas
 
