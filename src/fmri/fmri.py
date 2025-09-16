@@ -23,14 +23,18 @@ from skfda.misc.operators import LinearDifferentialOperator
 from skfda.misc.operators import gram_matrix
 from skfda.representation.basis import BSplineBasis
 
+from .b_spline_skfda import spline_base_funs as spline_base_funs_skfda
+from .b_spline_bspline import spline_base_funs as spline_base_funs_bspline
+
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 
 from .preprocess import LoadData
 from .evaluate_lambda import select_lambda, compute_hat_matrices_all_lambda
 
-# Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+import logging
+
+logger = logging.getLogger("fmri_logger")
 
 
 class FunctionalMRI:
@@ -56,8 +60,9 @@ class FunctionalMRI:
 
     def __init__(self, nii_file: str, mask_file: str, degree: int, n_basis: int, threshold: float, num_pca_comp: int,
                  batch_size: int, output_folder: str, TR: float, smooth_size: int, lambda_min: float, lambda_max: float,
-                 derivatives_num_p: int, derivatives_num_u:int, processed: bool, bad_margin_size: int,
-                 no_penalty: bool=False, calc_penalty_bspline_accurately: bool=False, calc_penalty_skfda: bool=False) -> None:
+                 derivatives_num_p: int, derivatives_num_u: int, processed: bool, bad_margin_size: int,
+                 no_penalty: bool = False, calc_penalty_bspline_accurately: bool = False,
+                 calc_penalty_skfda: bool = False) -> None:
         """
         Initialize the fMRI processing pipeline.
 
@@ -87,7 +92,7 @@ class FunctionalMRI:
                                                     If False, an approximate method will be used also with spline package.
             calc_penalty_skfda (bool): if True, the penalty matrix will be calculated using skfda.gram_matrix.
         """
-        logging.info("Load data...")
+        logger.info("Load data...")
         # Store all parameters
         self.nii_file = nii_file
         self.mask_file = mask_file
@@ -130,43 +135,43 @@ class FunctionalMRI:
         """
         Log all dataset parameters and pipeline configuration.
         """
-        logging.info("======== fMRI Processing Configuration ========")
+        logger.info("======== fMRI Processing Configuration ========")
 
         # Input
-        logging.info(f"NIfTI file: {self.nii_file}")
-        logging.info(f"Mask file: {self.mask_file}")
-        logging.info(f"Output folder: {self.output_folder}")
+        logger.info(f"NIfTI file: {self.nii_file}")
+        logger.info(f"Mask file: {self.mask_file}")
+        logger.info(f"Output folder: {self.output_folder}")
 
         # Data
-        logging.info(f"Original voxel dimensions: {self.orig_n_voxels}")
-        logging.info(f"fmri_data shape (voxels × timepoints): {self.fmri_data.shape}")
-        logging.info(f"Voxels after mask: {self.n_voxels}")
-        logging.info(f"Number of timepoints: {self.n_timepoints}")
-        logging.info(f"Time range: {self.T_min} to {self.T_max}")
-        logging.info(f"Repetition time (TR): {self.TR}")
-        logging.info(f"Smoothing kernel size: {self.smooth_size}")
-        logging.info(f"Preprocessed input: {self.processed}")
+        logger.info(f"Original voxel dimensions: {self.orig_n_voxels}")
+        logger.info(f"fmri_data shape (voxels × timepoints): {self.fmri_data.shape}")
+        logger.info(f"Voxels after mask: {self.n_voxels}")
+        logger.info(f"Number of timepoints: {self.n_timepoints}")
+        logger.info(f"Time range: {self.T_min} to {self.T_max}")
+        logger.info(f"Repetition time (TR): {self.TR}")
+        logger.info(f"Smoothing kernel size: {self.smooth_size}")
+        logger.info(f"Preprocessed input: {self.processed}")
 
         # Basis / PCA
-        logging.info(f"B-spline degree: {self.degree}")
-        logging.info(f"# basis functions: {self.n_basis if self.n_basis else 'auto (via threshold)'}")
-        logging.info(f"Interpolation threshold: {self.threshold}")
-        logging.info(f"# PCA components: {self.num_pca_comp}")
+        logger.info(f"B-spline degree: {self.degree}")
+        logger.info(f"# basis functions: {self.n_basis if self.n_basis else 'auto (via threshold)'}")
+        logger.info(f"Interpolation threshold: {self.threshold}")
+        logger.info(f"# PCA components: {self.num_pca_comp}")
 
         # Regularization / Penalty
-        logging.info(f"Lambda range: {self.lambda_min} – {self.lambda_max}")
-        logging.info(f"Penalty: {'disabled' if self.no_penalty else 'enabled'}")
+        logger.info(f"Lambda range: {self.lambda_min} – {self.lambda_max}")
+        logger.info(f"Penalty: {'disabled' if self.no_penalty else 'enabled'}")
         if not self.no_penalty:
-            logging.info(f"Penalty matrix (derivatives P): {self.derivatives_num_p}")
-            logging.info(f"Penalty matrix (derivatives U): {self.derivatives_num_u}")
-            logging.info(f"Penalty (accurate B-spline): {self.calc_penalty_bspline_accurately}")
-            logging.info(f"Penalty (skfda): {self.calc_penalty_skfda}")
+            logger.info(f"Penalty matrix (derivatives P): {self.derivatives_num_p}")
+            logger.info(f"Penalty matrix (derivatives U): {self.derivatives_num_u}")
+            logger.info(f"Penalty (accurate B-spline): {self.calc_penalty_bspline_accurately}")
+            logger.info(f"Penalty (skfda): {self.calc_penalty_skfda}")
 
         # Misc
-        logging.info(f"Batch size: {self.batch_size}")
-        logging.info(f"Bad margin size: {self.bad_margin_size}")
+        logger.info(f"Batch size: {self.batch_size}")
+        logger.info(f"Bad margin size: {self.bad_margin_size}")
 
-        logging.info("================================================")
+        logger.info("================================================")
 
     def run(self) -> None:
         """
@@ -175,9 +180,9 @@ class FunctionalMRI:
         2. Build penalty matrix and fit voxel coefficients.
         3. Perform functional PCA and generate outputs.
         """
-        logging.info("Constructing B-spline basis...")
+        logger.info("Constructing B-spline basis...")
         C, F, basis_funs, best_lambdas = self.calculate_interpolation()
-        logging.info("Performing functional PCA...")
+        logger.info("Performing functional PCA...")
         # Build penalty matrix for fPCA (no derivative)
         if self.no_penalty:
             U = np.eye(basis_funs.n_basis)
@@ -192,7 +197,8 @@ class FunctionalMRI:
                 else:
                     U = self.penalty_matrix_bspline(basis_funs, derivative_order=self.derivatives_num_u)
 
-        scores, eigvecs_sorted, eigvals_sorted, v_max_scores_pos, pc_temporal_profiles, total_variance = self.fPCA(C, U,                                                                                                          F)
+        scores, eigvecs_sorted, eigvals_sorted, v_max_scores_pos, pc_temporal_profiles, total_variance = self.fPCA(C, U,
+                                                                                                                   F)
         self.draw_graphs(C, F, scores, eigvecs_sorted, eigvals_sorted, v_max_scores_pos, best_lambdas,
                          pc_temporal_profiles, total_variance)
 
@@ -210,22 +216,21 @@ class FunctionalMRI:
                 C, F, basis_funs, mean_error, best_lambdas = self.calculate_n_basis_interpolation(n_basis)
                 n_basis_errors[i] = mean_error
                 if mean_error <= self.threshold:
-                    logging.info(f"The minimum number of basis functions that interporate the data is {n_basis}.")
+                    logger.info(f"The minimum number of basis functions that interporate the data is {n_basis}.")
                     self.n_basis = n_basis
                     return C, F, basis_funs, best_lambdas
 
             self.n_basis = range_n_basis[np.argmin(n_basis_errors)]
-            logging.info(
+            logger.info(
                 f"Cannot achieve interpolation threshold, continue with {self.n_basis} basis functions with {np.min(n_basis_errors):.2f} mean error.")
             C, F, basis_funs, mean_error, best_lambdas = self.calculate_n_basis_interpolation(self.n_basis)
             return C, F, basis_funs, best_lambdas
 
     def calculate_n_basis_interpolation(self, n_basis):
         if self.calc_penalty_skfda:
-            from .b_spline_skfda import spline_base_funs
+            basis_funs, _ = spline_base_funs_skfda(self.T_min, self.T_max, self.degree, n_basis)
         else:
-            from .b_spline_bspline import spline_base_funs
-        basis_funs, _ = spline_base_funs(self.T_min, self.T_max, self.degree, n_basis)
+            basis_funs, _ = spline_base_funs_bspline(self.T_min, self.T_max, self.degree, n_basis)
         # Build penalty matrix for regularized regression (second derivative)
         if self.no_penalty:
             P = np.eye(basis_funs.n_basis)
@@ -243,13 +248,13 @@ class FunctionalMRI:
             F = np.nan_to_num(basis_funs(self.times))  # (n_timepoints, n_basis)
 
         start = time()
-        logging.info(f"Calculate coefficients for {n_basis} basis functions...")
+        logger.info(f"Calculate coefficients for {n_basis} basis functions...")
         C, best_lambdas = self.calculate_coeff(F, P, n_basis)  # shape: (n_voxels, n_basis)
         end = time()
-        logging.info(f"Elapsed time: {end - start} seconds")
+        logger.info(f"Elapsed time: {end - start} seconds")
         Y_hat = C @ F.T  # (n_voxels, n_timepoints)
         mean_error = np.mean(np.abs(self.fmri_data - Y_hat))
-        logging.info(f"The mean interpolation error for {n_basis} basis functions is {mean_error:.2f}.")
+        logger.info(f"The mean interpolation error for {n_basis} basis functions is {mean_error:.2f}.")
         return C, F, basis_funs, mean_error, best_lambdas
 
     def penalty_matrix_skfda(self, basis_funs: BSplineBasis, derivative_order: int) -> np.ndarray:
@@ -263,7 +268,7 @@ class FunctionalMRI:
         Returns:
             G (ndarray): penalty matrix of shape (n_basis, n_basis).
         """
-        logging.info(f"Computing (accurately) penalty matrix for {derivative_order}-th derivative using scikit-fda...")
+        logger.info(f"Computing (accurately) penalty matrix for {derivative_order}-th derivative using scikit-fda...")
 
         n_basis = basis_funs.n_basis
 
@@ -292,7 +297,7 @@ class FunctionalMRI:
         Returns:
             G (ndarray): penalty matrix of shape (n_basis, n_basis).
         """
-        logging.info(f"Computing (accurately) penalty matrix for {derivative_order}-th derivative...")
+        logger.info(f"Computing (accurately) penalty matrix for {derivative_order}-th derivative...")
         deriv_funs = basis_funs.derivative(nu=derivative_order)
         n_basis = deriv_funs.c.shape[1]
         G = np.zeros((n_basis, n_basis))
@@ -325,7 +330,7 @@ class FunctionalMRI:
         Returns:
         - G: (n_basis x n_basis) approximated penalty matrix.
         """
-        logging.info(f"Computing (approximately) penalty matrix for {derivative_order}-th derivative...")
+        logger.info(f"Computing (approximately) penalty matrix for {derivative_order}-th derivative...")
         # Compute the derivative of the basis functions
         deriv_funs = basis_funs.derivative(nu=derivative_order)
         x_vals = np.linspace(self.T_min, self.T_max, 1000)
@@ -389,15 +394,15 @@ class FunctionalMRI:
             best_labmdas (ndarray): best lambdas for each voxel
         """
 
-        logging.info("Fitting basis to each voxel with optimal λ in batches...")
+        logger.info("Fitting basis to each voxel with optimal λ in batches...")
 
         # Coeff matrix
         C = np.zeros((self.n_voxels, n_basis))  # (n_voxels x n_basis)
 
         # Precompute the basis matrix and related matrices for efficiency.
         FtF = F.T @ F  # (n_basis, n_basis)
-        lambda_values = np.logspace(self.lambda_min, self.lambda_max,
-                                    100)  # 100 logarithmically spaced values between 10^-4 and 10^3
+        # 100 logarithmically spaced values between 10^-lambda_min and 10^lambda_max
+        lambda_values = np.unique(np.logspace(self.lambda_min, self.lambda_max, 100))
         # lambda_values = np.linspace(self.lambda_min, self.lambda_max, 100) # 100 linear spaced values between 10^-4 and 10^3
 
         # Compute H matrices for all lambda values.
@@ -423,6 +428,8 @@ class FunctionalMRI:
             # Store the computed coefficients in the overall array.
             C[i:end, :] = coeff_batch
             best_lambdas[i:end] = best_lambdas_batch
+        logger.info(f"Average best lambdas (over all voxels): {np.average(best_lambdas)} for number of {n_basis} basis fucntion.")
+
         return C, best_lambdas
 
     def fPCA(self, C: np.ndarray, U: np.ndarray, F: np.ndarray) -> tuple[
@@ -461,7 +468,7 @@ class FunctionalMRI:
         pc_temporal_profiles = F @ eigvecs_sorted  # (n_timepoints, num_pca_comp)
 
         # Flip sign so max absolute value is positive
-        max_idx = np.argmax(np.abs(pc_temporal_profiles[self.bad_margin_size:-self.bad_margin_size-1, :]), axis=0)
+        max_idx = np.argmax(np.abs(pc_temporal_profiles[self.bad_margin_size:-self.bad_margin_size - 1, :]), axis=0)
         flip_mask = pc_temporal_profiles[max_idx + self.bad_margin_size, np.arange(self.num_pca_comp)] < 0
         eigvecs_sorted[:, flip_mask] *= -1
         pc_temporal_profiles[:, flip_mask] *= -1
@@ -501,7 +508,7 @@ class FunctionalMRI:
 
         for i in range(self.num_pca_comp):
             explained_vairance_i = (eigvals_sorted[i] * 100) / total_variance
-            logging.info(f"Saving voxel-wise importance map for first eigenfunction {i}...")
+            logger.info(f"Saving voxel-wise importance map for first eigenfunction {i}...")
             importance_map = np.zeros(self.orig_n_voxels)
             importance_map[self.mask > 0] = scores[:, i]
             importance_nii = nib.Nifti1Image(importance_map, affine=self.nii_affine)
@@ -509,7 +516,7 @@ class FunctionalMRI:
             nib.save(importance_nii, impmap_file)
 
             # Display the slice
-            logging.info(f"voxel-wise importance map for eigenfunction {i}...")
+            logger.info(f"voxel-wise importance map for eigenfunction {i}...")
             # Pick the middle slice along Z-axis
             z_middle = importance_map.shape[2] // 2
             slice_img = importance_map[:, :, z_middle]
@@ -523,7 +530,7 @@ class FunctionalMRI:
             # plt.show()
             plt.close()
 
-            logging.info(f"Plotting temporal profile of eigenfunction {i}...")
+            logger.info(f"Plotting temporal profile of eigenfunction {i}...")
             plt.figure(figsize=(10, 4))
             plt.plot(self.times, pc_temporal_profiles[:, i], color='blue')
             plt.title(f'temporal profile of eigenfunction {i} ({explained_vairance_i}% var)')
@@ -545,7 +552,7 @@ class FunctionalMRI:
             Y_hat_v_max_score = C[v_max_scores_pos_i] @ F.T  # (1, n_timepoints)
             mean_error_max_score = np.mean(np.abs(Y_v_max_score - Y_hat_v_max_score))
             best_lambda = best_lambdas[v_max_scores_pos_i]
-            logging.info(f"Plotting signal intensity for best voxel in eigenfunction {i}...")
+            logger.info(f"Plotting signal intensity for best voxel in eigenfunction {i}...")
             plt.figure(figsize=(10, 4))
             plt.plot(self.times, Y_hat_v_max_score, color='blue')
             plt.scatter(self.times, Y_v_max_score, color='red')
@@ -579,7 +586,7 @@ class FunctionalMRI:
             # plt.show()
             plt.close()
 
-        logging.info(f"Plotting original average signal intensity ...")
+        logger.info(f"Plotting original average signal intensity ...")
         signal_intensity = np.average(self.fmri_data, axis=0)
         plt.figure(figsize=(10, 4))
         plt.plot(self.times, signal_intensity, color='blue')

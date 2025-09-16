@@ -6,8 +6,7 @@ import matplotlib.pyplot as plt
 from scipy.interpolate import BSpline
 import logging
 
-# Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger("fmri_logger")
 
 
 def validate_spline_basis_funs(splines_funs, knots):
@@ -28,9 +27,9 @@ def validate_spline_basis_funs(splines_funs, knots):
     sum_vals = np.sum(basis_values_matrix, axis=1)
     tolerance = 1e-10
     if np.all(np.abs(sum_vals - 1) < tolerance):
-        logging.info("Success: The basis functions sum to 1 (within tolerance) at all x values.")
+        logger.info("Success: The basis functions sum to 1 (within tolerance) at all x values.")
     else:
-        logging.info("Warning: The basis functions do not sum to 1 at some x values.")
+        logger.info("Warning: The basis functions do not sum to 1 at some x values.")
         raise ValueError("The basis functions do not sum to 1 at some x values.")
 
 
@@ -76,7 +75,7 @@ def main():
     # Define spline parameters: cubic spline (degree 3, order 4)
     degree = 3
     order = degree + 1
-    logging.info("Constructing B-spline basis...")
+    logger.info("Constructing B-spline basis...")
     knots = [0, 0, 0, 0, 2.5, 5.0, 7.5, 10, 10, 10, 10]
     # The number of B-spline basis functions is len(knots) - order.
     num_basis = len(knots) - order
@@ -93,9 +92,9 @@ def main():
     # Check that the sum is approximately 1 at all evaluation points.
     tolerance = 1e-10
     if np.all(np.abs(sum_vals - 1) < tolerance):
-        logging.info("Success: The basis functions sum to 1 (within tolerance) at all x values.")
+        logger.info("Success: The basis functions sum to 1 (within tolerance) at all x values.")
     else:
-        logging.info("Warning: The basis functions do not sum to 1 at some x values.")
+        logger.info("Warning: The basis functions do not sum to 1 at some x values.")
 
     # Plot the sum of the basis functions to visually verify the partition of unity.
     plt.figure(figsize=(10, 4))

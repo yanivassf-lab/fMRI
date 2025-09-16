@@ -4,9 +4,26 @@ Console script for fmri
 """
 
 import argparse
-import os
 
 from fmri.fmri import FunctionalMRI
+
+import logging
+import os
+
+
+def setup_logger(output_folder):
+    log_file = os.path.join(output_folder, "fmri_pipeline.log")
+    logger = logging.getLogger("fmri_logger")
+    logger.setLevel(logging.INFO)
+    logger.handlers = []
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    console_handler = logging.StreamHandler()
+    file_handler = logging.FileHandler(log_file, mode='w')
+    console_handler.setFormatter(formatter)
+    file_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
+    return logger
 
 
 def main():
@@ -50,6 +67,8 @@ def main():
             f"Output folder '{args.output_folder}' does not exist. Please create it before running."
         )
 
+    setup_logger(args.output_folder)
+
     # Create an instance of fMRI and set the output folder.
     fmri_instance = FunctionalMRI(nii_file=args.nii_file, mask_file=args.mask_file, degree=args.degree,
                                   n_basis=args.n_basis, threshold=args.threshold, num_pca_comp=args.num_pca_comp,
@@ -57,7 +76,8 @@ def main():
                                   smooth_size=args.smooth_size, lambda_min=args.lambda_min, lambda_max=args.lambda_max,
                                   derivatives_num_p=args.derivatives_num_p, derivatives_num_u=args.derivatives_num_u,
                                   processed=args.processed, bad_margin_size=args.bad_margin_size,
-                                  no_penalty=args.no_penalty, calc_penalty_bspline_accurately=args.calc_penalty_bspline_accurately,
+                                  no_penalty=args.no_penalty,
+                                  calc_penalty_bspline_accurately=args.calc_penalty_bspline_accurately,
                                   calc_penalty_skfda=args.calc_penalty_skfda)
 
     # Run the analysis.
