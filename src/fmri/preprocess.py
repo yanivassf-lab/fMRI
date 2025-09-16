@@ -7,6 +7,8 @@ from numpy import ndarray, dtype, float64
 from scipy.ndimage import uniform_filter
 from scipy.signal import butter, filtfilt
 
+logger = logging.getLogger("fmri_logger")
+
 
 class LoadData:
     def __init__(self, nii_file: str, mask_file: str):
@@ -15,7 +17,8 @@ class LoadData:
         self.filtered_file = None
         self.filtered_nii_rdata = None
 
-    def load_data(self, TR: float = None, smooth_size:int = 5, processed: bool = True, save_filtered_file: bool = False) -> tuple[
+    def load_data(self, TR: float = None, smooth_size: int = 5, processed: bool = True,
+                  save_filtered_file: bool = False) -> tuple[
         ndarray[tuple[Any, int], dtype[float64]], Any, Any]:
         """
         Load and preprocess fMRI data from a NIfTI file.
@@ -50,14 +53,14 @@ class LoadData:
         xlocs, ylocs, zlocs = np.where(mask == 1)
 
         if not processed:
-            logging.info("Applying preprocessing steps: spatial smoothing and temporal filtering...")
+            logger.info("Applying preprocessing steps: spatial smoothing and temporal filtering...")
             # Apply smoothing and temporal filtering
-            data = self.filter_fMRI(data, TR, smooth_size,st)
+            data = self.filter_fMRI(data, TR, smooth_size, st)
             if save_filtered_file:
                 self.filtered_file = data
                 self.filtered_nii_rdata = nii_rdata if nii_rdata else nii_mask
         else:
-            logging.info("Loading data files without additional filtering.")
+            logger.info("Loading data files without additional filtering.")
 
         # Extract raw time series data from voxels inside the mask
         data_flat = np.zeros((st, len(xlocs)))  # [time, voxels]
@@ -111,8 +114,9 @@ class LoadData:
 
         # Ensure Wn is within (0, 1)
         if not (0 < Wn[0] < 1 and 0 < Wn[1] < 1):
-            raise ValueError(f"Invalid filter frequencies: Wn={Wn}. Generally it caused because of an incorrect value of "
-                             f"TR. Check TR value.")
+            raise ValueError(
+                f"Invalid filter frequencies: Wn={Wn}. Generally it caused because of an incorrect value of "
+                f"TR. Check TR value.")
 
         order = 3  # Butterworth filter order
         b, a = butter(order, Wn, btype='band')

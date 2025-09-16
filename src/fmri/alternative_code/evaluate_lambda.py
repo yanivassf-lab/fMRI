@@ -6,7 +6,7 @@ from numpy.linalg import norm
 from scipy.linalg import cho_factor, cho_solve
 from time import time
 # Set up logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def gcv_score_one_voxel_one_lambda(voxel_data, H, I, n_timepoints):
     """

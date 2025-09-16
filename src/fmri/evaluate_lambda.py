@@ -2,8 +2,7 @@ import logging
 
 import numpy as np
 
-# Set up logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger("fmri_logger")
 
 
 def compute_hat_matrix(F: np.ndarray, FtF: np.ndarray, P: np.ndarray, lambda_const: float) -> np.ndarray:
@@ -45,7 +44,7 @@ def compute_hat_matrices_all_lambda(F, FtF, P, n_timepoints, lambda_values):
     n_lambda = len(lambda_values)
     H_all_lambda = np.zeros((n_lambda, n_timepoints, n_timepoints))
     for i, lambda_const in enumerate(lambda_values):
-        # logging.info(f"\t\tCompute hat matrix for lambda value: {lambda_const}")
+        # logger.info(f"\t\tCompute hat matrix for lambda value: {lambda_const}")
         H_all_lambda[i, :, :] = compute_hat_matrix(F, FtF, P, lambda_const)  # (n_lambda), n_timepoints, n_timepoints)
     return H_all_lambda
 
@@ -91,7 +90,7 @@ def select_lambda(I_minus_H: np.ndarray, voxel_data_batch: np.ndarray,
     traces = np.trace(I_minus_H, axis1=1, axis2=2)
 
     # Now compute the GCV score for each lambda and each voxel:
-    # Using broadcasting, reshape traces to (n_lambda, 1)
+    # Using broadcasting, reshape traces to (n_lambda, n_voxels)
     scores = (n_timepoints * res_norm_sq) / (traces[:, None] ** 2)
 
     # For each voxel, find the candidate (axis 0) with the minimal score.

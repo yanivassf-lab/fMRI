@@ -7,8 +7,7 @@ from skfda.representation.basis import BSplineBasis
 from skfda import FDataBasis
 import logging
 
-# Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger("fmri_logger")
 
 
 def validate_spline_basis_funs(basis_funs: BSplineBasis, domain_range):
@@ -32,17 +31,17 @@ def validate_spline_basis_funs(basis_funs: BSplineBasis, domain_range):
 
     tolerance = 1e-10
     if np.all(np.abs(sum_vals - 1) < tolerance):
-        logging.info("Success: The basis functions sum to 1 (within tolerance) at all x values.")
+        logger.info("Success: The basis functions sum to 1 (within tolerance) at all x values.")
     else:
         max_error = np.max(np.abs(sum_vals - 1))
-        logging.info(f"Warning: The basis functions do not sum to 1 at some x values. Max error: {max_error}")
+        logger.info(f"Warning: The basis functions do not sum to 1 at some x values. Max error: {max_error}")
         # For B-splines, the sum should be 1 in the interior of the domain
         # Check only the interior (exclude 5% at each boundary)
         interior_start = int(len(values) * 0.05)
         interior_end = int(len(values) * 0.95)
         interior_sum = sum_vals[interior_start:interior_end]
         interior_max_error = np.max(np.abs(interior_sum - 1))
-        logging.info(f"Interior max error (excluding boundaries): {interior_max_error}")
+        logger.info(f"Interior max error (excluding boundaries): {interior_max_error}")
 
 
 def spline_base_funs(T_min, T_max, degree, n_basis):
@@ -92,7 +91,7 @@ def evaluate_basis_functions(basis_funs, x_vals):
     # Use the evaluate method of BSplineBasis
     # It returns a 3D array of shape (n_samples, n_basis, n_outputs)
     # For basis evaluation, n_outputs = 1
-    basis_matrix = basis_funs(x_vals).squeeze().T # (n_basis, n_points)
+    basis_matrix = basis_funs(x_vals).squeeze().T  # (n_basis, n_points)
 
     # If x_vals is a single point, ensure we have the right shape
     if basis_matrix.ndim == 1:
@@ -141,7 +140,7 @@ def main():
     order = degree + 1
     domain_range = (0, 10)
 
-    logging.info("Constructing B-spline basis...")
+    logger.info("Constructing B-spline basis...")
 
     # Method 1: Create with custom knots
     interior_knots = [2.5, 5.0, 7.5]
@@ -152,10 +151,10 @@ def main():
     full_knots = basis_funs.knots
     actual_domain = basis_funs.domain_range[0]
 
-    logging.info(f"Number of basis functions: {n_basis}")
-    logging.info(f"Interior knots: {interior_knots}")
-    logging.info(f"Full knot sequence: {full_knots}")
-    logging.info(f"Actual domain range: {actual_domain}")
+    logger.info(f"Number of basis functions: {n_basis}")
+    logger.info(f"Interior knots: {interior_knots}")
+    logger.info(f"Full knot sequence: {full_knots}")
+    logger.info(f"Actual domain range: {actual_domain}")
 
     # Create a grid of x values over the actual domain
     # Use the actual domain from the basis object
@@ -170,10 +169,10 @@ def main():
     # Check partition of unity
     tolerance = 1e-10
     if np.all(np.abs(sum_vals - 1) < tolerance):
-        logging.info("Success: The basis functions sum to 1 (within tolerance) at all x values.")
+        logger.info("Success: The basis functions sum to 1 (within tolerance) at all x values.")
     else:
         max_error = np.max(np.abs(sum_vals - 1))
-        logging.info(f"Warning: Max deviation from 1: {max_error}")
+        logger.info(f"Warning: Max deviation from 1: {max_error}")
 
     # Plot individual basis functions
     plt.figure(figsize=(12, 8))
@@ -208,27 +207,27 @@ def main():
     plt.show()
 
     # Method 2: Test the spline_base_funs function (uniform knots)
-    logging.info("\nTesting spline_base_funs function (uniform knots)...")
+    logger.info("\nTesting spline_base_funs function (uniform knots)...")
     basis_funs2, knots2 = spline_base_funs(0, 10, 3, 7)
-    logging.info(f"Generated basis with {basis_funs2.n_basis} functions")
-    logging.info(f"Knot sequence: {knots2}")
+    logger.info(f"Generated basis with {basis_funs2.n_basis} functions")
+    logger.info(f"Knot sequence: {knots2}")
 
     # Evaluate and check
     x_vals2 = np.linspace(0, 10, 400)
     basis_matrix2 = evaluate_basis_functions(basis_funs2, x_vals2)
     sum_vals2 = np.sum(basis_matrix2, axis=1)
     max_error2 = np.max(np.abs(sum_vals2 - 1))
-    logging.info(f"Uniform knots - Max deviation from 1: {max_error2}")
+    logger.info(f"Uniform knots - Max deviation from 1: {max_error2}")
 
     # Example: Create FDataBasis objects if needed
-    logging.info("\nExample: Creating FDataBasis with identity coefficients...")
+    logger.info("\nExample: Creating FDataBasis with identity coefficients...")
     # Identity matrix coefficients - each row represents one basis function
     coefficients = np.eye(n_basis)
     fd_basis = FDataBasis(basis=basis_funs, coefficients=coefficients)
     # Evaluate at a few points
     test_points = np.array([2.5, 5.0, 7.5])
     fd_values = fd_basis(test_points).T
-    logging.info(f"FDataBasis evaluation shape: {fd_values.shape}")
+    logger.info(f"FDataBasis evaluation shape: {fd_values.shape}")
 
 
 if __name__ == '__main__':
