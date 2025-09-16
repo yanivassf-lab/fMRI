@@ -91,12 +91,12 @@ def select_lambda(I_minus_H: np.ndarray, voxel_data_batch: np.ndarray,
 
     # Now compute the GCV score for each lambda and each voxel:
     # Using broadcasting, reshape traces to (n_lambda, n_voxels)
-    scores = (n_timepoints * res_norm_sq) / (traces[:, None] ** 2)
+    gcv_scores = (n_timepoints * res_norm_sq) / (traces[:, None] ** 2)
 
     # For each voxel, find the candidate (axis 0) with the minimal score.
-    best_idx = np.argmin(scores, axis=0)  # shape: (n_voxels,)
+    best_idx = np.argmin(gcv_scores, axis=0)  # shape: (n_voxels,)
 
     best_lambda = lambda_values[best_idx]  # shape: (n_voxels,)
-    best_score = scores[best_idx, np.arange(scores.shape[1])]  # shape: (n_voxels,)
+    best_gcv_scores = gcv_scores[best_idx, np.arange(gcv_scores.shape[1])]  # shape: (n_voxels,)
 
-    return best_lambda, best_score, scores
+    return best_lambda, best_gcv_scores, gcv_scores
