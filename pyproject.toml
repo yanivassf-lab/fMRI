@@ -32,7 +32,8 @@ dependencies = [
     "nibabel==5.3.2",
     "numpy==2.2.3",
     "scipy==1.15.2",
-    "scikit-fda==0.10.1"
+    "scikit-fda==0.10.1",
+    "dtaidistance==2.3.13"
 ]
 
 
@@ -40,6 +41,8 @@ dependencies = [
 fmri-main = "fmri.cli.fmri_main:main"
 nifti-viewer = "fmri.cli.nifti_viewer:main"
 preprocess-nii-file = "fmri.cli.preprocess_nii_file:main"
+compare-peaks-between-movements = "fmri.cli.compare_peaks_between_movements:main"
+
 [project.optional-dependencies]
 dev = [
     "coverage", # for testing

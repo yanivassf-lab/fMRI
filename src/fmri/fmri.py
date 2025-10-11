@@ -10,7 +10,6 @@ This module defines an fMRI class that:
   6. Generates and saves voxel importance maps and eigenfunction intensity plots.
 """
 
-import logging
 import os.path
 from time import time
 
@@ -131,11 +130,12 @@ class FunctionalMRI:
         instance = super().__new__(cls)
         return instance
 
-    def log_data(self) -> None:
+    def log_data(self, argv) -> None:
         """
         Log all dataset parameters and pipeline configuration.
         """
         logger.info("======== fMRI Processing Configuration ========")
+        logger.info(f"Command line: {' '.join(argv)}")
 
         # Input
         logger.info(f"NIfTI file: {self.nii_file}")
@@ -421,7 +421,8 @@ class FunctionalMRI:
             voxel_data_batch = self.fmri_data[i:end]  # (batch_size, n_timepoints)
 
             # Use a vectorized function to select the best lambda for all voxels in the batch.
-            best_lambdas_batch, best_scores_batch, _ = select_lambda(I_minus_H, voxel_data_batch, self.n_timepoints, lambda_values)
+            best_lambdas_batch, best_scores_batch, _ = select_lambda(I_minus_H, voxel_data_batch, self.n_timepoints,
+                                                                     lambda_values)
 
             # Compute coefficients for the entire batch in a vectorized way.
             coeff_batch = self.compute_coeff_by_regularized_regression(F, FtF, P, best_lambdas_batch, voxel_data_batch)
@@ -430,7 +431,8 @@ class FunctionalMRI:
             C[i:end, :] = coeff_batch
             best_lambdas[i:end] = best_lambdas_batch
             best_scores[i:end] = best_scores_batch
-        logger.info(f"Average best lambdas: {np.average(best_lambdas)}, average best GCV scores: {np.average(best_scores)} (over all voxels) for number of {n_basis} basis fucntion.")
+        logger.info(
+            f"Average best lambdas: {np.average(best_lambdas)}, average best GCV scores: {np.average(best_scores)} (over all voxels) for number of {n_basis} basis fucntion.")
 
         return C, best_lambdas
 

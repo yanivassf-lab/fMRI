@@ -8,6 +8,7 @@ import argparse
 from fmri.fmri import FunctionalMRI
 
 import logging
+import sys
 import os
 
 
@@ -40,7 +41,7 @@ def main():
                         help="Path to a existing folder where output files will be saved.")
     parser.add_argument("--TR", type=float, default=None,
                         help="Repetition time (TR) in seconds. If not provided, it will be extracted from the NIfTI header.")
-    parser.add_argument("--smooth_size", type=int, default=5,
+    parser.add_argument("--smooth-size", type=int, default=5,
                         help="Box size of smoothing kernel. Relevant only if --processed is not set (default: 5).")
     parser.add_argument("--lambda-min", type=float, default=-4,
                         help="Minimum value of lambda in log10 scale (i.e., 10^-4) (default: -4)")
@@ -80,8 +81,9 @@ def main():
                                   calc_penalty_bspline_accurately=args.calc_penalty_bspline_accurately,
                                   calc_penalty_skfda=args.calc_penalty_skfda)
 
+
     # Run the analysis.
-    fmri_instance.log_data()
+    fmri_instance.log_data(sys.argv)
     fmri_instance.run()
 
 
