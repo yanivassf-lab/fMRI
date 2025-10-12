@@ -9,19 +9,20 @@ from fmri.peaks_similarity import get_peaks, calculate_similarity_score, peaks_t
 from fmri.utils import setup_logger
 
 
-def compare_peaks(files_path: str, output_folder: str, n_comp: int, movements: list[int],
-                                    alpha: float = 0.5, logger=None):
+def compare_peaks(files_path: str, output_folder: str, pc_num: int, movements: list[int],
+                                    alpha: float = 0.5, num_scores=5, logger=None):
     """
     Compare peaks between different movements by plotting the centered average of absolute signal intensities.
 
     Parameters:
     - files_path (str): Path to the directory containing subject subdirectories.
     - output_folder (str): Path to the output folder for logs and figures.
-    - n_comp (int): Number of components/functions to consider.
+    - pc_num (int): Number of components/functions to consider.
     - movements (list[int]): List of movement identifiers to compare.
     - alpha (float): Alpha parameter for combined score calculation between 0 and 1.
                     0 <= alpha <= 1, where alpha=1 gives full weight to the minimum similarity
                     and alpha=0 gives full weight to the mean similarity.
+    - num_scores (int): Number of top scores to keep for each movement and subject.
     """
 
     params_comb = get_list_of_params(files_path)
@@ -30,16 +31,16 @@ def compare_peaks(files_path: str, output_folder: str, n_comp: int, movements: l
     logger.info(f"Found {len(file_list)} files for {len(movements)} movements with {subs_num} subjects per movement.")
 
 
-    for pc_num in range(n_comp):
+    for pc_num in range(pc_num):
         logger.info(f"Processing PC: {pc_num}")
         os.makedirs(os.path.join(output_folder, f"pc_{pc_num}"), exist_ok=True)
-        best_scores_mov = [-np.inf] * len(movements)
-        best_params_mov = ['.'] * len(movements)
-        best_scores_sub = [-np.inf] * subs_num
-        best_params_sub = ['.'] * subs_num
+        best_scores_mov = np.array([[-np.inf] * num_scores] * len(movements))
+        best_params_mov = [['.'] * num_scores] * len(movements)
+        best_scores_sub = np.array([[-np.inf] * num_scores] * subs_num)
+        best_params_sub = [['.'] * num_scores] * subs_num
 
         for comb_num, params in enumerate(params_comb):
-            logger.info(f"PC:{pc_num}, comparing {params} ({comb_num} of {len(params_comb)} combinations)")
+            logger.info(f"PC:{pc_num}, comparing peaks of {params} ({comb_num} of {len(params_comb)} combinations)")
             peaks_signal_all = []
             plt.figure(figsize=(20, 10))
             scores_sub = []
@@ -78,15 +79,17 @@ def compare_peaks(files_path: str, output_folder: str, n_comp: int, movements: l
                 end = start + subs_num
                 score_mov = calculate_similarity_score(peaks_signal_all[start:end], alpha=alpha)
                 scores_mov.append(score_mov)
-                if score_mov > best_scores_mov[mov - 1]:
-                    best_scores_mov[mov - 1] = score_mov
-                    best_params_mov[mov - 1] = params
+                if score_mov > np.min(best_scores_mov[mov - 1]):
+                    min_idx = np.argmin(best_scores_mov[mov - 1])
+                    best_scores_mov[mov - 1][min_idx] = score_mov
+                    best_params_mov[mov - 1][min_idx] = params
             for sub in range(subs_num):
                 score_sub = calculate_similarity_score(peaks_signal_all[sub::subs_num], alpha=alpha)
                 scores_sub.append(score_sub)
-                if score_sub > best_scores_sub[sub]:
-                    best_scores_sub[sub] = score_sub
-                    best_params_sub[sub] = params
+                if score_sub > np.min(best_scores_sub[sub]):
+                    min_idx = np.argmin(best_scores_sub[sub])
+                    best_scores_sub[sub][min_idx] = score_sub
+                    best_params_sub[sub][min_idx] = params
 
             plt.suptitle(
                 f"Params {params} for pc {pc_num}\n \
@@ -100,17 +103,21 @@ def compare_peaks(files_path: str, output_folder: str, n_comp: int, movements: l
 
 
         for movement in movements:
+            sorted_idx = np.argsort(best_scores_mov[movement - 1])[::-1]
             logger.info(
-                f"Best score for pc {pc_num} movement {movement}: {best_scores_mov[movement - 1]:.4f} with params {best_params_mov[movement - 1]}")
+                f"Best score for pc {pc_num} movement {movement}: {','.join([f'{s:.4f}' for s in best_scores_mov[movement - 1][sorted_idx]])} with params {','.join(best_params_mov[movement - 1][sorted_idx])}"
+            )
         for sub_num in range(subs_num):
+            sorted_idx = np.argsort(best_scores_sub[sub_num])[::-1]
             logger.info(
-                f"Best score for pc {pc_num} subject {subs_names[sub_num]}: {best_scores_sub[sub_num]:.4f} with params {best_params_sub[sub_num]}")
+                f"Best score for pc {pc_num} subject {subs_names[sub_num]}: {','.join([f'{s:.4f}' for s in best_scores_sub[sub_num][sorted_idx]])} with params {','.join(best_params_sub[sub_num][sorted_idx])}"
+            )
 
 def get_list_of_params(files_path: str):
     """Get a list of unique parameter combinations from the directory structure."""
     subs = glob.glob(os.path.join(files_path, f'sub-*'))[0]
     params_comb = [os.path.basename(p) for p in glob.glob(os.path.join(subs, '*'))]
-    return params_comb
+    return sorted(params_comb)
 
 def get_list_of_files(files_path: str, movements: list[int]):
     """
@@ -137,10 +144,11 @@ def main():
     parser = argparse.ArgumentParser(description="Compare peaks between movements")
     parser.add_argument("--files-path", type=str, required=True, help="Path to the subjects directory")
     parser.add_argument("--output-folder", type=str, required=True, help="Path to the output folder")
-    parser.add_argument("--n-comp", type=int, required=True, help="Number of components/functions")
+    parser.add_argument("--pc_num", type=int, required=True, help="Number of components/functions")
     parser.add_argument("--movements", type=int, nargs='+', default=[1, 2], help="List of movements to compare (from 1 to 9)")
     parser.add_argument("--alpha", type=float, default=0.5,
                         help="Alpha parameter for combined score calculation between 0 and 1")
+    parser.add_argument("--num-scores", type=int, default=5, help="Number of top scores to keep for each movement and subject")
     args = parser.parse_args()
 
     if not os.path.exists(args.files_path):
@@ -162,7 +170,7 @@ def main():
     logger = logging.getLogger("compare_peaks_logger")
     logger.info(f"Command line: {' '.join(sys.argv)}")
 
-    compare_peaks(args.files_path, args.output_folder, args.n_comp, args.movements, args.alpha, logger)
+    compare_peaks(args.files_path, args.output_folder, args.pc_num, args.movements, args.alpha, args.num_scores, logger)
 
 
 if __name__ == "__main__":
