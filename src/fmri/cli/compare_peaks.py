@@ -105,12 +105,13 @@ def compare_peaks(files_path: str, output_folder: str, pc_num: int, movements: l
         for movement in movements:
             sorted_idx = np.argsort(best_scores_mov[movement - 1])[::-1]
             logger.info(
-                f"Best score for pc {pc_num} movement {movement}: {','.join([f'{s:.4f}' for s in best_scores_mov[movement - 1][sorted_idx]])} with params {','.join(best_params_mov[movement - 1][sorted_idx])}"
+                f"Best score for pc {pc_num} movement {movement}: {','.join([f'{s:.4f}' for s in best_scores_mov[movement - 1][sorted_idx]])} with params {','.join([best_params_mov[movement - 1][i] for i in sorted_idx])}"
             )
+
         for sub_num in range(subs_num):
             sorted_idx = np.argsort(best_scores_sub[sub_num])[::-1]
             logger.info(
-                f"Best score for pc {pc_num} subject {subs_names[sub_num]}: {','.join([f'{s:.4f}' for s in best_scores_sub[sub_num][sorted_idx]])} with params {','.join(best_params_sub[sub_num][sorted_idx])}"
+                f"Best score for pc {pc_num} subject {subs_names[sub_num]}: {','.join([f'{s:.4f}' for s in best_scores_sub[sub_num][sorted_idx]])} with params {','.join([best_params_sub[sub_num][i] for i in sorted_idx])}"
             )
 
 def get_list_of_params(files_path: str):
@@ -202,6 +203,9 @@ if __name__ == "__main__":
 #        └── ...
 #
 # 2. Run the script from the command line:
-#    compare-peaks --files-path /path/to/subjects/ --output-folder /path/to/non-exists/output/folder --n-comp 7 --movements 1 2 --alpha 0.9
-#
-# 3. The output figure will be saved in /path/to/subjects/figs/both_movements_compare_peaks_abs_values_xnorm.png
+# compare-peaks --files-path /path/to/subjects/ --output-folder /path/to/non-exists/output/folder --pc_num 7 --movements 1 2 --alpha 0.9 --num-scores 5
+#   - Replace /path/to/subjects/ with the actual path to the directory containing subject subdirectories.
+#   - Replace /path/to/non-exists/output/folder with the desired output folder path (it should not exist prior to running).
+#   - Adjust --pc_num, --movements, --alpha, and --num-scores as needed.
+
+# 3. The output will be saved in the specified output folder, including logs and figures for each parameter combination and principal component.
