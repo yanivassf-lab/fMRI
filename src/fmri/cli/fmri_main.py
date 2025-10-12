@@ -10,21 +10,7 @@ from fmri.fmri import FunctionalMRI
 import logging
 import sys
 import os
-
-
-def setup_logger(output_folder):
-    log_file = os.path.join(output_folder, "fmri_pipeline.log")
-    logger = logging.getLogger("fmri_logger")
-    logger.setLevel(logging.INFO)
-    logger.handlers = []
-    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    console_handler = logging.StreamHandler()
-    file_handler = logging.FileHandler(log_file, mode='w')
-    console_handler.setFormatter(formatter)
-    file_handler.setFormatter(formatter)
-    logger.addHandler(console_handler)
-    logger.addHandler(file_handler)
-    return logger
+from fmri.utils import setup_logger
 
 
 def main():
@@ -68,7 +54,7 @@ def main():
             f"Output folder '{args.output_folder}' does not exist. Please create it before running."
         )
 
-    setup_logger(args.output_folder)
+    setup_logger(output_folder=args.output_folder, file_name="fmri_log.txt", loger_name="fmri_logger", log_level=logging.INFO)
 
     # Create an instance of fMRI and set the output folder.
     fmri_instance = FunctionalMRI(nii_file=args.nii_file, mask_file=args.mask_file, degree=args.degree,

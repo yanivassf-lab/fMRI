@@ -41,7 +41,7 @@ dependencies = [
 fmri-main = "fmri.cli.fmri_main:main"
 nifti-viewer = "fmri.cli.nifti_viewer:main"
 preprocess-nii-file = "fmri.cli.preprocess_nii_file:main"
-compare-peaks-between-movements = "fmri.cli.compare_peaks_between_movements:main"
+compare-peaks = "fmri.cli.compare_peaks:main"
 
 [project.optional-dependencies]
 dev = [
