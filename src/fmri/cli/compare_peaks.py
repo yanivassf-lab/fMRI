@@ -34,10 +34,10 @@ def compare_peaks(files_path: str, output_folder: str, pc_num: int, movements: l
     for pc_num in range(pc_num):
         logger.info(f"Processing PC: {pc_num}")
         os.makedirs(os.path.join(output_folder, f"pc_{pc_num}"), exist_ok=True)
-        best_scores_mov = np.array([[-np.inf] * num_scores] * len(movements))
-        best_params_mov = [['.'] * num_scores] * len(movements)
-        best_scores_sub = np.array([[-np.inf] * num_scores] * subs_num)
-        best_params_sub = [['.'] * num_scores] * subs_num
+        best_scores_mov = np.array([[-np.inf] * num_scores for _ in range(len(movements))])
+        best_params_mov = [['.'] * num_scores for _ in range(len(movements))]
+        best_scores_sub = np.array([[-np.inf] * num_scores for _ in range(subs_num)])
+        best_params_sub = [['.'] * num_scores for _ in range(subs_num)]
 
         for comb_num, params in enumerate(params_comb):
             logger.info(f"PC:{pc_num}, comparing peaks of {params} ({comb_num} of {len(params_comb)} combinations)")
