@@ -1,13 +1,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
-
 import os
 import sys
 import glob
 import argparse
 import logging
-from fmri.peaks_similarity import PeaksSimilarity
+from fmri.peaks_similarity import get_peaks, calculate_similarity_score, peaks_to_signal
 from fmri.utils import setup_logger
 
 
@@ -28,7 +26,7 @@ def compare_peaks(files_path: str, output_folder: str, pc_num: int, movements: l
     """
 
     params_comb = get_list_of_params(files_path)
-    file_list = get_list_of_files(files_path, movements)
+    file_list, subs_names = get_list_of_files(files_path, movements)
     subs_num = int(len(file_list)/len(movements))
     logger.info(f"Found {len(file_list)} files for {len(movements)} movements with {subs_num} subjects per movement.")
 
@@ -36,23 +34,19 @@ def compare_peaks(files_path: str, output_folder: str, pc_num: int, movements: l
     for pc_num in range(pc_num):
         logger.info(f"Processing PC: {pc_num}")
         os.makedirs(os.path.join(output_folder, f"pc_{pc_num}"), exist_ok=True)
-        best_scores_within_mov = np.array([-np.inf] * num_scores)
-        best_params_within_mov = ['.'] * num_scores
-        best_scores_between_mov = np.array([-np.inf] * num_scores)
-        best_params_between_mov = ['.'] * num_scores
-        best_scores_weighted = np.array([-np.inf] * num_scores)
-        best_params_weighted = ['.'] * num_scores
+        best_scores_mov = np.array([[-np.inf] * num_scores for _ in range(len(movements))])
+        best_params_mov = [['.'] * num_scores for _ in range(len(movements))]
+        best_scores_sub = np.array([[-np.inf] * num_scores for _ in range(subs_num)])
+        best_params_sub = [['.'] * num_scores for _ in range(subs_num)]
 
         for comb_num, params in enumerate(params_comb):
             logger.info(f"PC:{pc_num}, comparing peaks of {params} ({comb_num} of {len(params_comb)} combinations)")
-            fig=plt.figure(figsize=(25, 15))
-            gs = gridspec.GridSpec(len(file_list), 2, width_ratios=[2, 1])  # 2x wider second column
-
-            peak_sim = PeaksSimilarity(subs_num, movements, alpha=alpha)
+            peaks_signal_all = []
+            plt.figure(figsize=(20, 10))
+            scores_sub = []
+            scores_mov = []
             for i, sub in enumerate(file_list):
-                ax1 = fig.add_subplot(gs[i, 0])  # left: signal plot
-
-                sub_name = os.path.basename(sub).split('_')[0].split('-')[1]
+                sub_name = os.path.basename(sub).split('_')[0]
                 sub_movement = int(i/(len(file_list) / len(movements))) # i.e. for 3 movements with 4 subject per movement: 0,1,2,3 -> movement 1; 4,5,6,7 -> movement 2; 8,9,10,11 -> movement 3
                 file = os.path.join(sub, params, f"temporal_profile_pc_{pc_num}.txt")
                 try:
@@ -65,77 +59,60 @@ def compare_peaks(files_path: str, output_folder: str, pc_num: int, movements: l
                 length_signal = len(signal_y)
                 x_norm = np.linspace(0, length_signal - 1, length_signal) / (length_signal - 1)
 
-                peaks_idx, peaks_height = peak_sim.extract_peaks_signal(signal_y)
-                ax1.plot(x_norm, signal_y)
-                ax1.scatter(x_norm[peaks_idx], peaks_height, color='red', s=10, zorder=3)  # mark peaks
+                plt.subplot(len(file_list), 1, (i + 1))
+                peaks_idx, peaks_height = get_peaks(signal_y)
+                peaks_signal = peaks_to_signal(peaks_idx, peaks_height, length_signal)
+                peaks_signal_all.append(peaks_signal)
+                plt.plot(x_norm, signal_y)
+                plt.scatter(x_norm[peaks_idx], peaks_height, color='red', s=10, zorder=3)  # mark peaks
                 # for peak_idx in peaks_idx:
                 #     plt.annotate(f'{peak_idx}', (peak_idx, signal_y[peak_idx]),
                 #                 textcoords="offset points", xytext=(0, 8), ha='center', fontsize=8)
                 #     plt.annotate(f'{signal_y[peak_idx]:.2f}', (peak_idx, signal_y[peak_idx]),
                 #                 textcoords="offset points", xytext=(0, 1), ha='center', fontsize=6)
 
-                ax1.set_title(f'subj: {sub_name}, movement: {sub_movement}')
-                ax1.set_ylabel('Signal Intensity')
-                ax1.set_ylim(-0.2, 0.2)
+                plt.title(f'subj: {sub_name}, movement: {sub_movement}')
+                plt.ylabel('Signal Intensity')
+                plt.ylim(-0.2, 0.2)
+            for mov in movements:
+                start = (mov-1)*subs_num
+                end = start + subs_num
+                score_mov = calculate_similarity_score(peaks_signal_all[start:end], alpha=alpha)
+                scores_mov.append(score_mov)
+                if score_mov > np.min(best_scores_mov[mov - 1]):
+                    min_idx = np.argmin(best_scores_mov[mov - 1])
+                    best_scores_mov[mov - 1][min_idx] = score_mov
+                    best_params_mov[mov - 1][min_idx] = params
+            for sub in range(subs_num):
+                score_sub = calculate_similarity_score(peaks_signal_all[sub::subs_num], alpha=alpha)
+                scores_sub.append(score_sub)
+                if score_sub > np.min(best_scores_sub[sub]):
+                    min_idx = np.argmin(best_scores_sub[sub])
+                    best_scores_sub[sub][min_idx] = score_sub
+                    best_params_sub[sub][min_idx] = params
 
-            peak_sim.calculate_similarity_score()
-            ax2 = fig.add_subplot(gs[:, 1])  # spans all rows, right column
-            im = ax2.imshow(peak_sim.sim_matrix, aspect='equal', cmap='viridis')
-            plt.colorbar(im, ax=ax2, label='Similarity')
-            ax2.set_title('Similarity Matrix')
+            plt.suptitle(
+                f"Params {params} for pc {pc_num}\n \
+                Score for {','.join([f'movement:  {m} = {scores_mov[m - 1]:.4f}' for m in movements])} \n \
+                Score for {', '.join([f'subject: {subs_names[s]} = {scores_sub[s]:.4f}' for s in range(subs_num)])}",
+                fontsize=16)
+            plt.tight_layout()
+            plt.savefig(os.path.join(output_folder, f"pc_{pc_num}", f"peaks_{params}_pc_{pc_num}.png"))
+            plt.close()
 
-            # --- build labels in the same order as file_list (the order used to build sim_matrix) ---
-            labels = []
-            for i, s in enumerate(file_list):
-                sub_name = os.path.basename(s).split('_')[0].split('-')[1]
-                sub_movement = int(i / (len(file_list) / len(movements)))
-                labels.append(f"{sub_name}_{sub_movement}")
 
-            # --- set ticks on the matrix axis (ax2) ---
-            n = peak_sim.sim_matrix.shape[0]
-            ax2.set_xticks(np.arange(n))
-            ax2.set_yticks(np.arange(n))
-            ax2.set_xticklabels(labels, rotation=45, ha='right')
-            ax2.set_yticklabels(labels)
-            ax2.set_xlabel('Signal Index')
-            ax2.set_ylabel('Signal Index')
 
-            fig.suptitle(
-                f"Params {params} for pc {pc_num}\n"
-                f"Average score within movements: {peak_sim.score_within_mov_avg:.4f}, \n"
-                f"Average score between movements: {peak_sim.score_between_mov_avg:.4f} \n"
-                f"Average weighted score: {peak_sim.weighted_score:.4f}",
-                fontsize=16
+        for movement in movements:
+            sorted_idx = np.argsort(best_scores_mov[movement - 1])[::-1]
+            logger.info(
+                f"Best score for pc {pc_num} movement {movement}: {','.join([f'{s:.4f}' for s in best_scores_mov[movement - 1][sorted_idx]])} with params {','.join([best_params_mov[movement - 1][i] for i in sorted_idx])}"
             )
-            fig.tight_layout(rect=[0, 0, 1, 0.96])  # leave space for suptitle
-            fig.savefig(os.path.join(output_folder, f"pc_{pc_num}", f"peaks_{params}_pc_{pc_num}.png"))
-            plt.close(fig)
 
-            if peak_sim.score_within_mov_avg > np.min(best_scores_within_mov):
-                min_idx = np.argmin(best_scores_within_mov)
-                best_scores_within_mov[min_idx] = peak_sim.score_within_mov_avg
-                best_params_within_mov[min_idx] = params
-            if peak_sim.score_between_mov_avg > np.min(best_scores_between_mov):
-                min_idx = np.argmin(best_scores_between_mov)
-                best_scores_between_mov[min_idx] = peak_sim.score_between_mov_avg
-                best_params_between_mov[min_idx] = params
-            if peak_sim.weighted_score > np.min(best_scores_weighted):
-                min_idx = np.argmin(best_scores_weighted)
-                best_scores_weighted[min_idx] = peak_sim.weighted_score
-                best_params_weighted[min_idx] = params
-
-        sorted_idx=np.argsort(best_scores_within_mov)[::-1]
-        logger.info(
-            f"Best score for pc {pc_num} best score within movements: {','.join([f'{s:.4f}' for s in best_scores_within_mov[sorted_idx]])} with params {','.join([best_params_within_mov[i] for i in sorted_idx])}"
-        )
-        sorted_idx = np.argsort(best_scores_between_mov)[::-1]
-        logger.info(
-            f"Best score for pc {pc_num} best score between movements {','.join([f'{s:.4f}' for s in best_scores_between_mov[sorted_idx]])} with params {','.join([best_params_between_mov[i] for i in sorted_idx])}"
-        )
-        sorted_idx = np.argsort(best_scores_weighted)[::-1]
-        logger.info(
-            f"Best score for pc {pc_num} best weighted score {','.join([f'{s:.4f}' for s in best_scores_weighted[sorted_idx]])} with params {','.join([best_params_weighted[i] for i in sorted_idx])}"
-        )
+        for sub_num in range(subs_num):
+            sorted_idx = np.argsort(best_scores_sub[sub_num])[::-1]
+            logger.info(
+                f"Best score for pc {pc_num} subject {subs_names[sub_num]}: {','.join([f'{s:.4f}' for s in best_scores_sub[sub_num][sorted_idx]])} with params {','.join([best_params_sub[sub_num][i] for i in sorted_idx])}"
+            )
 
 def get_list_of_params(files_path: str):
     """Get a list of unique parameter combinations from the directory structure."""
@@ -161,7 +138,8 @@ def get_list_of_files(files_path: str, movements: list[int]):
         if not any(f'movement{mov}' in s for s in subs):
             raise ValueError(f"No input files found for movement {mov} in '{files_path}'.")
         sorted_subs.extend(sorted([f for f in subs if f'movement{mov}' in f]))
-    return sorted_subs
+    subs_names = list(set([os.path.basename(s).split('_')[0] for s in sorted_subs]))
+    return sorted_subs, subs_names
 
 def main():
     parser = argparse.ArgumentParser(description="Compare peaks between movements")
