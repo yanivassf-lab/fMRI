@@ -73,7 +73,6 @@ class FunctionalMRI:
             degree (int): degree of the B-spline basis.
             n_basis (int): Number of basis functions. Use 0 to determine it automatically based on the
                                  interpolation threshold.
-            n_basis (int): number of basis functions.
             threshold (float): maximum allowed absolute error for interpolation.
             num_pca_comp (int): number of principal components to compute.
             batch_size (int): batch size of voxels
@@ -185,10 +184,10 @@ class FunctionalMRI:
         logger.info("Performing functional PCA...")
         # Build penalty matrix for fPCA (no derivative)
         if self.no_penalty:
-            U = np.eye(basis_funs.n_basis)
+            U = np.eye(self.n_basis)
         else:
             if self.no_penalty:
-                U = np.eye(basis_funs.n_basis)
+                U = np.eye(self.n_basis)
             else:
                 if self.calc_penalty_skfda:
                     U = self.penalty_matrix_skfda(basis_funs, derivative_order=self.derivatives_num_u)
@@ -270,7 +269,7 @@ class FunctionalMRI:
         """
         logger.info(f"Computing (accurately) penalty matrix for {derivative_order}-th derivative using scikit-fda...")
 
-        n_basis = basis_funs.n_basis
+        # n_basis = basis_funs.n_basis
 
         # Create a LinearDifferentialOperator for the specified derivative order
         weights = np.zeros(derivative_order + 1)
