@@ -9,6 +9,7 @@ Welcome to fMRI's documentation!
    math
    installation
    running
+   utils
 
 
 This program implements the methodology from the paper:

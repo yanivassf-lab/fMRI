@@ -2,7 +2,7 @@
 
 INPUT_DIR="/Users/user/My Drive (refaelkohen@mail.tau.ac.il)/TLV-U-drive/BrainWork/fMRI/files_from_amir_for_checking/raw-files/"
 PROCESSED_DIR="preprocessed_data"
-BASE_OUTPUT_DIR="fmri_results"
+BASE_OUTPUT_DIR="fmri_combinations_results"
 
 source /Users/user/Documents/pythonProject/fMRI-env/bin/activate
 

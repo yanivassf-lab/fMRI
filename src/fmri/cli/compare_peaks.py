@@ -22,8 +22,8 @@ def compare_peaks(files_path: str, output_folder: str, pc_num: int, movements: l
     - pc_num (int): Number of components/functions to consider.
     - movements (list[int]): List of movement identifiers to compare.
     - alpha (float): Alpha parameter for combined score calculation between 0 and 1.
-                    0 <= alpha <= 1, where alpha=1 gives full weight to the minimum similarity
-                    and alpha=0 gives full weight to the mean similarity.
+                    0 <= alpha <= 1, where alpha=1 gives full weight to the between movements similarity
+                    and alpha=0 gives full weight to the within movements similarity (between subs).
     - num_scores (int): Number of top scores to keep for each movement and subject.
     """
 
