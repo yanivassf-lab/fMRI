@@ -4,7 +4,7 @@ from dtaidistance import dtw
 
 
 class PeaksSimilarity:
-    def __init__(self, subs_num, movements, alpha=0.5):
+    def __init__(self, subs_num, movements, alpha=0.5, skip_edges=100):
         """
         Initialize the PeaksSimilarity class.
 
@@ -14,15 +14,18 @@ class PeaksSimilarity:
             alpha:      Weighting factor between 0 and 1 for combining scores between and within movements.
                         alpha=1 gives full weight to between-movement similarity,
                         alpha=0 gives full weight to within-movement similarity.
+            skip_edges: Number of samples to skip at the start and end of each signal to avoid edge effects.
         """
         self.subs_num = subs_num
         self.movements = movements
         self.alpha = alpha
+        self.skip_edges = skip_edges
         self.peaks_signal_all = []
         self.sim_matrix = None
         self.score_between_mov_avg = None
         self.score_within_mov_avg = None
         self.weighted_score = None
+        self.replaced_negatives = []  # indices of signals that were inverted
 
     # ====== Step 1: Find peaks ======
     def _get_peaks(self, signal):
@@ -46,10 +49,23 @@ class PeaksSimilarity:
         return peaks_idx, peaks_height
 
     # ====== Step 2: DTW similarity ======
-    def _dtw_similarity(self, sig1, sig2):
-        """Compute similarity between two signals based on DTW (0-1)"""
-        distance = dtw.distance(sig1, sig2)
-        return 1 / (1 + distance)  # similarity 0-1
+    def _find_correct_orientation(self, sig):
+        dist_plus = np.zeros(len(self.peaks_signal_all))
+        dist_minus = np.zeros(len(self.peaks_signal_all))
+        j = 0
+        for i, ref_sig in enumerate(self.peaks_signal_all):
+            if np.array_equal(sig, ref_sig):
+                j = i
+                continue
+            dist_plus[i] = dtw.distance(sig[self.skip_edges:-self.skip_edges], ref_sig[self.skip_edges:-self.skip_edges])
+            dist_minus[i] = dtw.distance(-sig[self.skip_edges:-self.skip_edges], ref_sig[self.skip_edges:-self.skip_edges])
+        dist_plus_avg = np.mean(dist_plus)
+        dist_minus_avg = np.mean(dist_minus)
+        if dist_plus_avg > dist_minus_avg:
+            self.replaced_negatives.append(j)
+            return -sig
+        else:
+            return sig
 
     # ====== Step 3: Compute similarity matrix for a triple ======
     def _compute_similarity_matrix(self):
@@ -59,7 +75,8 @@ class PeaksSimilarity:
         Returns:
             sim_matrix: n x n similarity matrix where sim_matrix[i][j] is the similarity between signal i and signal j
         """
-        dist_matrix = dtw.distance_matrix(self.peaks_signal_all)
+        peaks_signal_no_edges = [self.peaks_signal_all[i][self.skip_edges:-self.skip_edges] for i in range(len(self.peaks_signal_all))]
+        dist_matrix = dtw.distance_matrix(peaks_signal_no_edges)
         sim_matrix = 1 / (1 + dist_matrix)
 
         return sim_matrix
@@ -106,5 +123,9 @@ class PeaksSimilarity:
         Returns:       Combined similarity score.
 
         """
+        for i, sig in enumerate(self.peaks_signal_all):
+            self.peaks_signal_all[i] = self._find_correct_orientation(sig)
+
+
         self.sim_matrix = self._compute_similarity_matrix()
         self._score_combined()

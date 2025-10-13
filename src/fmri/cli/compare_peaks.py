@@ -48,12 +48,12 @@ def compare_peaks(files_path: str, output_folder: str, pc_num: int, movements: l
             fig=plt.figure(figsize=(25, 15))
             gs = gridspec.GridSpec(len(file_list), 2, width_ratios=[2, 1])  # 2x wider second column
 
+            x_norm_all = []
+            signal_y_all = []
+            peaks_idx_all = []
+            peaks_height_all =[]
             peak_sim = PeaksSimilarity(subs_num, movements, alpha=alpha)
             for i, sub in enumerate(file_list):
-                ax1 = fig.add_subplot(gs[i, 0])  # left: signal plot
-
-                sub_name = os.path.basename(sub).split('_')[0].split('-')[1]
-                sub_movement = int(i/(len(file_list) / len(movements))) # i.e. for 3 movements with 4 subject per movement: 0,1,2,3 -> movement 1; 4,5,6,7 -> movement 2; 8,9,10,11 -> movement 3
                 file = os.path.join(sub, params, f"temporal_profile_pc_{pc_num}.txt")
                 try:
                     with open(file, 'r') as f:
@@ -66,19 +66,32 @@ def compare_peaks(files_path: str, output_folder: str, pc_num: int, movements: l
                 x_norm = np.linspace(0, length_signal - 1, length_signal) / (length_signal - 1)
 
                 peaks_idx, peaks_height = peak_sim.extract_peaks_signal(signal_y)
-                ax1.plot(x_norm, signal_y)
-                ax1.scatter(x_norm[peaks_idx], peaks_height, color='red', s=10, zorder=3)  # mark peaks
+                peaks_idx_all.append(peaks_idx)
+                peaks_height_all.append(peaks_height)
+                signal_y_all.append(signal_y)
+                x_norm_all.append(x_norm)
+
+            peak_sim.calculate_similarity_score()
+            for i, sub in enumerate(file_list):
+                replaced = False
+                if i in peak_sim.replaced_negatives:
+                    signal_y_all[i] *= -1
+                    peaks_height_all[i] *= -1
+                    replaced = True
+                ax1 = fig.add_subplot(gs[i, 0])  # left: signal plot
+                ax1.plot(x_norm_all[i], signal_y_all[i])
+                ax1.scatter(x_norm_all[i][peaks_idx_all[i]], peaks_height_all[i], color='red', s=10, zorder=3)  # mark peaks
                 # for peak_idx in peaks_idx:
                 #     plt.annotate(f'{peak_idx}', (peak_idx, signal_y[peak_idx]),
                 #                 textcoords="offset points", xytext=(0, 8), ha='center', fontsize=8)
                 #     plt.annotate(f'{signal_y[peak_idx]:.2f}', (peak_idx, signal_y[peak_idx]),
                 #                 textcoords="offset points", xytext=(0, 1), ha='center', fontsize=6)
-
-                ax1.set_title(f'subj: {sub_name}, movement: {sub_movement}')
+                sub_name = os.path.basename(sub).split('_')[0].split('-')[1]
+                sub_movement = int(i/(len(file_list) / len(movements))) # i.e. for 3 movements with 4 subject per movement: 0,1,2,3 -> movement 1; 4,5,6,7 -> movement 2; 8,9,10,11 -> movement 3
+                ax1.set_title(f"subj: {sub_name}, movement: {sub_movement}, {'Reverted Signal' if replaced else 'Original Signal'}")
                 ax1.set_ylabel('Signal Intensity')
                 ax1.set_ylim(-0.2, 0.2)
 
-            peak_sim.calculate_similarity_score()
             ax2 = fig.add_subplot(gs[:, 1])  # spans all rows, right column
             im = ax2.imshow(peak_sim.sim_matrix, aspect='equal', cmap='viridis')
             plt.colorbar(im, ax=ax2, label='Similarity')
@@ -89,14 +102,14 @@ def compare_peaks(files_path: str, output_folder: str, pc_num: int, movements: l
             for i, s in enumerate(file_list):
                 sub_name = os.path.basename(s).split('_')[0].split('-')[1]
                 sub_movement = int(i / (len(file_list) / len(movements)))
-                labels.append(f"{sub_name}_{sub_movement}")
+                labels.append(f"sub-{sub_name}_mov-{sub_movement+1}")
 
             # --- set ticks on the matrix axis (ax2) ---
             n = peak_sim.sim_matrix.shape[0]
             ax2.set_xticks(np.arange(n))
             ax2.set_yticks(np.arange(n))
             ax2.set_xticklabels(labels, rotation=45, ha='right')
-            ax2.set_yticklabels(labels)
+            ax2.set_yticklabels(labels, rotation=45)
             ax2.set_xlabel('Signal Index')
             ax2.set_ylabel('Signal Index')
 
