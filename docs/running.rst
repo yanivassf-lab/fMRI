@@ -82,10 +82,10 @@ Arguments
 \-\-no-penalty `<optional>`
   If specified, no penalty will be used (default: not set).
 
-\-\-calc-penalty-accurately `<optional>`
+\-\-calc-penalty-bspline-accurately `<optional>`
   If set, the penalty matrix will be calculated using bspline package with an accurate method. If not set, an approximate method of bspline will be used (default: not set).
 
-\-\-calc-penalty-accurately `<optional>`
+\-\-calc-penalty-skfda `<optional>`
   If set, the penalty matrix will be calculated using skfda package an accurate method. If not set, an approximate method of bsplie will be used (default: not set).
 
 
