@@ -233,7 +233,7 @@ class FunctionalMRI:
             basis_funs, _ = spline_base_funs_bspline(self.T_min, self.T_max, self.degree, n_basis)
         # Build penalty matrix for regularized regression (second derivative)
         if self.no_penalty:
-            P = np.eye(basis_funs.n_basis)
+            P = np.eye(n_basis)
         else:
             if self.calc_penalty_skfda:
                 P = self.penalty_matrix_skfda(basis_funs, derivative_order=self.derivatives_num_p)
