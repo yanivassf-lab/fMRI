@@ -1,6 +1,8 @@
 import numpy as np
 from scipy.signal import find_peaks
 from dtaidistance import dtw
+from scipy.cluster.hierarchy import linkage, cophenet
+from scipy.spatial.distance import pdist
 
 
 class PeaksSimilarity:
@@ -18,6 +20,7 @@ class PeaksSimilarity:
         """
         self.subs_num = subs_num
         self.movements = movements
+        self.mov_num = len(movements)
         self.alpha = alpha
         self.skip_edges = skip_edges
         self.peaks_signal_all = []
@@ -25,6 +28,8 @@ class PeaksSimilarity:
         self.score_between_mov_avg = None
         self.score_within_mov_avg = None
         self.weighted_score = None
+        self.hierarchical_scores = np.zeros((self.mov_num, self.mov_num))
+        self.hierarchical_scores_avg = None
         self.replaced_negatives = []  # indices of signals that were inverted
 
     # ====== Step 1: Find peaks ======
@@ -78,8 +83,56 @@ class PeaksSimilarity:
         peaks_signal_no_edges = [self.peaks_signal_all[i][self.skip_edges:-self.skip_edges] for i in range(len(self.peaks_signal_all))]
         dist_matrix = dtw.distance_matrix(peaks_signal_no_edges)
         sim_matrix = 1 / (1 + dist_matrix)
-
+        self.sim_matrix = sim_matrix
         return sim_matrix
+
+
+    def extract_experiment_blocks(self):
+        """
+        Extracts the diagonal blocks (each experiment) from the large similarity matrix.
+        """
+        blocks = []
+        for i in range(self.mov_num):
+            start = i * self.subs_num
+            end = (i + 1) * self.subs_num
+            block = self.sim_matrix[start:end, start:end]
+            blocks.append(block)
+        return np.array(blocks)
+
+    def hierarchical_similarity(self):
+        """
+        Builds a hierarchical clustering tree for each experiment separately
+        from a similarity matrix of size (m*n, m*n),
+        and computes a hierarchical similarity score between experiments.
+        """
+        # Step 1: extract per-experiment similarity matrices
+        similarity_matrices = self.extract_experiment_blocks()
+
+        linkage_matrices = []
+        distance_vectors = []
+
+        # Step 2: build hierarchical tree for each experiment
+        for i in range(self.mov_num):
+            sim = similarity_matrices[i]
+            dist = 1 - sim  # convert similarity to distance
+            condensed = pdist(dist)  # condensed upper-triangle form
+            Z = linkage(condensed, method='average')
+            linkage_matrices.append(Z)
+            distance_vectors.append(condensed)
+
+        # Step 3: compute cophenetic correlation between all pairs of experiments
+        for i in range(self.mov_num):
+            for j in range(i + 1, self.mov_num):
+                # cophenet returns both the coefficient and the cophenetic distances
+                coph_i, _ = cophenet(linkage_matrices[i], distance_vectors[i])
+                coph_j, _ = cophenet(linkage_matrices[j], distance_vectors[j])
+                score = np.corrcoef(coph_i, coph_j)[0, 1]
+                self.hierarchical_scores[i, j] = self.hierarchical_scores[j, i] = score
+
+        # Step 4: compute the overall average similarity
+        self.hierarchical_scores_avg = np.mean(self.hierarchical_scores[np.triu_indices(self.mov_num, k=1)])
+
+
 
     # ====== Step 4: Score a triple ======
     def _score_combined(self):
@@ -115,17 +168,22 @@ class PeaksSimilarity:
         self.score_within_mov_avg = sum(score_within_mov) / len(score_within_mov)
         self.weighted_score = self.alpha * self.score_between_mov_avg + (1 - self.alpha) * self.score_within_mov_avg
 
-    def calculate_similarity_score(self):
+    def calculate_similarity_score(self, fix_orient):
         """
         This function calculates the similarity score between two signals based on DTW (0-1)
         and combines the minimum and mean similarity using a weighted average controlled by alpha.
 
+        Args:
+            fix_orient: True or False, flag to fix the orientation of signals
+
         Returns:       Combined similarity score.
 
         """
-        for i, sig in enumerate(self.peaks_signal_all):
-            self.peaks_signal_all[i] = self._find_correct_orientation(sig)
+        if fix_orient:
+            for i, sig in enumerate(self.peaks_signal_all):
+                self.peaks_signal_all[i] = self._find_correct_orientation(sig)
 
 
-        self.sim_matrix = self._compute_similarity_matrix()
+        self._compute_similarity_matrix()
+        self.hierarchical_similarity()
         self._score_combined()
