@@ -57,7 +57,7 @@ class FunctionalMRI:
         n_timepoints (int): number of time points per voxel.
     """
 
-    def __init__(self, nii_file: str, mask_file: str, degree: int, n_basis: int, threshold: float, num_pca_comp: int,
+    def __init__(self, nii_file: str, mask_file: str, degree: int, n_basis: list[int], threshold: float, num_pca_comp: int,
                  batch_size: int, output_folder: str, TR: float, smooth_size: int, lambda_min: float, lambda_max: float,
                  derivatives_num_p: int, derivatives_num_u: int, processed: bool, bad_margin_size: int,
                  no_penalty: bool = False, calc_penalty_bspline_accurately: bool = False,
@@ -95,7 +95,7 @@ class FunctionalMRI:
         self.nii_file = nii_file
         self.mask_file = mask_file
         self.degree = degree
-        self.n_basis = n_basis
+        self.n_basis_list = n_basis
         self.threshold = threshold
         self.num_pca_comp = num_pca_comp
         self.batch_size = batch_size
@@ -123,7 +123,7 @@ class FunctionalMRI:
         self.times = np.arange(self.n_timepoints)
         self.T_min = 0
         self.T_max = (self.n_timepoints - 1)  # Assuming time points are indexed from 0 to n_timepoints-1
-        self.n_basis = n_basis  # min(20, self.n_timepoints // 10)
+        self.n_basis = None
 
     def __new__(cls, *args, **kwargs):
         instance = super().__new__(cls)
@@ -202,12 +202,13 @@ class FunctionalMRI:
                          pc_temporal_profiles, total_variance)
 
     def calculate_interpolation(self):
-        if self.n_basis and np.size(self.n_basis) == 1:
-            C, F, basis_funs, mean_error, best_lambdas = self.calculate_n_basis_interpolation(self.n_basis[0])
+        if self.n_basis_list != [0] and len(self.n_basis_list) == 1:
+            self.n_basis = self.n_basis_list[0]
+            C, F, basis_funs, mean_error, best_lambdas = self.calculate_n_basis_interpolation(self.n_basis)
             return C, F, basis_funs, best_lambdas
         else:  # if user set threshold instead fixed number of n_basis
-            if np.size(self.n_basis) > 1:
-                range_n_basis = self.n_basis
+            if len(self.n_basis_list) > 1:
+                range_n_basis = self.n_basis_list
             else:
                 range_n_basis = range(self.degree + 1, self.n_timepoints + 20, 10)
             n_basis_errors = np.zeros(len(range_n_basis))

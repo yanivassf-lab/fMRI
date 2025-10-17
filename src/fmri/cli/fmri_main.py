@@ -18,8 +18,8 @@ def main():
     parser.add_argument("--nii-file", type=str, help="Path to the 4D fMRI NIfTI file.")
     parser.add_argument("--mask-file", type=str, help="Path to the 3D mask NIfTI file.")
     parser.add_argument("--degree", type=int, default=3, help="Degree of the B-spline basis (default: 3).")
-    parser.add_argument("--n-basis", type=int, default=0, nargs="+",
-                        help="Number of basis functions. Use 0 to determine it automatically based on the interpolation threshold (default: 0).")
+    parser.add_argument("--n-basis", type=int, default=[0], nargs="+",
+                        help="Number of basis functions. Use 0 to determine it automatically based on the interpolation threshold or use several values for finding the best automatically (default: 0).")
     parser.add_argument("--threshold", type=float, default=1e-6, help="Interpolation error threshold (default: 1e-6)")
     parser.add_argument("--num-pca-comp", type=int, default=3, help="Number of principal components (default: 3).")
     parser.add_argument("--batch-size", type=int, default=200, help="Batch size for processing voxels (default: 200).")
