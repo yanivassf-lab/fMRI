@@ -14,3 +14,4 @@ def setup_logger(output_folder, file_name, loger_name, log_level=logging.INFO):
     logger.addHandler(console_handler)
     logger.addHandler(file_handler)
     return logger
+
