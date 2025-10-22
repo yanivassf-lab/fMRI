@@ -18,6 +18,7 @@ import nibabel as nib
 import numpy as np
 from scipy.integrate import quad
 from scipy.interpolate import BSpline
+from scipy.linalg import eigvals
 from skfda.misc.operators import LinearDifferentialOperator
 from skfda.misc.operators import gram_matrix
 from skfda.representation.basis import BSplineBasis
@@ -509,7 +510,17 @@ class FunctionalMRI:
             pc_temporal_profiles (ndarray): temporal profiles of the principal components.
             total_variance (int): total variance in the data.
         """
-
+        store_data_file = os.path.join(self.output_folder, f"eigvecs_eigval_F.npz")
+        # Save the arrays to a compressed file
+        np.savez_compressed(store_data_file, a=eigvecs_sorted, b=eigvals_sorted, c=F)
+        logger.info("Eigenvectors, eigenvalues and F matrix are saved to 'eigvecs_eigval_F.npz'")
+        """
+        For loading the arrays back, use:
+            data = np.load(store_data_file)
+            eigvecs_sorted = data['a']
+            eigvals_sorted = data['b']
+            F = data['c']
+        """
         for i in range(self.num_pca_comp):
             explained_vairance_i = (eigvals_sorted[i] * 100) / total_variance
             logger.info(f"Saving voxel-wise importance map for first eigenfunction {i}...")

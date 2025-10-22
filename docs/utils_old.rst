@@ -282,7 +282,7 @@ The script outputs progress information including:
 Analysis Scripts
 ----------------
 
-compare-pcs
+compare-peaks
 ~~~~~~~~~~~~~
 
 The ``compare-peaks`` script compares temporal peaks between different movements across subjects and parameter combinations. It generates similarity matrices and visualizations to identify optimal parameter settings.
@@ -332,8 +332,23 @@ The script expects data organized as follows:
 
 1. **Peak Detection:** Extracts temporal peaks from signal intensity profiles
 2. **Similarity Calculation:** Computes similarity matrices between subjects and movements
-3. **Scoring:** Calculates scores based on:
+3. **Scoring:** Calculates three types of scores:
+   The scoring process computes three related similarity measures that evaluate how consistent and comparable the fMRI signals are within and across movements:
 
+   - Within-movement similarity:
+     Measures how similar the signal patterns of different examples (subjects) are within the same movement.
+     A higher value indicates that subjects performing the same movement exhibit more consistent signal shapes.
+     (Computed as the average pairwise similarity among all examples within each movement.)
+
+   - Between-movement similarity:
+     Measures how similar each example’s signal is across different movements.
+     A higher value means that the same example shows a more similar signal when performing different movements.
+     (Computed as the average similarity across movements for corresponding examples.)
+
+   - Weighted combined score:
+     Represents a weighted average of the two measures above:
+     the between-movement score is weighted by ``alpha``, and the within-movement score by ``1 - alpha``.
+     This allows balancing the importance between within-movement consistency and between-movement similarity.
 
 4. **Visualization:** Creates comprehensive plots showing:
 

@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
 
-INPUT_DIR="/path/to/raw-files/"
-PROCESSED_DIR="/path/to/preprocessed_data"
-BASE_OUTPUT_DIR="/path/to/fmri_combinations_results"
+INPUT_DIR="/Users/user/Documents/pythonProject/fMRI-runs/fMRI-files/files_from_amir_for_test/raw-files"
+PROCESSED_DIR="/Users/user/Documents/pythonProject/fMRI-runs/outputs/preprocessed_data"
+BASE_OUTPUT_DIR="/Users/user/Documents/pythonProject/fMRI-runs/outputs/run_params_comb/fmri_combinations_results_skfda"
 
-source "/path/to/fMRI-env/bin/activate"
+# Activate Python environment
+source "/Users/user/Documents/pythonProject/fMRI-env/bin/activate"
 
 # Parameter sets
 derivatives=(0 1 2)
 thresholds=(1e-6 1e-3)
-lambda_ranges=("0 3" "-4 0" "-4 3")
-n_basis_values=(100 200 300)
-MAX_PARALLEL=1  # Maximum number of parallel processes
+lambda_ranges=("0 6" "-6 0" "-6 6")
+n_basis_values=(100 200 300 400)
+MAX_PARALLEL=8  # Maximum number of parallel processes
+
 
 # Array to store PIDs of background processes
 pids=()
@@ -35,7 +37,7 @@ for bold_file in "$PROCESSED_DIR"/*_filtered.nii; do
                         --mask-file "$mask_file" \
                         --output-folder "$output_dir" \
                         --processed \
-                        --calc-penalty-bspline-accurately \
+                        --calc-penalty-skfda \
                         --no-penalty \
                         --num-pca-comp 7 \
                         --threshold 1e-6 \
@@ -59,7 +61,7 @@ for bold_file in "$PROCESSED_DIR"/*_filtered.nii; do
                                         --mask-file "$mask_file" \
                                         --output-folder "$output_dir" \
                                         --processed \
-                                        --calc-penalty-bspline-accurately \
+                                        --calc-penalty-skfda \
                                         --derivatives-num-p "$p" \
                                         --derivatives-num-u "$u" \
                                         --lambda-min "$min" \

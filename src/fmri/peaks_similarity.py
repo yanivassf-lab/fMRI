@@ -1,7 +1,8 @@
 import numpy as np
 from scipy.signal import find_peaks
 from dtaidistance import dtw
-from src.fmri.similarity import Similarity
+from itertools import combinations
+from .similarity import Similarity
 
 
 class PeaksSimilarity(Similarity):
@@ -18,13 +19,10 @@ class PeaksSimilarity(Similarity):
         """
         self.signals = signals
         self.skip_edges = skip_edges
-        self.n_subs = len(signals)
-        self.n_movs = n_movs
         self.peaks_idx = []
         self.peaks_height = []
         self.peaks_signals = []
         self.reverted = []
-        self.sim_matrix = np.zeros((self.n_subs, self.n_subs))
         self._extract_peaks_signal()
         self._find_correct_orientation()
 
@@ -52,25 +50,25 @@ class PeaksSimilarity(Similarity):
 
     # ====== Step 2: DTW similarity ======
     def _find_correct_orientation(self):
-        dist_min = np.zeros((len(self.signals), len(self.signals)))
+        dist_min = np.zeros((self.n_subs_tot, self.n_subs_tot))
 
-        for i, sig in enumerate(self.peaks_signals):
-            dist_org = np.zeros(len(self.peaks_signals))
-            dist_rev = np.zeros(len(self.peaks_signals))
-            for j, ref_sig in enumerate(self.peaks_signals):
-                if np.array_equal(sig, ref_sig):
-                    dist_org[j] = 0
+        for i, p_sig in enumerate(self.peaks_signals):
+            dist_org = np.zeros(self.n_subs_tot)
+            dist_rev = np.zeros(self.n_subs_tot)
+            for j, p_ref_sig in enumerate(self.peaks_signals):
+                if np.array_equal(p_sig, p_ref_sig):
+                    dist_org[j] = 0.0
                     continue
-                dist_org[j] = dtw.distance(sig[self.skip_edges:-self.skip_edges],
-                                           ref_sig[self.skip_edges:-self.skip_edges])
-                dist_rev[j] = dtw.distance(-sig[self.skip_edges:-self.skip_edges],
-                                           ref_sig[self.skip_edges:-self.skip_edges])
+                dist_org[j] = dtw.distance(p_sig[self.skip_edges:-self.skip_edges],
+                                           p_ref_sig[self.skip_edges:-self.skip_edges])
+                dist_rev[j] = dtw.distance(-p_sig[self.skip_edges:-self.skip_edges],
+                                           p_ref_sig[self.skip_edges:-self.skip_edges])
             dist_org_avg = np.mean(dist_org)
             dist_rev_avg = np.mean(dist_rev)
             if dist_rev_avg < dist_org_avg:
-                dist_min[i, :] = dist_rev_avg
+                dist_min[i, :] = dist_rev
                 self.reverted.append(True)
             else:
-                dist_min[i, :] = dist_org_avg
+                dist_min[i, :] = dist_org
                 self.reverted.append(False)
         self.sim_matrix = 1 / (1 + dist_min)

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
-INPUT_DIR="/path/to/raw-files/"
-OUTPUT_DIR="/path/to/preprocessed_data"
+INPUT_DIR="/Users/user/Documents/pythonProject/fMRI-runs/fMRI-files/files_from_amir_for_test/raw-files"
+OUTPUT_DIR="/Users/user/Documents/pythonProject/fMRI-runs/outputs/preprocessed_data"
 # ~12 GB RAM per process, adjust based on your system
-MAX_PARALLEL=1  # Maximum number of parallel processes
+MAX_PARALLEL=1
 
-source "/path/to/fMRI-env/bin/activate"
-
+# Activate Python virtual environment
+source "/Users/user/Documents/pythonProject/fMRI-env/bin/activate"
 mkdir -p "$OUTPUT_DIR"
 
 # Array to store PIDs of background processes

@@ -9,21 +9,26 @@ class Similarity:
         """
         Initialize with a similarity matrix and parameters.
 
-        Parameters
-        ----------
-        sim_matrix : np.ndarray
-            Large similarity matrix (subjects * movements, subjects * movements)
-        subs_num : int
+        Attributes:
+        n_subs : int
             Number of subjects per movement/experiment
-        mov_num : int
+        n_movs : int
             Number of movements/experiments
+        n_subs_tot : int
+            Total number of subjects across all movements/experiments
+        sim_matrix : np.ndarray
+            Similarity matrix of shape (n_subs_tot, n_subs_tot)
+        matrix_score : float
+            Overall consistency score across experiments
         """
         self.n_subs = n_subs
         self.n_movs = n_movs
-        self.sim_matrix = None # to be set in derived classes
+        self.n_subs_tot = n_subs * n_movs
+        self.sim_matrix = np.ones((self.n_subs_tot, self.n_subs_tot))
         self.matrix_score = None
+        self.matrix_op_pval = None
 
-    def get_matrix_score(self):
+    def calculate_matrix_score(self):
         """
         Computes the overall consistency score across experiments.
 
@@ -33,7 +38,7 @@ class Similarity:
             Consistency score.
         """
         blocks = self.extract_experiment_blocks()
-        self.matrix_score = self.consistency_score(blocks)
+        self.matrix_score, self.matrix_op_pval = self.consistency_score(blocks)
 
     def extract_experiment_blocks(self):
         """
@@ -45,7 +50,7 @@ class Similarity:
             end = (i + 1) * self.n_subs
             block = self.sim_matrix[start:end, start:end]
             blocks.append(block)
-        return np.array(blocks)
+        return blocks
 
     def consistency_score(self, blocks):
         """
@@ -74,21 +79,25 @@ class Similarity:
         """
         n_blocks = len(blocks)
         corrs = []
+        pvals = []
 
         # Compute Spearman correlation for every pair of blocks
         for i, j in combinations(range(n_blocks), 2):
             a = blocks[i]
             b = blocks[j]
-
             # Take only the upper triangle (no redundancy)
             iu = np.triu_indices_from(a, k=1)
             vec_a = a[iu]
             vec_b = b[iu]
 
             # Spearman correlation measures relative ranking similarity
-            r, _ = spearmanr(vec_a, vec_b)
+            r, p = spearmanr(vec_a, vec_b)
             corrs.append(r)
+            pvals.append(p)
 
         # Final score = average correlation across all pairs
-        return np.mean(corrs)
+        mean_corr = np.mean(corrs)
+        mean_pval = 1.0-np.mean(pvals)  # 1 minus of average p-value
+
+        return mean_corr, mean_pval
 
