@@ -8,12 +8,14 @@ import glob
 import argparse
 import logging
 
+from docutils.nodes import title
 from fmri.pc_similarity import PcSimilarity
 from fmri.peaks_similarity import PeaksSimilarity
 from fmri.utils import setup_logger
 from nibabel.externals.netcdf import netcdf_file
 
 SKIP_EDGES = 100  # number of timepoints to skip at the beginning and end when looking for peaks, TODO: make it a parameter
+
 
 class ComparePCS:
     def __init__(self, files_path, output_folder, movements, logger):
@@ -35,7 +37,8 @@ class ComparePCS:
         self.n_movs = len(movements)
         self.n_files = len(self.file_list)
         self.logger = logger
-        self.logger.info(f"Found {len(self.file_list)} files for {self.n_movs} movements with {self.n_subs} subjects per movement:\n {'\n '.join(os.path.basename(s) for s in self.file_list)}")
+        self.logger.info(
+            f"Found {len(self.file_list)} files for {self.n_movs} movements with {self.n_subs} subjects per movement:\n {'\n '.join(os.path.basename(s) for s in self.file_list)}")
 
     def load_pcs_and_signals(self, params: str):
         """
@@ -73,6 +76,32 @@ class ComparePCS:
             x_norm_all.append(x_norm)
         return x_norm_all, pcs_list, F_list
 
+    def load_original_signals(self):
+        """
+        Load original signals for all subjects and movements.
+
+        Returns: List of original signals for each subject/movement.
+        """
+        x_norm_all = []
+
+        org_signals = []
+        for i, sub in enumerate(self.file_list):
+            org_sig_file = os.path.join(sub, self.params_comb[0], f"original_averaged_signal_intensity.txt")
+            try:
+                with open(org_sig_file, 'r') as f:
+                    lines = f.readlines()
+                    signal_y = np.array(lines[4].strip().split(), dtype=float)
+            except Exception as e:
+                raise Exception(f"Error reading file {org_sig_file}: {e}")
+            n_times = len(signal_y)
+            self.logger.info(
+                f"Loaded original signal for sub-{self.get_sub_name(i)}_mov-{self.get_sub_mov(i)} with {n_times} time points.")
+            org_signals.append(signal_y)
+            x_norm = np.linspace(0, n_times - 1, n_times) / (n_times - 1)
+            x_norm_all.append(x_norm)
+
+        return x_norm_all, org_signals
+
     def get_signals_from_seleted_pcs(self, pcs_list, F_list, main_pcs):
         """
         Get signals reconstructed from selected principal components.
@@ -90,43 +119,9 @@ class ComparePCS:
             signals.append(F_list[i] @ pc_i)
         return signals
 
-    def load_original_signals(self):
-        """
-        Load original signals for all subjects and movements.
 
-        Returns: Tuple of lists: (x_norm_all, pcs_list, F_list, org_signals)
-            - x_norm_all: List of normalized time vectors for each subject/movement.
-            - pcs_list: List of principal component matrices for each subject/movement.
-            - F_list: List of signal matrices for each subject/movement.
-            - org_signals: List of original signals for each subject/movement.
-        """
-        x_norm_all = []
-        org_signals = []
-        for i, sub in enumerate(self.file_list):
-
-            store_data_file = os.path.join(sub, "no_penalty_nb100", f"eigvecs_eigval_F.npz")
-            try:
-                data = np.load(store_data_file)
-                eigvecs_sorted = data['a']
-                # eigvals_sorted = data['b']
-                F = data['c']
-            except Exception as e:
-                raise Exception(f"Error reading file {store_data_file}: {e}")
-
-            pcs_list.append(eigvecs_sorted)
-            F_list.append(F)
-            n_basis, n_pcs = eigvecs_sorted.shape
-            n_times = F.shape[0]
-            self.logger.info(
-                f"Loaded original signal for sub-{self.get_sub_name(i)}_mov-{self.get_sub_mov(i)} with {n_pcs} PCs, {n_basis} basis functions and {n_times} time points.")
-            x_norm = np.linspace(0, n_times - 1, n_times) / (n_times - 1)
-            x_norm_all.append(x_norm)
-            org_signals.append(F @ eigvecs_sorted[:, 0])  # first PC as original signal
-        return x_norm_all, pcs_list, F_list, org_signals
-
-    def extract_values_from_peaks(self, main_pcs, signals, x_norm_all, peaks_sim, i):
+    def extract_values_from_peaks(self, signals, x_norm_all, peaks_sim, i):
         """Extract peak similarity values for subject/movement at index i."""
-        pc_num_i = main_pcs[i]
         peaks_height_i = peaks_sim.peaks_height[i]
         signal_i = signals[i]
         x_norm_i = x_norm_all[i]
@@ -135,43 +130,41 @@ class ComparePCS:
         if revereted_i:
             signal_i *= -1
             peaks_height_i *= -1
-        return x_norm_i, signal_i, peaks_idx_i, peaks_height_i, pc_num_i, revereted_i
+        return x_norm_i, signal_i, peaks_idx_i, peaks_height_i, revereted_i
 
-    def plot_peaks_similarity(self, main_pcs, selected_signals, x_norm_all, peaks_sim, axes_left):
+    def plot_peaks_similarity(self, peaks_sim, selected_signals, x_norm_all, axis, main_pcs=None):
         """Plot peaks similarity for all subjects and movements."""
         for i in range(self.n_files):
-            x_norm_i, signal_i, peaks_idx_i, peaks_height_i, pc_num_i, revereted_i = self.extract_values_from_peaks(
-                main_pcs, selected_signals, x_norm_all, peaks_sim, i)
+            x_norm_i, signal_i, peaks_idx_i, peaks_height_i, revereted_i = self.extract_values_from_peaks(
+                selected_signals, x_norm_all, peaks_sim, i)
             sub_name_i = self.get_sub_name(i)
             # i.e. for 3 movements with 4 subject per movement: 0,1,2,3 -> movement 1; 4,5,6,7 -> movement 2; 8,9,10,11 -> movement 3
             sub_movement = self.get_sub_mov(i)
             sub_num = self.get_sub_num(i)
-            axes_left[sub_num].plot(x_norm_i, signal_i,
-                                    label=f"mov-{sub_movement}, pc: {pc_num_i}, {', Reverted Signal' if revereted_i else 'Original Signal'}")
-            axes_left[sub_num].scatter(x_norm_i[peaks_idx_i], peaks_height_i, color='red', s=10, zorder=3)  # mark peaks
+            pc_text = f", pc: {main_pcs[i]} " if main_pcs is not None else ""
+            axis[sub_num].plot(x_norm_i, signal_i,
+                               label=f"mov-{sub_movement}{pc_text} {', Reverted Signal' if revereted_i else 'Original Signal'}")
+            axis[sub_num].scatter(x_norm_i[peaks_idx_i], peaks_height_i, color='red', s=10, zorder=3)  # mark peaks
             if sub_movement == 1:
-                axes_left[sub_num].set_title(f"subj: {sub_name_i}")
-                axes_left[sub_num].set_ylabel('Signal Intensity')
-                axes_left[sub_num].set_ylim(-0.2, 0.2)
-            axes_left[sub_num].legend()
+                axis[sub_num].set_title(f"subj: {sub_name_i}")
+                axis[sub_num].set_ylabel('Signal Intensity')
+                axis[sub_num].set_ylim(-0.2, 0.2)
+            axis[sub_num].legend()
 
-            axes_left[sub_num + self.n_subs].plot(x_norm_i, np.abs(signal_i),
-                                                  label=f"mov-{sub_movement}, pc: {pc_num_i}, {', Reverted Signal' if revereted_i else 'Original Signal'}")
-            axes_left[sub_num + self.n_subs].scatter(x_norm_i[peaks_idx_i], np.abs(peaks_height_i), color='red', s=10,
-                                                     zorder=3)  # mark peaks
+            axis[sub_num + self.n_subs].plot(x_norm_i, np.abs(signal_i),
+                                             label=f"mov-{sub_movement}{pc_text}{', Reverted Signal' if revereted_i else 'Original Signal'}")
+            axis[sub_num + self.n_subs].scatter(x_norm_i[peaks_idx_i], np.abs(peaks_height_i), color='red', s=10,
+                                                zorder=3)  # mark peaks
             if sub_movement == 1:
-                axes_left[sub_num + self.n_subs].set_title(f"subj: {sub_name_i} abs signal")
-                axes_left[sub_num + self.n_subs].set_ylabel('Signal Intensity')
-                axes_left[sub_num + self.n_subs].set_ylim(-0.2, 0.2)
-            axes_left[sub_num + self.n_subs].legend()
+                axis[sub_num + self.n_subs].set_title(f"subj: {sub_name_i} abs signal")
+                axis[sub_num + self.n_subs].set_ylabel('Signal Intensity')
+                axis[sub_num + self.n_subs].set_ylim(-0.2, 0.2)
+            axis[sub_num + self.n_subs].legend()
 
-    def plot_similarity_matrices(self, pc_sim_matrix, peaks_sim_matrix, axes_right):
-        im_pcs = axes_right[0].imshow(pc_sim_matrix, aspect='equal', cmap='viridis')
-        im_peaks = axes_right[1].imshow(peaks_sim_matrix, aspect='equal', cmap='viridis')
-        plt.colorbar(im_pcs, ax=axes_right[0], label='Similarity PCs')
-        plt.colorbar(im_peaks, ax=axes_right[1], label='Similarity Peaks')
-        axes_right[0].set_title('Similarity Matrix PCs')
-        axes_right[1].set_title('Similarity Matrix Peaks')
+    def plot_similarity_matrices(self, sim_matrix, label, title, axis):
+        im = axis.imshow(sim_matrix, aspect='equal', cmap='viridis')
+        plt.colorbar(im, ax=axis, label=label)
+        axis.set_title(title=title)
 
         # --- build labels in the same order as file_list (the order used to build sim_matrix) ---
         labels = []
@@ -179,41 +172,38 @@ class ComparePCS:
             labels.append(f"sub-{self.get_sub_name(i)}_mov-{self.get_sub_mov(i)}")
 
         # --- set ticks on the matrix axis (ax2) ---
-        n = peaks_sim_matrix.shape[0]
-        axes_right[0].set_xticks(np.arange(n))
-        axes_right[0].set_yticks(np.arange(n))
-        axes_right[0].set_xticklabels(labels, rotation=45, ha='right')
-        axes_right[0].set_yticklabels(labels, rotation=45)
-        axes_right[0].set_xlabel('Signal Index')
-        axes_right[0].set_ylabel('Signal Index')
+        n = sim_matrix.shape[0]
+        axis.set_xticks(np.arange(n))
+        axis.set_yticks(np.arange(n))
+        axis.set_xticklabels(labels, rotation=45, ha='right')
+        axis.set_yticklabels(labels, rotation=45)
+        axis.set_xlabel('Signal Index')
+        axis.set_ylabel('Signal Index')
 
-        axes_right[1].set_xticks(np.arange(n))
-        axes_right[1].set_yticks(np.arange(n))
-        axes_right[1].set_xticklabels(labels, rotation=45, ha='right')
-        axes_right[1].set_yticklabels(labels, rotation=45)
-        axes_right[1].set_xlabel('Signal Index')
-        axes_right[1].set_ylabel('Signal Index')
-
-
-    def plot_params(self, params, pc_sim, peaks_sim, main_pcs, selected_signals, x_norm_all):
+    def plot_params(self, params, sim_objects_names, sim_objects, selected_signals, x_norm_all, main_pcs=None):
         """Plot results for a given parameter combination."""
         fig = plt.figure(figsize=(35, 15))
         gs = gridspec.GridSpec(len(self.file_list), 2, width_ratios=[2, 1])  # 2x wider second column
         axes_left = [fig.add_subplot(gs[i, 0]) for i in range(self.n_files)]
         gs_right = gridspec.GridSpecFromSubplotSpec(2, 1, subplot_spec=gs[:, 1])
         axes_right = [fig.add_subplot(gs_right[i, 0]) for i in range(2)]
+
         # --- plot peaks similarity ---
-        self.plot_peaks_similarity(main_pcs, selected_signals, x_norm_all, peaks_sim, axes_left)
+        self.plot_peaks_similarity(sim_objects[0], selected_signals, x_norm_all, axes_left, main_pcs)
         # --- plot similarity matrices ---
-        self.plot_similarity_matrices(pc_sim.sim_matrix, peaks_sim.sim_matrix, axes_right)
+        for i, sim_obj_name, sim_obj in zip(range(len(sim_objects)), sim_objects_names, sim_objects):
+            self.plot_similarity_matrices(sim_obj.sim_matrix, f'Similarity {sim_obj_name}', 'Similarity Matrix {sim_obj_name}', axes_right[i])
+        # --- finalize and save figure ---
+        title = "\n".join(
+            [f"Average score of {name} matrix: {sim_obj.score:.4f}, average P-value: {1 - sim_obj.matrix_op_pval:.4f}\n"
+             for name, sim_obj in zip(sim_objects_names, sim_objects)])
+
         fig.suptitle(
-            f"Params {params}\n"
-            f"Average score of pc matrix: {pc_sim.score:.4f}, average P-value: {1 - pc_sim.matrix_op_pval:.4f}\n"
-            f"Average score of peaks matrix: {peaks_sim.score:.4f}, average P-value: {1 - peaks_sim.matrix_op_pval:.4f}\n",
+            f"Params {params}\n" + title + "\n",
             fontsize=16
         )
         fig.tight_layout(rect=[0, 0, 1, 0.96])  # leave space for suptitle
-        fig.savefig(os.path.join(self.output_folder, f"peaks_{params}_pc.png"))
+        fig.savefig(os.path.join(self.output_folder, f"similarity_{params}.png"))
         plt.close(fig)
 
     def compare(self, num_scores=5):
@@ -222,9 +212,11 @@ class ComparePCS:
 
         - num_scores (int): Number of top scores to keep for each movement and subject.
         """
-        x_norm_all, pcs_list, F_list, org_signals = self.load_original_signals()
-
+        x_norm_all, org_signals = self.load_original_signals()
         peaks_sim_org_sig = PeaksSimilarity(org_signals, self.n_subs, self.n_movs, skip_edges=SKIP_EDGES)
+        peaks_sim_org_sig.calculate_score()
+        sim_objects_names, sim_objects = ['Original Similarity'], [peaks_sim_org_sig]
+        self.plot_params('original', sim_objects_names, sim_objects, org_signals, x_norm_all, None)
 
         pc_best_scores = np.array([-np.inf] * num_scores)
         pc_best_scores_params = ['.'] * num_scores
@@ -251,7 +243,8 @@ class ComparePCS:
             # -- calculate peaks similarity score ---
             peaks_sim.calculate_score()
             # --- plot results ---
-            self.plot_params(params, pc_sim, peaks_sim, main_pcs, selected_signals, x_norm_all)
+            sim_objects_names, sim_objects = ['PCs Similarity', 'Peaks Similarity'], [pc_sim, peaks_sim]
+            self.plot_params(params, sim_objects_names, sim_objects, selected_signals, x_norm_all, main_pcs)
             # --- update the parameters with the best scores ---
             self.update_best_scores(pc_best_scores, pc_best_scores_params, pc_sim.score, params)
             self.update_best_scores(pc_best_op_pvals, pc_best_op_pvals_params, pc_sim.matrix_op_pval, params)
@@ -264,8 +257,6 @@ class ComparePCS:
         self.print_best_scores(peaks_best_scores, peaks_best_scores_params, 'peaks score')
         self.print_best_scores(peaks_best_op_pvals, peaks_best_op_pvals_params, 'peaks P-value', oposite=True)
 
-
-
     def update_best_scores(self, best_scores: np.ndarray, best_params: list[str], new_score: float, params: str):
         """Update the list of best scores and corresponding parameters."""
         if new_score > np.min(best_scores):
@@ -273,11 +264,12 @@ class ComparePCS:
             best_scores[min_idx] = new_score
             best_params[min_idx] = params
 
-    def print_best_scores(self, best_scores: np.ndarray, best_params: list[str], score_type: str, oposite: bool = False):
+    def print_best_scores(self, best_scores: np.ndarray, best_params: list[str], score_type: str,
+                          oposite: bool = False):
         """Print the best scores and their corresponding parameters."""
         sorted_idx = np.argsort(best_scores)[::-1]
         self.logger.info(
-            f"Best {score_type}: {','.join([f'{1-s if oposite else s:.4f}' for s in best_scores[sorted_idx]])} with params {','.join([best_params[i] for i in sorted_idx])}"
+            f"Best {score_type}: {','.join([f'{1 - s if oposite else s:.4f}' for s in best_scores[sorted_idx]])} with params {','.join([best_params[i] for i in sorted_idx])}"
         )
 
     def get_list_of_params(self, files_path: str):
@@ -285,7 +277,6 @@ class ComparePCS:
         subs = glob.glob(os.path.join(files_path, f'sub-*'))[0]
         params_comb = [os.path.basename(p) for p in glob.glob(os.path.join(subs, '*'))]
         return sorted(params_comb)
-
 
     def get_list_of_files(self, files_path: str, movements: list[int]):
         """
