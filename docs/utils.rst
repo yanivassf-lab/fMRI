@@ -415,8 +415,14 @@ Expected input structure
      ├── sub-XX_movement1/
      │   ├── <param_comb_1>/
      │   │   └── eigvecs_eigval_F.npz
+     │   │   └── original_averaged_signal_intensity.txt
+     │   │   └── temporal_profile_pc_0.txt
+     │   │   └── temporal_profile_pc_1.txt
      │   ├── <param_comb_2>/
      │   │   └── eigvecs_eigval_F.npz
+     │   │   └── original_averaged_signal_intensity.txt
+     │   │   └── temporal_profile_pc_0.txt
+     │   │   └── temporal_profile_pc_1.txt
      │   └── ...
      ├── sub-XX_movement2/
      │   └── ...
