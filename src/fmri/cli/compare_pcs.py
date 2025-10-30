@@ -11,7 +11,7 @@ import sys
 import glob
 import argparse
 import logging
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed, CancelledError
 
 from fmri.pc_similarity import PcSimilarity
 from fmri.peaks_similarity import PeaksSimilarity
@@ -320,6 +320,12 @@ class ComparePCS:
                         self.update_best_scores(pc_best_op_pvals, pc_best_op_pvals_params, pc_pval, params)
                         self.update_best_scores(peaks_best_scores, peaks_best_scores_params, abs(peaks_score), params)
                         self.update_best_scores(peaks_best_op_pvals, peaks_best_op_pvals_params, peaks_pval, params)
+                    except KeyboardInterrupt:
+                        print("KeyboardInterrupt caught, shutting down executor...")
+                        executor.shutdown(wait=False, cancel_futures=True)
+                        raise
+                    except CancelledError:
+                        print("Some tasks were cancelled due to shutdown")
                     except Exception as exc:
                         self.logger.error(f'Parameter combination {params} generated an exception: {exc}')
 
