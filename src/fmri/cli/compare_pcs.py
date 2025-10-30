@@ -1,6 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
+from numpy.ma.extras import average
+from scipy.signal import resample
+
 matplotlib.use('Agg')  # Use non-interactive backend for multiprocessing
 import matplotlib.gridspec as gridspec
 
@@ -51,15 +54,12 @@ class ComparePCS:
             params: Parameter combination string.
 
         Returns: Tuple of lists: (x_norm_all, pcs_list, F_list)
-            - x_norm_all: List of normalized time vectors for each subject/movement.
             - pcs_list: List of principal component matrices for each subject/movement.
             - F_list: List of signal matrices for each subject/movement.
         """
-        x_norm_all = []
         pcs_list = []
         F_list = []
         for i, sub in enumerate(self.file_list):
-
             store_data_file = os.path.join(sub, params, f"eigvecs_eigval_F.npz")
             try:
                 data = np.load(store_data_file)
@@ -75,9 +75,7 @@ class ComparePCS:
             n_times = F.shape[0]
             self.logger.info(
                 f"Loaded sub-{self.get_sub_name(i)}_mov-{self.get_sub_mov(i)} with {n_pcs} PCs, {n_basis} basis functions and {n_times} time points.")
-            x_norm = np.linspace(0, n_times - 1, n_times) / (n_times - 1)
-            x_norm_all.append(x_norm)
-        return x_norm_all, pcs_list, F_list
+        return pcs_list, F_list
 
     def load_original_signals(self):
         """
@@ -85,25 +83,27 @@ class ComparePCS:
 
         Returns: List of original signals for each subject/movement.
         """
-        x_norm_all = []
-
         org_signals = []
+        average_len = 0
         for i, sub in enumerate(self.file_list):
             org_sig_file = os.path.join(sub, self.params_comb[0], f"original_averaged_signal_intensity.txt")
             try:
                 with open(org_sig_file, 'r') as f:
                     lines = f.readlines()
-                    signal_y = np.array(lines[4].strip().split(), dtype=float)
+                    signal_y = np.array(lines[3].strip().split(), dtype=float)
             except Exception as e:
                 raise Exception(f"Error reading file {org_sig_file}: {e}")
             n_times = len(signal_y)
+            average_len += n_times
             self.logger.info(
                 f"Loaded original signal for sub-{self.get_sub_name(i)}_mov-{self.get_sub_mov(i)} with {n_times} time points.")
             org_signals.append(signal_y)
-            x_norm = np.linspace(0, n_times - 1, n_times) / (n_times - 1)
-            x_norm_all.append(x_norm)
 
-        return x_norm_all, org_signals
+        average_len = int(average_len / self.n_files)
+        self.logger.info(f"Resampling original signals to average length of {average_len} time points.")
+        for i in range(self.n_files):
+            org_signals[i] = resample(org_signals[i], average_len)
+        return org_signals
 
     def get_signals_from_seleted_pcs(self, pcs_list, F_list, main_pcs):
         """
@@ -117,57 +117,68 @@ class ComparePCS:
         Returns: List of reconstructed signals for each subject/movement.
         """
         signals = []
+        average_len = 0
         for i in range(self.n_files):
             pc_i = pcs_list[i][:, main_pcs[i]]
-            signals.append(F_list[i] @ pc_i)
+            signal_i  = F_list[i] @ pc_i
+            average_len += signal_i.shape[0]
+            signals.append(signal_i)
+
+        average_len = int(average_len / self.n_files)
+        self.logger.info(f"Resampling signals to average length of {average_len} time points.")
+        for i in range(self.n_files):
+            signals[i] = resample(signals[i], average_len)
+
         return signals
 
 
-    def extract_values_from_peaks(self, signals, x_norm_all, peaks_sim, i):
+    def extract_values_from_peaks(self, signals, peaks_sim, i):
         """Extract peak similarity values for subject/movement at index i."""
         peaks_height_i = peaks_sim.peaks_height[i]
         signal_i = signals[i]
-        x_norm_i = x_norm_all[i]
         peaks_idx_i = peaks_sim.peaks_idx[i]
         revereted_i = peaks_sim.reverted[i]
         if revereted_i:
             signal_i *= -1
             peaks_height_i *= -1
-        return x_norm_i, signal_i, peaks_idx_i, peaks_height_i, revereted_i
+        return signal_i, peaks_idx_i, peaks_height_i, revereted_i
 
-    def plot_peaks_similarity(self, peaks_sim, selected_signals, x_norm_all, axis, main_pcs=None):
+    def plot_peaks_similarity(self, peaks_sim, selected_signals, axis, main_pcs=None):
         """Plot peaks similarity for all subjects and movements."""
         for i in range(self.n_files):
-            x_norm_i, signal_i, peaks_idx_i, peaks_height_i, revereted_i = self.extract_values_from_peaks(
-                selected_signals, x_norm_all, peaks_sim, i)
+            signal_i, peaks_idx_i, peaks_height_i, revereted_i = self.extract_values_from_peaks(
+                selected_signals, peaks_sim, i)
             sub_name_i = self.get_sub_name(i)
             # i.e. for 3 movements with 4 subject per movement: 0,1,2,3 -> movement 1; 4,5,6,7 -> movement 2; 8,9,10,11 -> movement 3
             sub_movement = self.get_sub_mov(i)
             sub_num = self.get_sub_num(i)
             pc_text = f", pc: {main_pcs[i]} " if main_pcs is not None else ""
-            axis[sub_num].plot(x_norm_i, signal_i,
-                               label=f"mov-{sub_movement}{pc_text} {', Reverted Signal' if revereted_i else 'Original Signal'}")
-            axis[sub_num].scatter(x_norm_i[peaks_idx_i], peaks_height_i, color='red', s=10, zorder=3)  # mark peaks
+            axis[sub_num].plot(np.arange(len(signal_i)), signal_i,
+                               label=f"mov-{sub_movement}{pc_text} {', Reverted Signal' if revereted_i else ', Original Signal'}")
+            axis[sub_num].scatter(peaks_idx_i, peaks_height_i, color='red', s=10, zorder=3)  # mark peaks
             if sub_movement == 1:
                 axis[sub_num].set_title(f"subj: {sub_name_i}")
                 axis[sub_num].set_ylabel('Signal Intensity')
-                axis[sub_num].set_ylim(-0.2, 0.2)
+                if pc_text != "":
+                    axis[sub_num].set_ylim(-0.2, 0.2)
             axis[sub_num].legend()
 
-            axis[sub_num + self.n_subs].plot(x_norm_i, np.abs(signal_i),
-                                             label=f"mov-{sub_movement}{pc_text}{', Reverted Signal' if revereted_i else 'Original Signal'}")
-            axis[sub_num + self.n_subs].scatter(x_norm_i[peaks_idx_i], np.abs(peaks_height_i), color='red', s=10,
+            axis[sub_num + self.n_subs].plot(np.arange(len(signal_i)), np.abs(signal_i),
+                                             label=f"mov-{sub_movement}{pc_text}{', Reverted Signal' if revereted_i else ', Original Signal'}")
+            axis[sub_num + self.n_subs].scatter(peaks_idx_i, np.abs(peaks_height_i), color='red', s=10,
                                                 zorder=3)  # mark peaks
             if sub_movement == 1:
                 axis[sub_num + self.n_subs].set_title(f"subj: {sub_name_i} abs signal")
                 axis[sub_num + self.n_subs].set_ylabel('Signal Intensity')
-                axis[sub_num + self.n_subs].set_ylim(-0.2, 0.2)
+                if pc_text != "":
+                    axis[sub_num + self.n_subs].set_ylim(0.0, 0.4)
             axis[sub_num + self.n_subs].legend()
 
     def plot_similarity_matrices(self, sim_matrix, label, title, axis):
+        np.fill_diagonal(sim_matrix, np.nan)
         im = axis.imshow(sim_matrix, aspect='equal', cmap='viridis')
         plt.colorbar(im, ax=axis, label=label)
-        axis.set_title(title=title)
+        axis.set_title(title)
 
         # --- build labels in the same order as file_list (the order used to build sim_matrix) ---
         labels = []
@@ -183,26 +194,29 @@ class ComparePCS:
         axis.set_xlabel('Signal Index')
         axis.set_ylabel('Signal Index')
 
-    def plot_params(self, params, sim_objects_names, sim_objects, selected_signals, x_norm_all, main_pcs=None):
+    def plot_params(self, params, sim_objects_names, sim_objects, selected_signals, main_pcs=None):
         """Plot results for a given parameter combination."""
-        fig = plt.figure(figsize=(35, 15))
+        fig = plt.figure(figsize=(35, 1.5 * len(self.file_list)))
         gs = gridspec.GridSpec(len(self.file_list), 2, width_ratios=[2, 1])  # 2x wider second column
         axes_left = [fig.add_subplot(gs[i, 0]) for i in range(self.n_files)]
         gs_right = gridspec.GridSpecFromSubplotSpec(2, 1, subplot_spec=gs[:, 1])
-        axes_right = [fig.add_subplot(gs_right[i, 0]) for i in range(2)]
+        if main_pcs is not None:
+            axes_right = [fig.add_subplot(gs_right[i, 0]) for i in range(2)]
+        else:
+            axes_right = [fig.add_subplot(gs_right[0, 0])]
 
         # --- plot peaks similarity ---
-        self.plot_peaks_similarity(sim_objects[0], selected_signals, x_norm_all, axes_left, main_pcs)
+        self.plot_peaks_similarity(sim_objects[0], selected_signals, axes_left, main_pcs)
         # --- plot similarity matrices ---
         for i, sim_obj_name, sim_obj in zip(range(len(sim_objects)), sim_objects_names, sim_objects):
-            self.plot_similarity_matrices(sim_obj.sim_matrix, f'Similarity {sim_obj_name}', 'Similarity Matrix {sim_obj_name}', axes_right[i])
+            self.plot_similarity_matrices(sim_obj.sim_matrix, f'Similarity {sim_obj_name}', f'Similarity Matrix {sim_obj_name}', axes_right[i])
         # --- finalize and save figure ---
         title = "\n".join(
-            [f"Average score of {name} matrix: {sim_obj.score:.4f}, average P-value: {1 - sim_obj.matrix_op_pval:.4f}\n"
+            [f"Average score of {name} matrix: {sim_obj.score:.4f}, average P-value: {1 - sim_obj.matrix_op_pval:.4f}"
              for name, sim_obj in zip(sim_objects_names, sim_objects)])
 
         fig.suptitle(
-            f"Params {params}\n" + title + "\n",
+            f"Params {params}\n\n" + title + "\n",
             fontsize=16
         )
         fig.tight_layout(rect=[0, 0, 1, 0.96])  # leave space for suptitle
@@ -216,10 +230,10 @@ class ComparePCS:
         Returns:
             tuple: (pc_sim.score, pc_sim.matrix_op_pval, peaks_sim.score, peaks_sim.matrix_op_pval, params)
         """
-        self.logger.info(f"comparing peaks of {params} ({comb_num} of {len(self.params_comb)} combinations)")
         # --- load pcs and signals ---
-        x_norm_all, pcs_list, F_list = self.load_pcs_and_signals(params)
+        pcs_list, F_list = self.load_pcs_and_signals(params)
         # --- compare pcs ---
+        self.logger.info(f"Comparing pcs of {params} ({comb_num} of {len(self.params_comb)} combinations)")
         pc_sim = PcSimilarity(pcs_list, self.n_subs, self.n_movs)
         # --- get main pcs ---
         main_pcs = pc_sim.compare_and_plot_top_pc_avg_corr()
@@ -228,14 +242,34 @@ class ComparePCS:
         # --- get signals from selected pcs ---
         selected_signals = self.get_signals_from_seleted_pcs(pcs_list, F_list, main_pcs)
         # --- calculate peaks similarity score on selected signals ---
-        peaks_sim = PeaksSimilarity(selected_signals, self.n_subs, self.n_movs, skip_edges=SKIP_EDGES)
+        self.logger.info(f"Comparing peaks of {params} ({comb_num} of {len(self.params_comb)} combinations)")
+        peaks_sim = PeaksSimilarity(selected_signals, self.n_subs, self.n_movs, fix_orientation=True, skip_edges=SKIP_EDGES)
         # -- calculate peaks similarity score ---
         peaks_sim.calculate_score()
         # --- plot results ---
-        sim_objects_names, sim_objects = ['PCs Similarity', 'Peaks Similarity'], [pc_sim, peaks_sim]
-        self.plot_params(params, sim_objects_names, sim_objects, selected_signals, x_norm_all, main_pcs)
+        self.logger.info(f"Plotting similarity for {params} ({comb_num} of {len(self.params_comb)} combinations)")
+        sim_objects_names, sim_objects = ['Peaks Similarity', 'PCs Similarity'], [peaks_sim, pc_sim]
+        self.plot_params(params, sim_objects_names, sim_objects, selected_signals, main_pcs)
 
         return pc_sim.score, pc_sim.matrix_op_pval, peaks_sim.score, peaks_sim.matrix_op_pval, params
+
+    def process_original_signals(self):
+        """
+        Process and plot similarity for original signals across all subjects and movements.
+        """
+        self.logger.info("Processing original signals for comparison.")
+        # --- load original signals ---
+        org_signals = self.load_original_signals()
+        # --- calculate peaks similarity score on original signals ---
+        self.logger.info("Comparing peaks of original signals.")
+        peaks_sim = PeaksSimilarity(org_signals, self.n_subs, self.n_movs, fix_orientation=False, skip_edges=SKIP_EDGES)
+        # -- calculate peaks similarity score ---
+        peaks_sim.calculate_score()
+        # --- plot results ---
+        self.logger.info("Plotting similarity for original signals.")
+        sim_objects_names, sim_objects = ['Peaks Similarity'], [peaks_sim]
+        self.plot_params('original_signals', sim_objects_names, sim_objects, org_signals)
+
 
     def compare(self, num_scores=10, max_workers=0):
         """
@@ -244,11 +278,7 @@ class ComparePCS:
         - num_scores (int): Number of top scores to keep for each movement and subject.
         - max_workers (int): Maximum number of parallel workers. if 1, runs sequentially.
         """
-        x_norm_all, org_signals = self.load_original_signals()
-        peaks_sim_org_sig = PeaksSimilarity(org_signals, self.n_subs, self.n_movs, skip_edges=SKIP_EDGES)
-        peaks_sim_org_sig.calculate_score()
-        sim_objects_names, sim_objects = ['Original Similarity'], [peaks_sim_org_sig]
-        self.plot_params('original', sim_objects_names, sim_objects, org_signals, x_norm_all, None)
+        self.process_original_signals()
 
         pc_best_scores = np.array([-np.inf] * num_scores)
         pc_best_scores_params = ['.'] * num_scores
@@ -261,6 +291,7 @@ class ComparePCS:
 
         # Handle sequential execution (avoid threading overhead when max_workers=1)
         if max_workers == 1:
+            self.logger.info(f"Running sequentially without parallel processing.")
             for comb_num, params in enumerate(self.params_comb):
                 try:
                     pc_score, pc_pval, peaks_score, peaks_pval, _ = self.process_single_combination(params, comb_num)
@@ -272,6 +303,7 @@ class ComparePCS:
                 except Exception as exc:
                     self.logger.error(f'Parameter combination {params} generated an exception: {exc}')
         else:
+            self.logger.info(f"Running parallel processing with {max_workers} workers.")
             # Parallel processing of parameter combinations
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 # Submit all tasks
@@ -362,7 +394,7 @@ def main():
     parser.add_argument("--output-folder", type=str, required=True, help="Path to the output folder")
     parser.add_argument("--movements", type=int, nargs='+', default=[1, 2],
                         help="List of movements to compare (from 1 to 9)")
-    parser.add_argument("--num-scores", type=int, default=5,
+    parser.add_argument("--num-scores", type=int, default=10,
                         help="Number of top scores to keep for each movement and subject")
     parser.add_argument("--max-workers", type=int, default=1,
                         help="Maximum number of parallel workers. 0=auto (CPU count), 1=sequential")
@@ -384,8 +416,8 @@ def main():
                  log_level=logging.INFO)
     logger = logging.getLogger("compare_peaks_logger")
     logger.info(f"Command line: {' '.join(sys.argv)}")
-    effective_workers = os.cpu_count() if args.max_workers == 0 else args.max_workers
-
+    effective_workers = os.cpu_count() if args.max_workers == 0 else int(args.max_workers)
+    logger.info(f"Run with {effective_workers} cpu's.")
     compare_pcs = ComparePCS(args.files_path, args.output_folder, args.movements, logger)
     compare_pcs.compare(num_scores=args.num_scores, max_workers=effective_workers)
 
@@ -426,9 +458,9 @@ if __name__ == "__main__":
 #        └── ...
 #
 # 2. Run the script from the command line:
-# compare-peaks --files-path /path/to/subjects/ --output-folder /path/to/non-exists/output/folder --movements 1 2 --num-scores 5
+# compare-pcs --files-path /path/to/subjects/ --output-folder /path/to/non-exists/output/folder --movements 1 2 --num-scores 10 --max-workers 1
 #   - Replace /path/to/subjects/ with the actual path to the directory containing subject subdirectories.
 #   - Replace /path/to/non-exists/output/folder with the desired output folder path (it should not exist prior to running).
-#   - Adjust --movements, and --num-scores as needed.
+#   - Adjust --movements, --num-scores and --max-workers as needed.
 
 # 3. The output will be saved in the specified output folder, including logs and figures for each parameter combination and principal component.

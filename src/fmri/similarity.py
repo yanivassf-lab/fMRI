@@ -14,17 +14,17 @@ class Similarity:
             Number of subjects per movement/experiment
         n_movs : int
             Number of movements/experiments
-        n_subs_tot : int
+        n_files : int
             Total number of subjects across all movements/experiments
         sim_matrix : np.ndarray
-            Similarity matrix of shape (n_subs_tot, n_subs_tot)
+            Similarity matrix of shape (n_files, n_files)
         score : float
             Overall consistency score across experiments
         """
         self.n_subs = n_subs
         self.n_movs = n_movs
-        self.n_subs_tot = n_subs * n_movs
-        self.sim_matrix = np.ones((self.n_subs_tot, self.n_subs_tot))
+        self.n_files = n_subs * n_movs
+        self.sim_matrix = np.ones((self.n_files, self.n_files))
         self.score = None
         self.matrix_op_pval = None
 

@@ -6,7 +6,7 @@ from .similarity import Similarity
 
 
 class PeaksSimilarity(Similarity):
-    def __init__(self, signals, n_subs, n_movs, skip_edges=100):
+    def __init__(self, signals, n_subs, n_movs, fix_orientation, skip_edges=100):
         super().__init__(n_subs, n_movs)
         """
         Initialize the PeaksSimilarity class.
@@ -15,6 +15,7 @@ class PeaksSimilarity(Similarity):
             signals (list): list of signals
             n_subs:      Number of subjects/samples
             n_movs:      Number of movements/experiments
+            fix_orientation: If True, corrects for signal orientation before similarity calculation.
             skip_edges: Number of samples to skip at the start and end of each signal to avoid edge effects.
         """
         self.signals = signals
@@ -22,9 +23,12 @@ class PeaksSimilarity(Similarity):
         self.peaks_idx = []
         self.peaks_height = []
         self.peaks_signals = []
-        self.reverted = []
+        self.reverted = None
         self._extract_peaks_signal()
-        self._find_correct_orientation()
+        if fix_orientation:
+            self._calculate_similarity_score_correct_orientation()
+        else:
+            self._calculate_similarity_score()
 
     # ====== Step 1: Find peaks ======
     def _get_peaks(self, signal):
@@ -49,26 +53,71 @@ class PeaksSimilarity(Similarity):
             self._peaks_to_signal(peaks_idx, peaks_height, len(signal))
 
     # ====== Step 2: DTW similarity ======
-    def _find_correct_orientation(self):
-        dist_min = np.zeros((self.n_subs_tot, self.n_subs_tot))
+    def _calculate_similarity_score_correct_orientation(self):
+        # 1. Cut edges
+        cut_peaks_signals = [p_sig[self.skip_edges:-self.skip_edges] for p_sig in self.peaks_signals]
 
-        for i, p_sig in enumerate(self.peaks_signals):
-            dist_org = np.zeros(self.n_subs_tot)
-            dist_rev = np.zeros(self.n_subs_tot)
-            for j, p_ref_sig in enumerate(self.peaks_signals):
-                if np.array_equal(p_sig, p_ref_sig):
-                    dist_org[j] = 0.0
-                    continue
-                dist_org[j] = dtw.distance(p_sig[self.skip_edges:-self.skip_edges],
-                                           p_ref_sig[self.skip_edges:-self.skip_edges])
-                dist_rev[j] = dtw.distance(-p_sig[self.skip_edges:-self.skip_edges],
-                                           p_ref_sig[self.skip_edges:-self.skip_edges])
-            dist_org_avg = np.mean(dist_org)
-            dist_rev_avg = np.mean(dist_rev)
-            if dist_rev_avg < dist_org_avg:
-                dist_min[i, :] = dist_rev
-                self.reverted.append(True)
-            else:
-                dist_min[i, :] = dist_org
-                self.reverted.append(False)
-        self.sim_matrix = 1 / (1 + dist_min)
+        # 2. Compute distance matrix for original signals
+        # dist_mat_org = dtw.distance_matrix(cut_peaks_signals, parallel=True, use_mp=True)
+
+        # 2. Compute distance matrix for reversed signals
+        cut_peaks_signals_rev = [-p_sig for p_sig in cut_peaks_signals]  # invert each signal
+        cut_peaks_signals_all = cut_peaks_signals_rev + cut_peaks_signals
+
+        dist_mat_all = dtw.distance_matrix(cut_peaks_signals_all, block=((0, 2*self.n_files),(self.n_files,2*self.n_files)))#,parallel=True, use_mp=True)
+        dist_mat_org = dist_mat_all[self.n_files:2*self.n_files, self.n_files:2*self.n_files]
+        dist_mat_rev = dist_mat_all[:self.n_files, self.n_files:]
+        # 3. Compute minimal distances and reversed flags
+        dist_min_mat = np.minimum(dist_mat_org, dist_mat_rev)
+        reversed_mat = dist_mat_rev < dist_mat_org
+
+        # 5. Find optimal orientations using the spectral method
+        self.reverted = self.find_optimal_orientations(reversed_mat)
+
+        # 6. Similarity matrix (higher = more similar)
+        self.sim_matrix = 1 / (1 + dist_min_mat)
+
+    def find_optimal_orientations(self, M, num_iter=100, tol=1e-6):
+        """
+        Computes approximate optimal orientations for a set of samples
+        using a spectral method with power iteration (faster than full eigen decomposition).
+
+        Args:
+            M (array-like): Symmetric (N x N) matrix of 0s and 1s.
+                            M[i, j] = 0 means i and j have the same orientation.
+                            M[i, j] = 1 means i and j have opposite orientations.
+            num_iter (int): Maximum number of power iteration steps.
+            tol (float): Convergence tolerance.
+
+        Returns:
+            list: List of length N of 0s and 1s.
+                  0 = keep original orientation.
+                  1 = flip orientation.
+        """
+        W = 1 - 2 * M
+        np.fill_diagonal(W, 0)
+
+        # --- Power iteration to approximate principal eigenvector ---
+        n = W.shape[0]
+        b = np.random.rand(n)
+        b /= np.linalg.norm(b)
+
+        for _ in range(num_iter):
+            b_next = W @ b
+            b_next /= np.linalg.norm(b_next)
+            if np.linalg.norm(b_next - b) < tol:
+                break
+            b = b_next
+
+        principal_eigenvector = b
+
+        # Determine orientations based on sign
+        orientations = (principal_eigenvector < 0).astype(int)
+        return orientations.tolist()
+
+    def _calculate_similarity_score(self):
+        cut_peaks_signals = [p_sig[self.skip_edges:-self.skip_edges] for p_sig in self.peaks_signals]
+        dist_min_mat = dtw.distance_matrix(cut_peaks_signals)#, parallel=True, use_mp=True)
+        self.reverted = np.zeros(self.n_files)
+        self.sim_matrix = 1 / (1 + dist_min_mat)
+

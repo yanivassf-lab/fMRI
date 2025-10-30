@@ -49,10 +49,10 @@ class PcSimilarity(Similarity):
         """
 
         # Matrices to store similarities
-        pc_corrs_sum = np.zeros((self.n_subs_tot, self.n_components, self.n_components))
+        pc_corrs_sum = np.zeros((self.n_files, self.n_components, self.n_components))
 
         # Compute pairwise similarities
-        for i, j in combinations(range(self.n_subs_tot), 2):
+        for i, j in combinations(range(self.n_files), 2):
             pcs_i = self.PCs_list[i]
             pcs_j = self.PCs_list[j]
 
