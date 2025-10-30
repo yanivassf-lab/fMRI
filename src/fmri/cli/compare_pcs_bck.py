@@ -1,7 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib
-matplotlib.use('Agg')  # Use non-interactive backend for multiprocessing
 import matplotlib.gridspec as gridspec
 
 import os
@@ -9,7 +7,7 @@ import sys
 import glob
 import argparse
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from docutils.nodes import title
 from fmri.pc_similarity import PcSimilarity
@@ -209,40 +207,11 @@ class ComparePCS:
         fig.savefig(os.path.join(self.output_folder, f"similarity_{params}.png"))
         plt.close(fig)
 
-    def process_single_combination(self, params, comb_num):
-        """
-        Process a single parameter combination.
-
-        Returns:
-            tuple: (pc_sim.score, pc_sim.matrix_op_pval, peaks_sim.score, peaks_sim.matrix_op_pval, params)
-        """
-        self.logger.info(f"comparing peaks of {params} ({comb_num} of {len(self.params_comb)} combinations)")
-        # --- load pcs and signals ---
-        x_norm_all, pcs_list, F_list = self.load_pcs_and_signals(params)
-        # --- compare pcs ---
-        pc_sim = PcSimilarity(pcs_list, self.n_subs, self.n_movs)
-        # --- get main pcs ---
-        main_pcs = pc_sim.compare_and_plot_top_pc_avg_corr()
-        # --- calculate pc similarity score ---
-        pc_sim.calculate_score()
-        # --- get signals from selected pcs ---
-        selected_signals = self.get_signals_from_seleted_pcs(pcs_list, F_list, main_pcs)
-        # --- calculate peaks similarity score on selected signals ---
-        peaks_sim = PeaksSimilarity(selected_signals, self.n_subs, self.n_movs, skip_edges=SKIP_EDGES)
-        # -- calculate peaks similarity score ---
-        peaks_sim.calculate_score()
-        # --- plot results ---
-        sim_objects_names, sim_objects = ['PCs Similarity', 'Peaks Similarity'], [pc_sim, peaks_sim]
-        self.plot_params(params, sim_objects_names, sim_objects, selected_signals, x_norm_all, main_pcs)
-
-        return pc_sim.score, pc_sim.matrix_op_pval, peaks_sim.score, peaks_sim.matrix_op_pval, params
-
-    def compare(self, num_scores=10, max_workers=0):
+    def compare(self, num_scores=10):
         """
         Compare principal components across different movements and subjects.
 
         - num_scores (int): Number of top scores to keep for each movement and subject.
-        - max_workers (int): Maximum number of parallel workers. if 1, runs sequentially.
         """
         x_norm_all, org_signals = self.load_original_signals()
         peaks_sim_org_sig = PeaksSimilarity(org_signals, self.n_subs, self.n_movs, skip_edges=SKIP_EDGES)
@@ -258,40 +227,30 @@ class ComparePCS:
         peaks_best_scores_params = ['.'] * num_scores
         peaks_best_op_pvals = np.array([-np.inf] * num_scores)
         peaks_best_op_pvals_params = ['.'] * num_scores
-
-        # Handle sequential execution (avoid threading overhead when max_workers=1)
-        if max_workers == 1:
-            for comb_num, params in enumerate(self.params_comb):
-                try:
-                    pc_score, pc_pval, peaks_score, peaks_pval, _ = self.process_single_combination(params, comb_num)
-                    # --- update the parameters with the best scores ---
-                    self.update_best_scores(pc_best_scores, pc_best_scores_params, pc_score, params)
-                    self.update_best_scores(pc_best_op_pvals, pc_best_op_pvals_params, pc_pval, params)
-                    self.update_best_scores(peaks_best_scores, peaks_best_scores_params, peaks_score, params)
-                    self.update_best_scores(peaks_best_op_pvals, peaks_best_op_pvals_params, peaks_pval, params)
-                except Exception as exc:
-                    self.logger.error(f'Parameter combination {params} generated an exception: {exc}')
-        else:
-            # Parallel processing of parameter combinations
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                # Submit all tasks
-                future_to_params = {
-                    executor.submit(self.process_single_combination, params, comb_num): params
-                    for comb_num, params in enumerate(self.params_comb)
-                }
-
-                # Process completed tasks as they finish
-                for future in as_completed(future_to_params):
-                    params = future_to_params[future]
-                    try:
-                        pc_score, pc_pval, peaks_score, peaks_pval, _ = future.result()
-                        # --- update the parameters with the best scores ---
-                        self.update_best_scores(pc_best_scores, pc_best_scores_params, pc_score, params)
-                        self.update_best_scores(pc_best_op_pvals, pc_best_op_pvals_params, pc_pval, params)
-                        self.update_best_scores(peaks_best_scores, peaks_best_scores_params, peaks_score, params)
-                        self.update_best_scores(peaks_best_op_pvals, peaks_best_op_pvals_params, peaks_pval, params)
-                    except Exception as exc:
-                        self.logger.error(f'Parameter combination {params} generated an exception: {exc}')
+        for comb_num, params in enumerate(self.params_comb):
+            self.logger.info(f"comparing peaks of {params} ({comb_num} of {len(self.params_comb)} combinations)")
+            # --- load pcs and signals ---
+            x_norm_all, pcs_list, F_list = self.load_pcs_and_signals(params)
+            # --- compare pcs ---
+            pc_sim = PcSimilarity(pcs_list, self.n_subs, self.n_movs)
+            # --- get main pcs ---
+            main_pcs = pc_sim.compare_and_plot_top_pc_avg_corr()
+            # --- calculate pc similarity score ---
+            pc_sim.calculate_score()
+            # --- get signals from selected pcs ---
+            selected_signals = self.get_signals_from_seleted_pcs(pcs_list, F_list, main_pcs)
+            # --- calculate peaks similarity score on selected signals ---
+            peaks_sim = PeaksSimilarity(selected_signals, self.n_subs, self.n_movs, skip_edges=SKIP_EDGES)
+            # -- calculate peaks similarity score ---
+            peaks_sim.calculate_score()
+            # --- plot results ---
+            sim_objects_names, sim_objects = ['PCs Similarity', 'Peaks Similarity'], [pc_sim, peaks_sim]
+            self.plot_params(params, sim_objects_names, sim_objects, selected_signals, x_norm_all, main_pcs)
+            # --- update the parameters with the best scores ---
+            self.update_best_scores(pc_best_scores, pc_best_scores_params, pc_sim.score, params)
+            self.update_best_scores(pc_best_op_pvals, pc_best_op_pvals_params, pc_sim.matrix_op_pval, params)
+            self.update_best_scores(peaks_best_scores, peaks_best_scores_params, peaks_sim.score, params)
+            self.update_best_scores(peaks_best_op_pvals, peaks_best_op_pvals_params, peaks_sim.matrix_op_pval, params)
 
         # --- print the parameters with the best scores ---
         self.print_best_scores(pc_best_scores, pc_best_scores_params, 'pc score')
@@ -364,8 +323,6 @@ def main():
                         help="List of movements to compare (from 1 to 9)")
     parser.add_argument("--num-scores", type=int, default=5,
                         help="Number of top scores to keep for each movement and subject")
-    parser.add_argument("--max-workers", type=int, default=1,
-                        help="Maximum number of parallel workers. 0=auto (CPU count), 1=sequential")
     args = parser.parse_args()
 
     if not os.path.exists(args.files_path):
@@ -384,10 +341,10 @@ def main():
                  log_level=logging.INFO)
     logger = logging.getLogger("compare_peaks_logger")
     logger.info(f"Command line: {' '.join(sys.argv)}")
-    effective_workers = os.cpu_count() if args.max_workers == 0 else args.max_workers
 
     compare_pcs = ComparePCS(args.files_path, args.output_folder, args.movements, logger)
-    compare_pcs.compare(num_scores=args.num_scores, max_workers=effective_workers)
+    compare_pcs.compare(num_scores=args.num_scores)
+
 
 if __name__ == "__main__":
     main()
@@ -397,28 +354,20 @@ if __name__ == "__main__":
 #    /path/to/subjects/
 #        ├── sub-01_movement1/
 #        │   ├── no_penalty_nb100/
-#        │   │   ├── eigvecs_eigval_F.npz
-#        │   │   ├── original_averaged_signal_intensity.txt
 #        │   │   ├── temporal_profile_pc_0.txt
 #        │   │   ├── temporal_profile_pc_1.txt
 #        │   │   └── ...
 #        │   ├── p0_u1_t1e-6_l-4_0_nb100/
-#        │   │   ├── eigvecs_eigval_F.npz
-#        │   │   ├── original_averaged_signal_intensity.txt
 #        │   │   ├── temporal_profile_pc_0.txt
 #        │   │   ├── temporal_profile_pc_1.txt
 #        │   │   └── ...
 #        │   └── ...
 #        ├── sub-01_movement2/
 #        │   ├── no_penalty_nb100/
-#        │   │   ├── eigvecs_eigval_F.npz
-#        │   │   ├── original_averaged_signal_intensity.txt
 #        │   │   ├── temporal_profile_pc_0.txt
 #        │   │   ├── temporal_profile_pc_1.txt
 #        │   │   └── ...
 #        │   ├── p0_u1_t1e-6_l-4_0_nb100/
-#        │   │   ├── eigvecs_eigval_F.npz
-#        │   │   ├── original_averaged_signal_intensity.txt
 #        │   │   ├── temporal_profile_pc_0.txt
 #        │   │   ├── temporal_profile_pc_1.txt
 #        │   │   └── ...

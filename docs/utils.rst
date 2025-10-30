@@ -444,13 +444,16 @@ Usage
        --files-path /path/to/fmri_combinations_results_skfda \
        --output-folder /path/to/output_folder \
        --movements 1 2 3 \
-       --num-scores 10
+       --num-scores 10 \
+       --max-workers 1
 
 - Notes
 
   - ``--files-path`` must exist and contain the structure above.
   - ``--output-folder`` must NOT exist (it will be created).
   - Movement numbers must be between 1 and 9.
+  - ``--num-scores`` is the number of top scores to keep for each movement and subject.
+  - ``--max-workers`` is the number of parallel workers to use. If 0, uses os.cpu_count().
   - The script writes a log file (``compare_peaks_log.txt``) and one figure per parameter combination.
 
 Outputs
