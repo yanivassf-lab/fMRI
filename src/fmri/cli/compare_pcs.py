@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
-from numpy.ma.extras import average
 from scipy.signal import resample
 
 matplotlib.use('Agg')  # Use non-interactive backend for multiprocessing
@@ -12,19 +11,16 @@ import sys
 import glob
 import argparse
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
-from docutils.nodes import title
 from fmri.pc_similarity import PcSimilarity
 from fmri.peaks_similarity import PeaksSimilarity
 from fmri.utils import setup_logger
-from nibabel.externals.netcdf import netcdf_file
 
-SKIP_EDGES = 100  # number of timepoints to skip at the beginning and end when looking for peaks, TODO: make it a parameter
 
 
 class ComparePCS:
-    def __init__(self, files_path, output_folder, movements, logger):
+    def __init__(self, files_path, output_folder, movements, skip_timepoints, logger):
         """
         Initialize the ComparePCS class.
 
@@ -32,11 +28,13 @@ class ComparePCS:
         - files_path (str): Path to the directory containing subject subdirectories.
         - output_folder (str): Path to the output folder for logs and figures.
         - movements (list[int]): List of movement identifiers to compare.
+        - skip_timepoints (int): Number of timepoints to skip at the beginning and end when comparing peaks.
         - logger: Logger object for logging information.
         """
         self.files_path = files_path
         self.output_folder = output_folder
         self.movements = movements
+        self.skip_timepoints = skip_timepoints
         self.params_comb = self.get_list_of_params(files_path)
         self.file_list = self.get_list_of_files(files_path, movements)
         self.n_subs = int(len(self.file_list) / len(movements))
@@ -212,7 +210,7 @@ class ComparePCS:
             self.plot_similarity_matrices(sim_obj.sim_matrix, f'Similarity {sim_obj_name}', f'Similarity Matrix {sim_obj_name}', axes_right[i])
         # --- finalize and save figure ---
         title = "\n".join(
-            [f"Average score of {name} matrix: {sim_obj.score:.4f}, average P-value: {1 - sim_obj.matrix_op_pval:.4f}"
+            [f"Average Spearman correlation of {name} matrix: {sim_obj.score:.4f}, average P-value: {1 - sim_obj.matrix_op_pval:.4f}"
              for name, sim_obj in zip(sim_objects_names, sim_objects)])
 
         fig.suptitle(
@@ -243,7 +241,7 @@ class ComparePCS:
         selected_signals = self.get_signals_from_seleted_pcs(pcs_list, F_list, main_pcs)
         # --- calculate peaks similarity score on selected signals ---
         self.logger.info(f"Comparing peaks of {params} ({comb_num} of {len(self.params_comb)} combinations)")
-        peaks_sim = PeaksSimilarity(selected_signals, self.n_subs, self.n_movs, fix_orientation=True, skip_edges=SKIP_EDGES)
+        peaks_sim = PeaksSimilarity(selected_signals, self.n_subs, self.n_movs, fix_orientation=True, skip_timepoints=self.skip_timepoints)
         # -- calculate peaks similarity score ---
         peaks_sim.calculate_score()
         # --- plot results ---
@@ -262,7 +260,7 @@ class ComparePCS:
         org_signals = self.load_original_signals()
         # --- calculate peaks similarity score on original signals ---
         self.logger.info("Comparing peaks of original signals.")
-        peaks_sim = PeaksSimilarity(org_signals, self.n_subs, self.n_movs, fix_orientation=False, skip_edges=SKIP_EDGES)
+        peaks_sim = PeaksSimilarity(org_signals, self.n_subs, self.n_movs, fix_orientation=False, skip_timepoints=self.skip_timepoints)
         # -- calculate peaks similarity score ---
         peaks_sim.calculate_score()
         # --- plot results ---
@@ -296,31 +294,31 @@ class ComparePCS:
                 try:
                     pc_score, pc_pval, peaks_score, peaks_pval, _ = self.process_single_combination(params, comb_num)
                     # --- update the parameters with the best scores ---
-                    self.update_best_scores(pc_best_scores, pc_best_scores_params, pc_score, params)
+                    self.update_best_scores(pc_best_scores, pc_best_scores_params, abs(pc_score), params)
                     self.update_best_scores(pc_best_op_pvals, pc_best_op_pvals_params, pc_pval, params)
-                    self.update_best_scores(peaks_best_scores, peaks_best_scores_params, peaks_score, params)
+                    self.update_best_scores(peaks_best_scores, peaks_best_scores_params, abs(peaks_score), params)
                     self.update_best_scores(peaks_best_op_pvals, peaks_best_op_pvals_params, peaks_pval, params)
                 except Exception as exc:
                     self.logger.error(f'Parameter combination {params} generated an exception: {exc}')
         else:
             self.logger.info(f"Running parallel processing with {max_workers} workers.")
             # Parallel processing of parameter combinations
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                # Submit all tasks
+            with ProcessPoolExecutor(max_workers=max_workers) as executor:
                 future_to_params = {
                     executor.submit(self.process_single_combination, params, comb_num): params
                     for comb_num, params in enumerate(self.params_comb)
                 }
+
 
                 # Process completed tasks as they finish
                 for future in as_completed(future_to_params):
                     params = future_to_params[future]
                     try:
                         pc_score, pc_pval, peaks_score, peaks_pval, _ = future.result()
-                        # --- update the parameters with the best scores ---
-                        self.update_best_scores(pc_best_scores, pc_best_scores_params, pc_score, params)
+                        # --- update the parameters with the best scores (in absolute value) ---
+                        self.update_best_scores(pc_best_scores, pc_best_scores_params, abs(pc_score), params)
                         self.update_best_scores(pc_best_op_pvals, pc_best_op_pvals_params, pc_pval, params)
-                        self.update_best_scores(peaks_best_scores, peaks_best_scores_params, peaks_score, params)
+                        self.update_best_scores(peaks_best_scores, peaks_best_scores_params, abs(peaks_score), params)
                         self.update_best_scores(peaks_best_op_pvals, peaks_best_op_pvals_params, peaks_pval, params)
                     except Exception as exc:
                         self.logger.error(f'Parameter combination {params} generated an exception: {exc}')
@@ -398,6 +396,8 @@ def main():
                         help="Number of top scores to keep for each movement and subject")
     parser.add_argument("--max-workers", type=int, default=1,
                         help="Maximum number of parallel workers. 0=auto (CPU count), 1=sequential")
+    parser.add_argument("--skip-timepoints", type=int, default=100, help="Number of timepoints to skip at the beginning and end when comparing peaks.")
+
     args = parser.parse_args()
 
     if not os.path.exists(args.files_path):
@@ -418,7 +418,7 @@ def main():
     logger.info(f"Command line: {' '.join(sys.argv)}")
     effective_workers = os.cpu_count() if args.max_workers == 0 else int(args.max_workers)
     logger.info(f"Run with {effective_workers} cpu's.")
-    compare_pcs = ComparePCS(args.files_path, args.output_folder, args.movements, logger)
+    compare_pcs = ComparePCS(args.files_path, args.output_folder, args.movements, args.skip_timepoints, logger)
     compare_pcs.compare(num_scores=args.num_scores, max_workers=effective_workers)
 
 if __name__ == "__main__":
@@ -461,6 +461,6 @@ if __name__ == "__main__":
 # compare-pcs --files-path /path/to/subjects/ --output-folder /path/to/non-exists/output/folder --movements 1 2 --num-scores 10 --max-workers 1
 #   - Replace /path/to/subjects/ with the actual path to the directory containing subject subdirectories.
 #   - Replace /path/to/non-exists/output/folder with the desired output folder path (it should not exist prior to running).
-#   - Adjust --movements, --num-scores and --max-workers as needed.
+#   - Adjust --movements, --num-scores, --skip-timepoints and --max-workers as needed.
 
 # 3. The output will be saved in the specified output folder, including logs and figures for each parameter combination and principal component.

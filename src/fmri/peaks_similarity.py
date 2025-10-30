@@ -6,7 +6,7 @@ from .similarity import Similarity
 
 
 class PeaksSimilarity(Similarity):
-    def __init__(self, signals, n_subs, n_movs, fix_orientation, skip_edges=100):
+    def __init__(self, signals, n_subs, n_movs, fix_orientation, skip_timepoints=100):
         super().__init__(n_subs, n_movs)
         """
         Initialize the PeaksSimilarity class.
@@ -16,10 +16,10 @@ class PeaksSimilarity(Similarity):
             n_subs:      Number of subjects/samples
             n_movs:      Number of movements/experiments
             fix_orientation: If True, corrects for signal orientation before similarity calculation.
-            skip_edges: Number of samples to skip at the start and end of each signal to avoid edge effects.
+            skip_timepoints: Number of timesteps to skip at the start and end of each signal to avoid edge effects.
         """
         self.signals = signals
-        self.skip_edges = skip_edges
+        self.skip_timepoints = skip_timepoints
         self.peaks_idx = []
         self.peaks_height = []
         self.peaks_signals = []
@@ -55,10 +55,7 @@ class PeaksSimilarity(Similarity):
     # ====== Step 2: DTW similarity ======
     def _calculate_similarity_score_correct_orientation(self):
         # 1. Cut edges
-        cut_peaks_signals = [p_sig[self.skip_edges:-self.skip_edges] for p_sig in self.peaks_signals]
-
-        # 2. Compute distance matrix for original signals
-        # dist_mat_org = dtw.distance_matrix(cut_peaks_signals, parallel=True, use_mp=True)
+        cut_peaks_signals = [p_sig[self.skip_timepoints:-self.skip_timepoints] for p_sig in self.peaks_signals]
 
         # 2. Compute distance matrix for reversed signals
         cut_peaks_signals_rev = [-p_sig for p_sig in cut_peaks_signals]  # invert each signal
@@ -116,7 +113,7 @@ class PeaksSimilarity(Similarity):
         return orientations.tolist()
 
     def _calculate_similarity_score(self):
-        cut_peaks_signals = [p_sig[self.skip_edges:-self.skip_edges] for p_sig in self.peaks_signals]
+        cut_peaks_signals = [p_sig[self.skip_timepoints:-self.skip_timepoints] for p_sig in self.peaks_signals]
         dist_min_mat = dtw.distance_matrix(cut_peaks_signals)#, parallel=True, use_mp=True)
         self.reverted = np.zeros(self.n_files)
         self.sim_matrix = 1 / (1 + dist_min_mat)

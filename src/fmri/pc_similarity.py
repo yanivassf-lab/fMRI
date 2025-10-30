@@ -58,8 +58,9 @@ class PcSimilarity(Similarity):
 
             # Subspace angles
             angles = subspace_angles(pcs_i, pcs_j)
-            subspace_similarity = np.mean(np.cos(angles))
-            self.sim_matrix[i, j] = self.sim_matrix[j, i] = subspace_similarity
+            # subspace_similarity = np.mean(np.cos(angles))
+            min_angle_cos = np.cos(angles[0])
+            self.sim_matrix[i, j] = self.sim_matrix[j, i] = min_angle_cos
 
             for ci, cj in combinations(range(self.n_components), 2):
                 pc_corrs = np.corrcoef(pcs_i[:, ci], pcs_j[:, cj])[0, 1]

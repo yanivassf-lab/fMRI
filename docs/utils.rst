@@ -244,12 +244,12 @@ This script systematically tests different parameter combinations for fMRI analy
 The script runs two types of analyses in sequence:
 
 1. **Non-penalized Analysis:** Tests different numbers of basis functions without regularization
-   
+
    - Uses ``--no-penalty`` flag
    - Tests all n_basis values with threshold 1e-6
-   
+
 2. **Penalized Analysis:** Tests combinations of all parameters with regularization
-   
+
    - Nested loops over all parameter combinations
    - Creates separate output directories for each combination
 
@@ -331,11 +331,11 @@ Before running, update these variables in the script:
    $INPUT_DIR = "C:\path\to\raw-files"
    $PROCESSED_DIR = "C:\path\to\preprocessed_data"
    $BASE_OUTPUT_DIR = "C:\path\to\output"
-   
+
    # Conda environment
    $CONDA_BAT = "C:\ProgramData\Miniconda3\condabin\conda.bat"
    $ENV_NAME = "fmri-env"
-   
+
    # Parameters (same as Bash version)
    $derivatives = @(0, 1, 2)
    $thresholds = @(1e-3, 1e-6)
@@ -445,6 +445,7 @@ Usage
        --output-folder /path/to/output_folder \
        --movements 1 2 3 \
        --num-scores 10 \
+       --skip-timepoints 100 \
        --max-workers 1
 
 - Notes
@@ -453,6 +454,7 @@ Usage
   - ``--output-folder`` must NOT exist (it will be created).
   - Movement numbers must be between 1 and 9.
   - ``--num-scores`` is the number of top scores to keep for each movement and subject.
+  - ``--skip-timepoints`` is how many timepoints to ignore at the start and end of each signal when comparing peaks (to avoid edge artifacts).
   - ``--max-workers`` is the number of parallel workers to use. If 0, uses os.cpu_count().
   - The script writes a log file (``compare_peaks_log.txt``) and one figure per parameter combination.
 
