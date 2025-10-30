@@ -4,48 +4,85 @@
 Installation
 ============
 
+Stable release (pip)
+--------------------
 
-Stable release
---------------
-
-To install fMRI, run this command in your terminal:
+To install fMRI from PyPI with pip:
 
 .. code-block:: console
 
     $ pip install fmri
 
-This is the preferred method to install fMRI, as it will always install the most recent stable release.
+This installs the latest stable release and the CLI entry points (``fmri-main``, ``preprocess-nii-file``, ``nifti-viewer``, ``compare-pcs``).
 
-If you don't have `pip`_ installed, this `Python installation guide`_ can guide
-you through the process.
+Windows (recommended: conda/mamba)
+----------------------------------
 
-.. _pip: https://pip.pypa.io
-.. _Python installation guide: http://docs.python-guide.org/en/latest/starting/installation/
+On Windows we recommend using a conda environment (via Miniconda or Mambaforge) for smooth installation of scientific dependencies:
 
+1) Install Miniconda or Mambaforge
+
+   - Miniconda: https://docs.conda.io/en/latest/miniconda.html
+   - Mambaforge: https://github.com/conda-forge/miniforge
+
+2) Create and activate an environment (Python 3.11 suggested)
+
+.. code-block:: console
+
+    # Install mamba in base (optional but faster)
+    conda install -c conda-forge mamba
+
+    # Create environment
+    mamba create -n fmri-env -c conda-forge python=3.11
+
+    # Activate environment
+    mamba activate fmri-env
+
+3) Install core scientific packages from conda-forge (ensures MKL/OpenBLAS are configured correctly)
+
+.. code-block:: console
+
+    mamba install -c conda-forge numpy scipy mkl mkl-service matplotlib nibabel scikit-fda dtaidistance
+
+4) Install the fMRI package (PyPI) into the same environment
+
+.. code-block:: console
+
+    pip install fmri
 
 From sources
 ------------
 
 The sources for fMRI can be downloaded from the `Github repo`_.
 
-You can either clone the public repository:
+Clone the repository:
 
 .. code-block:: console
 
-    $ git clone git://github.com/yanivassf-lab/fmri
+    $ git clone https://github.com/yanivassf-lab/fmri
+    $ cd fmri
 
-Or download the `tarball`_:
-
-.. code-block:: console
-
-    $ curl -OJL https://github.com/yanivassf-lab/fmri/tarball/master
-
-Once you have a copy of the source, you can install it with:
+Install in editable mode (development):
 
 .. code-block:: console
 
-    $ python setup.py install
+    # Option A: system Python
+    $ pip install -e .
 
+    # Option B: conda
+    $ conda install -c conda-forge mamba
+    $ mamba create -n fmri-dev -c conda-forge python=3.11
+    $ mamba activate fmri-dev
+    $ mamba install -c conda-forge numpy scipy mkl mkl-service matplotlib nibabel scikit-fda dtaidistance
+    $ pip install -e .
+
+Verify installation
+-------------------
+
+.. code-block:: console
+
+    fmri-main --help
+    preprocess-nii-file --help
+    compare-pcs --help
 
 .. _Github repo: https://github.com/yanivassf-lab/fmri
-.. _tarball: https://github.com/yanivassf-lab/fmri/tarball/master

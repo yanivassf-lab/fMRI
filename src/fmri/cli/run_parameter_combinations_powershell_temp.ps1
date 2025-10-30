@@ -26,7 +26,7 @@ $BASE_OUTPUT_DIR = "C:\Users\user\Documents\brainWork\fmri-runs\outputs\run_para
 
 # Conda executable
 $CONDA_BAT = "C:\ProgramData\Miniconda3\condabin\conda.bat"
-$ENV_NAME = "fmri-stable"
+$ENV_NAME = "fmri-env"
 
 # Parameter sets
 $derivatives = @(2, 1, 0)
@@ -48,9 +48,9 @@ function Wait-ForSlot {
 
     # Loop until the number of active processes is below the maximum limit
     while ($processesRef.Value.Count -ge $MAX_PARALLEL) {
-        
+
         Write-Host "--- MAX LIMIT REACHED: Waiting for a slot. Current running: $($processesRef.Value.Count) / $MAX_PARALLEL ---"
-        
+
         # 1. Reliable cleanup: Iterate backwards and remove all finished processes
         # This prevents the array from resizing unpredictably and cleans multiple finishes.
         $list = $processesRef.Value
@@ -61,14 +61,14 @@ function Wait-ForSlot {
                 $list.RemoveAt($i)
             }
         }
-        
+
         # 2. Check the count again. If still too high, pause briefly before re-checking
         if ($processesRef.Value.Count -ge $MAX_PARALLEL) {
             Write-Host "--- Still full. Sleeping for 2 seconds to allow jobs to finish... ---"
             Start-Sleep -Seconds 2
         }
     }
-    
+
     # Final cleanup before exiting the function (just in case)
     $list = $processesRef.Value
     for ($i = $list.Count - 1; $i -ge 0; $i--) {
@@ -92,7 +92,7 @@ foreach ($n_basis in $n_basis_values) {
         if (Test-Path $mask_file) {
             $output_dir = Join-Path $BASE_OUTPUT_DIR "$base\no_penalty_nb$n_basis"
             if (-not (Test-Path $output_dir)) { New-Item -ItemType Directory -Path $output_dir | Out-Null }
-            
+
             # --- Wait for a slot before launching the next job ---
             Wait-ForSlot -processesRef ([ref]$processes) -MAX_PARALLEL $MAX_PARALLEL
 
@@ -111,10 +111,16 @@ foreach ($n_basis in $n_basis_values) {
             # Start process in background
             $proc = Start-Process -FilePath $CONDA_BAT -ArgumentList $args -PassThru
             # Use .Add() instead of += to avoid 'op_Addition' error
-            $processes.Add($proc) | Out-Null 
+            $processes.Add($proc) | Out-Null
             Write-Host "Launched NO-PENALTY job $($proc.Id): $base (Basis: $n_basis). Total running: $($processes.Count)"
         }
     }
+}
+
+Write-Host "Waiting for last $($processes.Count) tasks to finish..."
+# Use the same cleanup/wait logic to ensure all remaining jobs are handled
+while ($processes.Count -gt 0) {
+    Wait-ForSlot -processesRef ([ref]$processes) -MAX_PARALLEL 1 # Set MAX_PARALLEL to 1 to force a wait for a slot
 }
 
 # -----------------------

@@ -36,6 +36,43 @@ dependencies = [
     "dtaidistance==2.3.13"
 ]
 
+# For conda
+# optional: instructions to create a conda environment
+# On base conda installation, run:
+# conda install -c conda-forge mamba
+# Then, create the environment:
+# mamba create -n fmri-stable -c conda-forge python=3.11
+# Activate the environment and install dependencies:
+# mamba activate fmri-stable
+# Install the required packages:
+# mamba install -c conda-forge numpy scipy mkl mkl-service matplotlib nibabel scikit-fda dtaidistance
+# Finally, install development tools via pip:
+# pip install ruff pytest tox Sphinx bump2version watchdog coverage twine
+# To install the package in editable mode, run:
+# pip install -e .
+# To run the tests, use:
+# pytest tests/
+# To check types, use:
+# mypy fmri/
+# To lint the code, use:
+# ruff check fmri/
+# To build the package, use:
+# python -m build
+# To upload the package to PyPI, use:
+# twine upload dist/*
+# To bump the version, use:
+# bump2version patch|minor|major
+# To watch for changes and run tests automatically, use:
+# watchdog -p "tests/" -r "pytest tests/"
+# To run the main CLI, use:
+# fmri-main [args]
+# To view NIfTI files, use:
+# nifti-viewer [args]
+# To preprocess NIfTI files, use:
+# preprocess-nii-file [args]
+# To compare principal components, use:
+# compare-pcs [args]
+# End of conda instructions
 
 [project.scripts]
 fmri-main = "fmri.cli.fmri_main:main"

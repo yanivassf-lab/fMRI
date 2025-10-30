@@ -18,17 +18,17 @@ class Similarity:
             Total number of subjects across all movements/experiments
         sim_matrix : np.ndarray
             Similarity matrix of shape (n_subs_tot, n_subs_tot)
-        matrix_score : float
+        score : float
             Overall consistency score across experiments
         """
         self.n_subs = n_subs
         self.n_movs = n_movs
         self.n_subs_tot = n_subs * n_movs
         self.sim_matrix = np.ones((self.n_subs_tot, self.n_subs_tot))
-        self.matrix_score = None
+        self.score = None
         self.matrix_op_pval = None
 
-    def calculate_matrix_score(self):
+    def calculate_score(self):
         """
         Computes the overall consistency score across experiments.
 
@@ -38,7 +38,7 @@ class Similarity:
             Consistency score.
         """
         blocks = self.extract_experiment_blocks()
-        self.matrix_score, self.matrix_op_pval = self.consistency_score(blocks)
+        self.score, self.matrix_op_pval = self.consistency_score(blocks)
 
     def extract_experiment_blocks(self):
         """

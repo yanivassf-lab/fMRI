@@ -10,6 +10,7 @@ Welcome to fMRI's documentation!
    installation
    running
    utils
+   developers
 
 
 This program implements the methodology from the paper:
