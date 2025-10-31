@@ -61,7 +61,7 @@ class PeaksSimilarity(Similarity):
         cut_peaks_signals_rev = [-p_sig for p_sig in cut_peaks_signals]  # invert each signal
         cut_peaks_signals_all = cut_peaks_signals_rev + cut_peaks_signals
 
-        dist_mat_all = dtw.distance_matrix(cut_peaks_signals_all, block=((0, 2*self.n_files),(self.n_files,2*self.n_files)))#,parallel=True, use_mp=True)
+        dist_mat_all = dtw.distance_matrix(cut_peaks_signals_all, block=((0, 2*self.n_files),(self.n_files,2*self.n_files)),parallel=True, use_mp=True)
         dist_mat_org = dist_mat_all[self.n_files:2*self.n_files, self.n_files:2*self.n_files]
         dist_mat_rev = dist_mat_all[:self.n_files, self.n_files:]
         # 3. Compute minimal distances and reversed flags
@@ -114,7 +114,7 @@ class PeaksSimilarity(Similarity):
 
     def _calculate_similarity_score(self):
         cut_peaks_signals = [p_sig[self.skip_timepoints:-self.skip_timepoints] for p_sig in self.peaks_signals]
-        dist_min_mat = dtw.distance_matrix(cut_peaks_signals)#, parallel=True, use_mp=True)
+        dist_min_mat = dtw.distance_matrix(cut_peaks_signals, parallel=True, use_mp=True)
         self.reverted = np.zeros(self.n_files)
         self.sim_matrix = 1 / (1 + dist_min_mat)
 

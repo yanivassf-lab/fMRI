@@ -452,6 +452,8 @@ Usage
        --movements 1 2 3 \
        --num-scores 10 \
        --skip-timepoints 100 \
+       --best-similar-pc \
+       --weight-similar-pc \
        --max-workers 1
 
 - Notes
@@ -461,6 +463,8 @@ Usage
   - Movement numbers must be between 1 and 9.
   - ``--num-scores`` is the number of top scores to keep for each movement and subject.
   - ``--skip-timepoints`` is how many timepoints to ignore at the start and end of each signal when comparing peaks (to avoid edge artifacts).
+  - ``--best-similar-pc`` enables choosing the main PC based on maximum similarity across subjects.
+  - ``--weight-similar-pc`` enables weighting the PC correlations by their similarity when choosing the main PC.
   - ``--max-workers`` is the number of parallel workers to use. If 0, uses os.cpu_count().
   - The script writes a log file (``compare_peaks_log.txt``) and one figure per parameter combination.
 
