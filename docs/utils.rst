@@ -358,43 +358,95 @@ The ``compare-pcs`` script compares the principal components of different moveme
 Algorithm
 ---------
 
-1) Scan inputs
+1) **Scan inputs**
 
    - Reads the list of parameter combinations from the first subject’s directory.
    - Builds a sorted list of subject folders according to the requested movements (e.g., movement1, movement2, …).
    - Figures out how many subjects per movement and how many movements there are.
 
-2) Load per‑combination data
+2) **Load per‑combination data**
 
    - For each parameter combination, reads each subject’s file: ``eigvecs_eigval_F.npz``.
    - From that file it uses:
+
      - ``eigvecs`` (PCs as columns, shape: n_bases × n_pcs)
      - ``F`` (the basis functions over time, shape: n_time × n_bases)
 
-3) Pick the main PC per subject (PcSimilarity)
+3) **Pick the main PC per subject**
 
-   - For every pair of subjects, compares their PC spaces using subspace angles and converts the angles to a similarity value (average cosines).
-   - In parallel, accumulates correlations between individual PCs across subjects (for each PC of i vs each PC of j).
-   - For every subject, sums how much each of its PCs correlates with everyone else, and chooses the PC with the top total correlation as that subject’s “main PC”.
+   Two separate computations are performed:
 
-4) Reconstruct each subject’s time‑signal from its main PC
+   - **Subspace similarity (RV measure)** (PC similarity)
+
+     For every pair of subjects, subspace angles between their PC spaces are computed and converted into an RV similarity value (based on cosines of the angles).
+     These values are stored in the ``sim_matrix`` and represent the overall geometric similarity between the subspaces.
+
+   - **Individual PC scoring (for main PC selection)**
+
+    - For every pair of subjects, compute similarity between their PC spaces (using subspace angles).
+    - In parallel, accumulate correlations between individual PCs across subjects.
+      Correlations are converted to absolute values and raised to a power
+      (``pc_sim_auto_weight_similar_pc``) to emphasize stronger matches.
+
+    Selection modes
+    ~~~~~~~~~~~~~~~
+
+    - **Best-match mode** (``pc_sim_auto_best_similar_pc=True``):
+
+      Only the strongest correlation for each PC (its best match in every other subject) contributes to its score.
+
+    - **Average mode** (``pc_sim_auto_best_similar_pc=False``):
+
+      All correlations are summed, so PCs that are moderately similar to many others gain higher scores.
+
+    Weighting
+    ~~~~~~~~~
+
+    The parameter ``pc_sim_auto_weight_similar_pc`` controls how much stronger correlations dominate.
+    Higher values make the method focus on strong, distinct similarities; lower values give more balanced weighting.
+
+4) **Reconstruct each subject’s time‑signal from its main PC**
 
    - Takes the chosen PC (length n_bases) and multiplies it by the basis matrix ``F`` (n_time × n_bases) to get a clean 1D time‑signal per subject.
 
-5) Compare subjects by their peak patterns (PeaksSimilarity)
+5) **Compare subjects by their peak patterns (peak similarity)**
 
-   - Detects both maxima and minima peaks in each reconstructed signal.
-   - Builds a sparse “peaks‑only” signal (zeros everywhere except at detected peaks, where the peak height/sign is kept).
-   - For each subject, decides if flipping the signal (multiply by −1) makes it more consistent with the others (based on average Dynamic Time Warping distances after trimming edges).
-   - Builds a similarity matrix from the (inverted or original) pairwise DTW distances via: similarity = 1 / (1 + distance).
+    This method compares subjects based on the **patterns of peaks** (maxima and minima) in their reconstructed signals.
 
-6) Turn the matrices into simple scores (Similarity)
+    - Detects both positive and negative peaks in each signal and converts them into a sparse “peaks-only” representation — a zero-filled signal where only peak positions retain their original height (and sign).
+    - Optionally skips a number of timepoints at the beginning and end of each signal (``--skip-timepoints``) to reduce edge effects.
+
+    Two comparison modes are available, controlled by the parameters:
+
+    A. Orientation-corrected mode (``--fix-orientation``):
+
+    - For each pair of signals, the method evaluates both the original and inverted versions (multiplied by −1) to determine which orientation yields better overall alignment.
+    - A spectral method is used to find a consistent orientation across all subjects, minimizing Dynamic Time Warping (DTW) distances.
+    - The final similarity matrix is computed as:
+      ``similarity = 1 / (1 + distance)``,
+      where ``distance`` is the minimal DTW distance after orientation correction.
+
+
+    B. Absolute-value mode (``--peaks-abs``):
+
+    - If orientation correction is **not** applied, the method can instead compare **absolute** peak heights, ignoring sign differences.
+    - In this case, DTW distances are computed directly on the absolute peak signals.
+
+
+    C. PC selection:
+
+    - The signals compared here are those reconstructed from either:
+
+      - a **specific PC** chosen with ``--pc-num-comp``, or
+      - the **automatically selected representative PC** from ``--pc-sim-auto``.
+
+6) **Turn the matrices into simple scores (Similarity)**
 
    - Splits each similarity matrix into movement‑wise diagonal blocks (one block per movement).
    - For all movement‑pairs, compares the upper‑triangle entries (subject‑to‑subject similarities) using Spearman correlation.
    - Reports two numbers per matrix: the mean correlation (consistency score) and 1 − mean(p‑value).
 
-7) Plot and log
+7) **Plot and log**
 
    - For each combination it saves one figure containing:
 
