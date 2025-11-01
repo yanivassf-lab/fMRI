@@ -205,6 +205,35 @@ class ComparePCS:
         axis.set_xlabel('Signal Index')
         axis.set_ylabel('Signal Index')
 
+    def save_plot_data_to_txt(self, params, selected_signals, sim_objects_names, sim_objects, main_pcs=None):
+        txt_file = os.path.join(self.output_folder, f"similarity_{params}.txt")
+        with open(txt_file, "w") as f:
+            f.write(f"Parameters: {params}\n\n")
+
+            # --- save peaks info ---
+            f.write("Peaks similarity per subject and movement:\n")
+            for i in range(self.n_files):
+                signal_i, peaks_idx_i, peaks_height_i, revereted_i = self.extract_values_from_peaks(
+                    selected_signals, sim_objects[0], i)
+                sub_name_i = self.get_sub_name(i)
+                sub_movement = self.get_sub_mov(i)
+                pc_text = f", pc: {main_pcs[i]}" if main_pcs is not None else ""
+                f.write(
+                    f"Subject {sub_name_i}, movement {sub_movement}{pc_text}, {'Reverted' if revereted_i else 'Original'}:\n")
+                f.write("Signal: " + ", ".join([f"{v:.4f}" for v in signal_i]) + "\n")
+                f.write("Peaks idx: " + ", ".join(map(str, peaks_idx_i)) + "\n")
+                f.write("Peaks height: " + ", ".join([f"{v:.4f}" for v in peaks_height_i]) + "\n\n")
+
+            # --- save similarity matrices ---
+            for sim_obj_name, sim_obj in zip(sim_objects_names, sim_objects):
+                f.write(f"Similarity matrix: {sim_obj_name}\n")
+                f.write("Matrix:\n")
+                np.savetxt(f, sim_obj.sim_matrix, fmt="%.4f")
+                f.write(f"Average score: {sim_obj.score:.4f}\n")
+                f.write(f"Average P-value: {1 - sim_obj.matrix_op_pval:.4f}\n\n")
+
+        print(f"Saved plot data to {txt_file}")
+
     def plot_params(self, params, sim_objects_names, sim_objects, selected_signals, main_pcs=None):
         """Plot results for a given parameter combination."""
         fig = plt.figure(figsize=(35, 1.5 * len(self.file_list)))
@@ -235,6 +264,7 @@ class ComparePCS:
         fig.tight_layout(rect=[0, 0, 1, 0.96])  # leave space for suptitle
         fig.savefig(os.path.join(self.output_folder, f"similarity_{params}.png"))
         plt.close(fig)
+        self.save_plot_data_to_txt(params, selected_signals, sim_objects_names, sim_objects, main_pcs)
 
     def process_single_combination(self, params, comb_num):
         """
