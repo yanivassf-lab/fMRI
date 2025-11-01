@@ -18,9 +18,11 @@ from fmri.peaks_similarity import PeaksSimilarity
 from fmri.utils import setup_logger
 
 
-
 class ComparePCS:
-    def __init__(self, files_path, output_folder, movements, skip_timepoints, logger):
+    def __init__(self, files_path, output_folder, movements, pc_sim_auto: bool,
+                 pc_sim_auto_best_similar_pc: bool, pc_sim_auto_weight_similar_pc: int,
+                 pc_num_comp: int, fix_orientation: bool, peaks_abs: bool, skip_timepoints: int,
+                 logger):
         """
         Initialize the ComparePCS class.
 
@@ -28,6 +30,12 @@ class ComparePCS:
         - files_path (str): Path to the directory containing subject subdirectories.
         - output_folder (str): Path to the output folder for logs and figures.
         - movements (list[int]): List of movement identifiers to compare.
+        - pc_sim_auto (bool): If True, find the best representative PC for each sample according to similarity to other samples's PCs.
+        - pc_sim_auto_best_similar_pc (bool): If True, only the best matching PC from each other file is considered when calculate similarity, otherwise all PCs are averaged (relevant only if pc_sim_auto is True).
+        - pc_sim_auto_weight_similar_pc (int): Exponent to which the absolute correlation values are raised. Higher values give more weight to stronger correlations (relevant only if pc_sim_auto is True).
+        - pc_num_comp (int): Number of PCs to compare (relevant only if pc_sim_auto is False).
+        - fix_orientation (bool): If True, corrects for signal orientation before peaks similarity calculation.
+        - peaks_abs (bool): If True, uses absolute peak heights for similarity calculation.
         - skip_timepoints (int): Number of timepoints to skip at the beginning and end when comparing peaks.
         - logger: Logger object for logging information.
         """
@@ -35,6 +43,12 @@ class ComparePCS:
         self.output_folder = output_folder
         self.movements = movements
         self.skip_timepoints = skip_timepoints
+        self.pc_sim_auto = pc_sim_auto
+        self.pc_sim_auto_best_similar_pc = pc_sim_auto_best_similar_pc
+        self.pc_sim_auto_weight_similar_pc = pc_sim_auto_weight_similar_pc
+        self.pc_num_comp = pc_num_comp
+        self.fix_orientation = fix_orientation
+        self.peaks_abs = peaks_abs
         self.params_comb = self.get_list_of_params(files_path)
         self.file_list = self.get_list_of_files(files_path, movements)
         self.n_subs = int(len(self.file_list) / len(movements))
@@ -118,7 +132,7 @@ class ComparePCS:
         average_len = 0
         for i in range(self.n_files):
             pc_i = pcs_list[i][:, main_pcs[i]]
-            signal_i  = F_list[i] @ pc_i
+            signal_i = F_list[i] @ pc_i
             average_len += signal_i.shape[0]
             signals.append(signal_i)
 
@@ -128,7 +142,6 @@ class ComparePCS:
             signals[i] = resample(signals[i], average_len)
 
         return signals
-
 
     def extract_values_from_peaks(self, signals, peaks_sim, i):
         """Extract peak similarity values for subject/movement at index i."""
@@ -207,11 +220,13 @@ class ComparePCS:
         self.plot_peaks_similarity(sim_objects[0], selected_signals, axes_left, main_pcs)
         # --- plot similarity matrices ---
         for i, sim_obj_name, sim_obj in zip(range(len(sim_objects)), sim_objects_names, sim_objects):
-            self.plot_similarity_matrices(sim_obj.sim_matrix, f'Similarity {sim_obj_name}', f'Similarity Matrix {sim_obj_name}', axes_right[i])
+            self.plot_similarity_matrices(sim_obj.sim_matrix, f'Similarity {sim_obj_name}',
+                                          f'Similarity Matrix {sim_obj_name}', axes_right[i])
         # --- finalize and save figure ---
         title = "\n".join(
-            [f"Average Spearman correlation of {name} matrix: {sim_obj.score:.4f}, average P-value: {1 - sim_obj.matrix_op_pval:.4f}"
-             for name, sim_obj in zip(sim_objects_names, sim_objects)])
+            [
+                f"Average Spearman correlation of {name} matrix: {sim_obj.score:.4f}, average P-value: {1 - sim_obj.matrix_op_pval:.4f}"
+                for name, sim_obj in zip(sim_objects_names, sim_objects)])
 
         fig.suptitle(
             f"Params {params}\n\n" + title + "\n",
@@ -234,14 +249,19 @@ class ComparePCS:
         self.logger.info(f"Comparing pcs of {params} ({comb_num} of {len(self.params_comb)} combinations)")
         pc_sim = PcSimilarity(pcs_list, self.n_subs, self.n_movs)
         # --- get main pcs ---
-        main_pcs = pc_sim.compare_and_plot_top_pc_avg_corr()
+        if self.pc_sim_auto:
+            main_pcs = pc_sim.find_representative_pcs(self.pc_sim_auto_best_similar_pc,
+                                                      self.pc_sim_auto_weight_similar_pc)
+        else:
+            main_pcs = np.zeros(len(self.file_list), dtype=int) + self.pc_num_comp
         # --- calculate pc similarity score ---
         pc_sim.calculate_score()
         # --- get signals from selected pcs ---
         selected_signals = self.get_signals_from_seleted_pcs(pcs_list, F_list, main_pcs)
         # --- calculate peaks similarity score on selected signals ---
         self.logger.info(f"Comparing peaks of {params} ({comb_num} of {len(self.params_comb)} combinations)")
-        peaks_sim = PeaksSimilarity(selected_signals, self.n_subs, self.n_movs, fix_orientation=True, skip_timepoints=self.skip_timepoints)
+        peaks_sim = PeaksSimilarity(selected_signals, self.n_subs, self.n_movs, fix_orientation=self.fix_orientation,
+                                    peaks_abs=self.peaks_abs, skip_timepoints=self.skip_timepoints)
         # -- calculate peaks similarity score ---
         peaks_sim.calculate_score()
         # --- plot results ---
@@ -255,19 +275,20 @@ class ComparePCS:
         """
         Process and plot similarity for original signals across all subjects and movements.
         """
-        self.logger.info("Processing original signals for comparison.")
+        self.logger.info("PPProcessing original signals for comparison.")
         # --- load original signals ---
         org_signals = self.load_original_signals()
         # --- calculate peaks similarity score on original signals ---
         self.logger.info("Comparing peaks of original signals.")
-        peaks_sim = PeaksSimilarity(org_signals, self.n_subs, self.n_movs, fix_orientation=False, skip_timepoints=self.skip_timepoints)
+        # The orientation correction is not relevant when comparing original signals
+        peaks_sim = PeaksSimilarity(org_signals, self.n_subs, self.n_movs, fix_orientation=False,
+                                    peaks_abs=self.peaks_abs, skip_timepoints=self.skip_timepoints)
         # -- calculate peaks similarity score ---
         peaks_sim.calculate_score()
         # --- plot results ---
         self.logger.info("Plotting similarity for original signals.")
         sim_objects_names, sim_objects = ['Peaks Similarity'], [peaks_sim]
         self.plot_params('original_signals', sim_objects_names, sim_objects, org_signals)
-
 
     def compare(self, num_scores=10, max_workers=0):
         """
@@ -308,7 +329,6 @@ class ComparePCS:
                     executor.submit(self.process_single_combination, params, comb_num): params
                     for comb_num, params in enumerate(self.params_comb)
                 }
-
 
                 # Process completed tasks as they finish
                 for future in as_completed(future_to_params):
@@ -400,12 +420,23 @@ def main():
                         help="List of movements to compare (from 1 to 9)")
     parser.add_argument("--num-scores", type=int, default=10,
                         help="Number of top scores to keep for each movement and subject")
+    parser.add_argument('--pc-sim-auto', action='store_true',
+                        help="If set, find the best representative PC for each sample according to similarity to other samples's PCs.")
+    parser.add_argument('--pc-sim-auto-best-similar-pc', action='store_true',
+                        help="If set, only the best matching PC from each other file is considered when calculate similarity, otherwise all PCs are averaged (relevant only if pc_sim_auto is True).")
+    parser.add_argument('--pc-sim-auto-weight-similar-pc', type=int, default=2,
+                        help="Exponent to which the absolute correlation values are raised. Higher values give more weight to stronger correlations (relevant only if pc_sim_auto is True).")
+    parser.add_argument('--pc-num-comp', type=int, default=0,
+                        help="Number of PCs to compare (relevant only if pc_sim_auto is False).")
+    parser.add_argument('--fix-orientation', action='store_true',
+                        help="If set, corrects for signal orientation before peaks similarity calculation.")
+    parser.add_argument('--peaks-abs', action='store_true',
+                        help="If set, uses absolute peak heights for similarity calculation.")
+    parser.add_argument("--skip-timepoints", type=int, default=100,
+                        help="Number of timepoints to skip at the beginning and end when comparing peaks.")
     parser.add_argument("--max-workers", type=int, default=1,
                         help="Maximum number of parallel workers. 0=auto (CPU count), 1=sequential")
-    parser.add_argument("--skip-timepoints", type=int, default=100, help="Number of timepoints to skip at the beginning and end when comparing peaks.")
-
     args = parser.parse_args()
-
     if not os.path.exists(args.files_path):
         raise FileNotFoundError(
             f"Files folder '{args.files_path}' does not exist."
@@ -424,8 +455,13 @@ def main():
     logger.info(f"Command line: {' '.join(sys.argv)}")
     effective_workers = os.cpu_count() if args.max_workers == 0 else int(args.max_workers)
     logger.info(f"Run with {effective_workers} cpu's.")
-    compare_pcs = ComparePCS(args.files_path, args.output_folder, args.movements, args.skip_timepoints, logger)
+    compare_pcs = ComparePCS(args.files_path, args.output_folder, args.movements,
+                             args.pc_sim_auto, args.pc_sim_auto_best_similar_pc,
+                             args.pc_sim_auto_weight_similar_pc, args.pc_num_comp,
+                             args.fix_orientation, args.peaks_abs, args.skip_timepoints,
+                             logger)
     compare_pcs.compare(num_scores=args.num_scores, max_workers=effective_workers)
+
 
 if __name__ == "__main__":
     main()
@@ -467,6 +503,4 @@ if __name__ == "__main__":
 # compare-pcs --files-path /path/to/subjects/ --output-folder /path/to/non-exists/output/folder --movements 1 2 --num-scores 10 --max-workers 1
 #   - Replace /path/to/subjects/ with the actual path to the directory containing subject subdirectories.
 #   - Replace /path/to/non-exists/output/folder with the desired output folder path (it should not exist prior to running).
-#   - Adjust --movements, --num-scores, --skip-timepoints and --max-workers as needed.
-
 # 3. The output will be saved in the specified output folder, including logs and figures for each parameter combination and principal component.

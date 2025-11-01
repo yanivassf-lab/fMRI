@@ -53,7 +53,7 @@ class PcSimilarity(Similarity):
             rv_similarity = sum_sq_cos / np.sqrt(k_i * k_j)
             self.sim_matrix[i, j] = self.sim_matrix[j, i] = rv_similarity
 
-    def find_representative_pcs(self, best_similar_pc: bool = True, weight_similar_pc: int = 2) -> np.ndarray:
+    def find_representative_pcs(self, pc_sim_auto_best_similar_pc, pc_sim_auto_weight_similar_pc) -> np.ndarray:
         """Calculates the most representative PC for each file.
         This method identifies a single "main" or "representative" PC for each
         file. It does this by summing the squared correlations of each PC with
@@ -61,11 +61,11 @@ class PcSimilarity(Similarity):
 
         Parameters
         ----------
-        best_similar_pc : bool
-            If True, only the best matching PC from each other file is considered
-            when summing correlations. If False, all PCs from other files are summed.
-        weight_similar_pc : int
-            Exponent to which the absolute correlation values are raised. Higher values give more weight to stronger correlations.
+        - pc_sim_auto_best_similar_pc (bool): If True, only the best matching PC from each
+          other file is considered when calculate similarity, otherwise all PCs are
+          averaged.
+        - pc_sim_auto_weight_similar_pc (int): Exponent to which the absolute correlation values
+          are raised. Higher values give more weight to stronger correlations.
 
         Returns
         -------
@@ -74,7 +74,7 @@ class PcSimilarity(Similarity):
             integer index (from 0 to n_components-1) of the most representative
             principal component for file i.
         """
-        pc_corrs_sum = np.zeros((self.n_files,self.n_components))
+        pc_corrs_sum = np.zeros((self.n_files, self.n_components))
 
         for i, j in combinations(range(self.n_files), 2):
             pcs_i = self.pcs_list[i]
@@ -82,10 +82,10 @@ class PcSimilarity(Similarity):
 
             # Correlation between individual PCs
             corr_matrix = np.corrcoef(pcs_i.T, pcs_j.T)[:self.n_components, self.n_components:]
-            corr_matrix = np.abs(corr_matrix) ** weight_similar_pc  # stronger weight to higher correlations
+            corr_matrix = np.abs(corr_matrix) ** pc_sim_auto_weight_similar_pc  # stronger weight to higher correlations
 
             # Sum correlations for each PC
-            if best_similar_pc:
+            if pc_sim_auto_best_similar_pc:
                 # Only consider the best matching PC for each PC
                 pc_corrs_sum[i, :] += np.max(corr_matrix, axis=1)
                 pc_corrs_sum[j, :] += np.max(corr_matrix, axis=0)
@@ -96,4 +96,3 @@ class PcSimilarity(Similarity):
         # Select the PC with the highest total correlation for each sample
         main_pcs = np.argmax(pc_corrs_sum, axis=1)
         return main_pcs
-

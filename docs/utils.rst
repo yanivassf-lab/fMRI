@@ -462,11 +462,16 @@ Usage
   - ``--output-folder`` must NOT exist (it will be created).
   - Movement numbers must be between 1 and 9.
   - ``--num-scores`` is the number of top scores to keep for each movement and subject.
-  - ``--skip-timepoints`` is how many timepoints to ignore at the start and end of each signal when comparing peaks (to avoid edge artifacts).
-  - ``--best-similar-pc`` enables choosing the main PC based on maximum similarity across subjects.
-  - ``--weight-similar-pc`` enables weighting the PC correlations by their similarity when choosing the main PC.
-  - ``--max-workers`` is the number of parallel workers to use. If 0, uses os.cpu_count().
-  - The script writes a log file (``compare_peaks_log.txt``) and one figure per parameter combination.
+  - ``--pc-sim-auto`` If set, find the best representative PC for each sample according to similarity to other samples's PCs.
+  - ``--pc-sim-auto-best-similar-pc`` If set, only the best matching PC from each other file is considered when calculating similarity; otherwise, all PCs are averaged (relevant only if ``--pc-sim-auto`` is True).
+  - ``--pc-sim-auto-weight-similar-pc`` Exponent to which the absolute correlation values are raised. Higher values give more weight to stronger correlations (relevant only if ``--pc-sim-auto`` is True).
+  - ``--pc-num-comp`` Number of PCs to compare (relevant only if ``--pc-sim-auto`` is False).
+  - ``--fix-orientation`` If set, corrects for signal orientation before peaks similarity calculation.
+  - ``--peaks-abs`` If set, uses absolute peak heights for similarity calculation.
+  - ``--skip-timepoints`` Number of timepoints to skip at the beginning and end when comparing peaks.
+  - ``--max-workers`` Maximum number of parallel workers. 0=auto (CPU count), 1=sequential.
+ - The script writes a log file (``compare_peaks_log.txt``) and one figure per parameter combination.
+
 
 Outputs
 -------
