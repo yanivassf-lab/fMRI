@@ -534,3 +534,10 @@ Outputs
   - Two heatmaps: PC similarity and Peaks similarity
   - The two consistency scores for each matrix
 
+     .. figure:: _static/similarity_p1_u1_t1e-3_l0_6_nb100.png
+        :align: center
+        :figwidth: 80%
+        :alt: PCs and Peaks similarity
+        :figclass: align-center
+
+
