@@ -37,7 +37,7 @@ class PeaksSimilarity(Similarity):
     # ====== Step 1: Find peaks ======
     def _get_peaks(self, signal):
         """Return indices and heights of both maxima and minima"""
-        peaks_up, _ = find_peaks(signal , height=0.3, distance=5)
+        peaks_up, _ = find_peaks(signal, distance=5)# , height=0.3,
         heights_up = signal[peaks_up]
         peaks_down, _ = find_peaks(-signal)
         heights_down = signal[peaks_down]  # keep original sign
