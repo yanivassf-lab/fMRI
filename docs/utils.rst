@@ -520,6 +520,7 @@ Usage
   - ``--pc-num-comp`` Number of PCs to compare (relevant only if ``--pc-sim-auto`` is False).
   - ``--fix-orientation`` If set, corrects for signal orientation before peaks similarity calculation.
   - ``--peaks-abs`` If set, uses absolute peak heights for similarity calculation.
+  - ``--peaks-dist`` Distance between peaks to consider for similarity calculation (default: 5).
   - ``--skip-timepoints`` Number of timepoints to skip at the beginning and end when comparing peaks.
   - ``--max-workers`` Maximum number of parallel workers. 0=auto (CPU count), 1=sequential.
  - The script writes a log file (``compare_peaks_log.txt``) and one figure per parameter combination.

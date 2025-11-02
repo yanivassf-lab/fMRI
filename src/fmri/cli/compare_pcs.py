@@ -21,7 +21,7 @@ from fmri.utils import setup_logger
 class ComparePCS:
     def __init__(self, files_path, output_folder, movements, pc_sim_auto: bool,
                  pc_sim_auto_best_similar_pc: bool, pc_sim_auto_weight_similar_pc: int,
-                 pc_num_comp: int, fix_orientation: bool, peaks_abs: bool, skip_timepoints: int,
+                 pc_num_comp: int, fix_orientation: bool, peaks_abs: bool, peaks_dist:int, skip_timepoints: int,
                  logger):
         """
         Initialize the ComparePCS class.
@@ -36,6 +36,7 @@ class ComparePCS:
         - pc_num_comp (int): Number of PCs to compare (relevant only if pc_sim_auto is False).
         - fix_orientation (bool): If True, corrects for signal orientation before peaks similarity calculation.
         - peaks_abs (bool): If True, uses absolute peak heights for similarity calculation.
+        - peaks_dist (int): Minimum distance between peaks (in timepoints).
         - skip_timepoints (int): Number of timepoints to skip at the beginning and end when comparing peaks.
         - logger: Logger object for logging information.
         """
@@ -49,6 +50,7 @@ class ComparePCS:
         self.pc_num_comp = pc_num_comp
         self.fix_orientation = fix_orientation
         self.peaks_abs = peaks_abs
+        self.peaks_dist = peaks_dist
         self.params_comb = self.get_list_of_params(files_path)
         self.file_list = self.get_list_of_files(files_path, movements)
         self.n_subs = int(len(self.file_list) / len(movements))
@@ -291,7 +293,7 @@ class ComparePCS:
         # --- calculate peaks similarity score on selected signals ---
         self.logger.info(f"Comparing peaks of {params} ({comb_num} of {len(self.params_comb)} combinations)")
         peaks_sim = PeaksSimilarity(selected_signals, self.n_subs, self.n_movs, fix_orientation=self.fix_orientation,
-                                    peaks_abs=self.peaks_abs, skip_timepoints=self.skip_timepoints)
+                                    peaks_abs=self.peaks_abs, peaks_dist=self.peaks_dist,skip_timepoints=self.skip_timepoints)
         # -- calculate peaks similarity score ---
         peaks_sim.calculate_score()
         # --- plot results ---
@@ -312,7 +314,7 @@ class ComparePCS:
         self.logger.info("Comparing peaks of original signals.")
         # The orientation correction is not relevant when comparing original signals
         peaks_sim = PeaksSimilarity(org_signals, self.n_subs, self.n_movs, fix_orientation=False,
-                                    peaks_abs=self.peaks_abs, skip_timepoints=self.skip_timepoints)
+                                    peaks_abs=self.peaks_abs, peaks_dist=self.peaks_dist, skip_timepoints=self.skip_timepoints)
         # -- calculate peaks similarity score ---
         peaks_sim.calculate_score()
         # --- plot results ---
@@ -462,6 +464,7 @@ def main():
                         help="If set, corrects for signal orientation before peaks similarity calculation.")
     parser.add_argument('--peaks-abs', action='store_true',
                         help="If set, uses absolute peak heights for similarity calculation.")
+    parser.add_argument('--peaks-dist', type=int,default=5, help="Minimum distance between peaks (in timepoints).")
     parser.add_argument("--skip-timepoints", type=int, default=100,
                         help="Number of timepoints to skip at the beginning and end when comparing peaks.")
     parser.add_argument("--max-workers", type=int, default=1,
@@ -488,7 +491,7 @@ def main():
     compare_pcs = ComparePCS(args.files_path, args.output_folder, args.movements,
                              args.pc_sim_auto, args.pc_sim_auto_best_similar_pc,
                              args.pc_sim_auto_weight_similar_pc, args.pc_num_comp,
-                             args.fix_orientation, args.peaks_abs, args.skip_timepoints,
+                             args.fix_orientation, args.peaks_abs, args.peaks_dist, args.skip_timepoints,
                              logger)
     compare_pcs.compare(num_scores=args.num_scores, max_workers=effective_workers)
 

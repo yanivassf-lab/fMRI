@@ -5,7 +5,7 @@ from .similarity import Similarity
 
 
 class PeaksSimilarity(Similarity):
-    def __init__(self, signals, n_subs, n_movs, fix_orientation=True, peaks_abs=False, skip_timepoints=100):
+    def __init__(self, signals, n_subs, n_movs, fix_orientation=True, peaks_abs=False, peaks_dist=5, skip_timepoints=100):
         super().__init__(n_subs, n_movs)
         """
         Initialize the PeaksSimilarity class.
@@ -16,12 +16,14 @@ class PeaksSimilarity(Similarity):
             n_movs:      Number of movements/experiments
             fix_orientation: If True, corrects for signal orientation before similarity calculation.
             peaks_abs: If True, uses absolute peak heights for similarity calculation (not relevant if fix_orientation is True).
+            peaks_dist: Distance between peaks to consider for similarity calculation.
             skip_timepoints: Number of timesteps to skip at the start and end of each signal to avoid edge effects.
         """
         self.signals = signals
         self.skip_timepoints = skip_timepoints
         self.fix_orientation = fix_orientation
         self.peaks_abs = peaks_abs
+        self.peaks_dist = peaks_dist
         self.peaks_idx = []
         self.peaks_height = []
         self.peaks_signals = []
@@ -37,7 +39,7 @@ class PeaksSimilarity(Similarity):
     # ====== Step 1: Find peaks ======
     def _get_peaks(self, signal):
         """Return indices and heights of both maxima and minima"""
-        peaks_up, _ = find_peaks(signal, distance=5)# , height=0.3,
+        peaks_up, _ = find_peaks(signal, distance=self.peaks_dist)# , height=0.3,
         heights_up = signal[peaks_up]
         peaks_down, _ = find_peaks(-signal)
         heights_down = signal[peaks_down]  # keep original sign
