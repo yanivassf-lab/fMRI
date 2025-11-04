@@ -470,7 +470,7 @@ def main():
     parser.add_argument('--pc-sim-auto-weight-similar-pc', type=int, default=2,
                         help="Exponent to which the absolute correlation values are raised. Higher values give more weight to stronger correlations (relevant only if pc_sim_auto is True).")
     parser.add_argument('--pc-num-comp', type=int, default=0,
-                        help="Number of PCs to compare (relevant only if pc_sim_auto is False).")
+                        help="Number of PCs to compare - starting from 0 (relevant only if pc_sim_auto is False).")
     parser.add_argument('--skip-pc-num', type=int, nargs='+', default=None, help="List of number of PCs to exclude from the entire analysis (starting from 0). If set to None, all components are used.")
     parser.add_argument('--fix-orientation', action='store_true',
                         help="If set, corrects for signal orientation before peaks similarity calculation.")
