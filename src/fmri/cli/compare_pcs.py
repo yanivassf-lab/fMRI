@@ -22,7 +22,7 @@ class ComparePCS:
     def __init__(self, files_path, output_folder, movements, pc_sim_auto: bool,
                  pc_sim_auto_best_similar_pc: bool, pc_sim_auto_weight_similar_pc: int,
                  pc_num_comp: int, fix_orientation: bool, peaks_abs: bool, peaks_dist:int, skip_timepoints: int,
-                 logger):
+                 skip_pc_num, logger):
         """
         Initialize the ComparePCS class.
 
@@ -38,6 +38,7 @@ class ComparePCS:
         - peaks_abs (bool): If True, uses absolute peak heights for similarity calculation.
         - peaks_dist (int): Minimum distance between peaks (in timepoints).
         - skip_timepoints (int): Number of timepoints to skip at the beginning and end when comparing peaks.
+        - skip_pc_num (list[int]): If not None, exclude the PCs in the list from the analysis.
         - logger: Logger object for logging information.
         """
         self.files_path = files_path
@@ -49,6 +50,7 @@ class ComparePCS:
         self.pc_sim_auto_weight_similar_pc = pc_sim_auto_weight_similar_pc
         self.pc_num_comp = pc_num_comp
         self.fix_orientation = fix_orientation
+        self.skip_pc_num = skip_pc_num
         self.peaks_abs = peaks_abs
         self.peaks_dist = peaks_dist
         self.params_comb = self.get_list_of_params(files_path)
@@ -84,6 +86,8 @@ class ComparePCS:
                 raise Exception(f"Error reading file {store_data_file}: {e}")
 
             pcs_list.append(eigvecs_sorted)
+            if self.skip_pc_num is not None:
+                pcs_list = [x for i, x in enumerate(data) if i not in self.skip_pc_num]
             F_list.append(F)
             n_basis, n_pcs = eigvecs_sorted.shape
             n_times = F.shape[0]
@@ -165,7 +169,14 @@ class ComparePCS:
             # i.e. for 3 movements with 4 subject per movement: 0,1,2,3 -> movement 1; 4,5,6,7 -> movement 2; 8,9,10,11 -> movement 3
             sub_movement = self.get_sub_mov(i)
             sub_num = self.get_sub_num(i)
-            pc_text = f", pc: {main_pcs[i]} " if main_pcs is not None else ""
+            if self.skip_pc_num is not None:
+                main_pcs_i = main_pcs[i]
+                for j in self.skip_pc_num:
+                    if j <= main_pcs[i]:
+                        main_pcs_i += 1
+            else:
+                main_pcs_i = main_pcs[i]
+            pc_text = f", pc: {main_pcs_i} " if main_pcs is not None else ""
             axis[sub_num].plot(np.arange(len(signal_i)), signal_i,
                                label=f"mov-{sub_movement}{pc_text} {', Reverted Signal' if revereted_i else ', Original Signal'}")
             axis[sub_num].scatter(peaks_idx_i, peaks_height_i, color='red', s=10, zorder=3)  # mark peaks
@@ -460,6 +471,7 @@ def main():
                         help="Exponent to which the absolute correlation values are raised. Higher values give more weight to stronger correlations (relevant only if pc_sim_auto is True).")
     parser.add_argument('--pc-num-comp', type=int, default=0,
                         help="Number of PCs to compare (relevant only if pc_sim_auto is False).")
+    parser.add_argument('--skip-pc-num', type=int, nargs='+', default=None, help="List of number of PCs to exclude from the entire analysis (starting from 0). If set to None, all components are used.")
     parser.add_argument('--fix-orientation', action='store_true',
                         help="If set, corrects for signal orientation before peaks similarity calculation.")
     parser.add_argument('--peaks-abs', action='store_true',
@@ -492,7 +504,7 @@ def main():
                              args.pc_sim_auto, args.pc_sim_auto_best_similar_pc,
                              args.pc_sim_auto_weight_similar_pc, args.pc_num_comp,
                              args.fix_orientation, args.peaks_abs, args.peaks_dist, args.skip_timepoints,
-                             logger)
+                             args.skip_pc_num, logger)
     compare_pcs.compare(num_scores=args.num_scores, max_workers=effective_workers)
 
 

@@ -522,6 +522,7 @@ Usage
   - ``--peaks-abs`` If set, uses absolute peak heights for similarity calculation.
   - ``--peaks-dist`` Distance between peaks to consider for similarity calculation (default: 5).
   - ``--skip-timepoints`` Number of timepoints to skip at the beginning and end when comparing peaks.
+  - ``--skip-pc-num`` List of number of PCs to exclude from the entire analysis (starting from 0). If set to None, all components are used. (default: None)
   - ``--max-workers`` Maximum number of parallel workers. 0=auto (CPU count), 1=sequential.
  - The script writes a log file (``compare_peaks_log.txt``) and one figure per parameter combination.
 
