@@ -19,7 +19,7 @@ def main():
     parser.add_argument("--mask-file", type=str, help="Path to the 3D mask NIfTI file.")
     parser.add_argument("--degree", type=int, default=3, help="Degree of the B-spline basis (default: 3).")
     parser.add_argument("--n-basis", type=int, default=[0], nargs="+",
-                        help="Number of basis functions. Use 0 to determine it automatically based on the interpolation threshold or use several values for finding the best automatically (default: 0).")
+                        help="Number of B-spline basis functions. Use 0 to determine it as number of timepoints or use several values for finding the best automatically based on the interpolation threshold (default: 0).")
     parser.add_argument("--threshold", type=float, default=1e-6, help="Interpolation error threshold (default: 1e-6)")
     parser.add_argument("--num-pca-comp", type=int, default=3, help="Number of principal components (default: 3).")
     parser.add_argument("--batch-size", type=int, default=200, help="Batch size for processing voxels (default: 200).")
@@ -47,6 +47,15 @@ def main():
                         help="If set, the penalty matrix will be calculated using bspline package with an accurate method. If not set, an approximate method of bspline will be used.")
     parser.add_argument("--calc-penalty-skfda", action='store_true',
                         help="If set, the penalty matrix will be calculated using skfda package an accurate method. If not set, an approximate method of bsplie will be used.")
+    parser.add_argument("--n-skip-vols-start", type=int, default=0,
+                        help="Number of initial fMRI volumes to discard from the beginning of the signal (default: 0).")
+    parser.add_argument("--n-skip-vols-end", type=int, default=0,
+                        help="Number of initial fMRI volumes to discard from the end of the signal (default: 0).")
+    parser.add_argument("--highpass", type=float, default=0.01,
+                        help="High-pass filter cutoff frequency in Hz. Filters out slow drifts below this frequency (default: 0.01).")
+    parser.add_argument("--lowpass", type=float, default=0.08,
+                        help="Low-pass filter cutoff frequency in Hz. Filters out high-frequency noise above this frequency (default: 0.08).")
+
     args = parser.parse_args()
 
     if not os.path.exists(args.output_folder):
@@ -54,7 +63,8 @@ def main():
             f"Output folder '{args.output_folder}' does not exist. Please create it before running."
         )
 
-    setup_logger(output_folder=args.output_folder, file_name="fmri_log.txt", loger_name="fmri_logger", log_level=logging.INFO)
+    setup_logger(output_folder=args.output_folder, file_name="fmri_log.txt", loger_name="fmri_logger",
+                 log_level=logging.INFO)
 
     # Create an instance of fMRI and set the output folder.
     fmri_instance = FunctionalMRI(nii_file=args.nii_file, mask_file=args.mask_file, degree=args.degree,
@@ -65,8 +75,9 @@ def main():
                                   processed=args.processed, bad_margin_size=args.bad_margin_size,
                                   no_penalty=args.no_penalty,
                                   calc_penalty_bspline_accurately=args.calc_penalty_bspline_accurately,
-                                  calc_penalty_skfda=args.calc_penalty_skfda)
-
+                                  calc_penalty_skfda=args.calc_penalty_skfda,
+                                  n_skip_vols_start=args.n_skip_vols_start, n_skip_vols_end=args.n_skip_vols_end,
+                                  highpass=args.highpass, lowpass=args.lowpass)
 
     # Run the analysis.
     fmri_instance.log_data(sys.argv)

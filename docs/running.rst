@@ -25,8 +25,12 @@ Synopsis
              [--processed <BOOL>] \
              [--bad-margin-size <INT>] \
              [--no-penalty <BOOL>] \
-             [--calc-penalty-bspline-accurately <optional>] \
-             [--calc-penalty-skfda <optional>] \
+             [--calc-penalty-bspline-accurately <BOOL>] \
+             [--calc-penalty-skfda <BOOL>] \
+             [--n-skip-vols-start <int>] \
+             [--n-skip-vols-end <int>] \
+             [--highpass <FLOAT>] \
+             [--lowpass <FLOAT>]
 
 Arguments
 ---------
@@ -44,7 +48,7 @@ Arguments
   Degree of the B-spline basis (default: 3).
 
 \-\-n-basis `<INT>`
-  Number of B-spline basis functions (default: 0 → automatic selection).
+  Number of B-spline basis functions. Use 0 to determine it as number of timepoints or use several values for finding the best automatically based on the interpolation threshold (default: 0).
 
 \-\-threshold `<FLOAT>`
   Interpolation error threshold for basis selection (default: 1e-6).
@@ -79,15 +83,26 @@ Arguments
 \-\-bad-margin-size `<INT>`
   Size of the margin to ignore in calculating direction of eigvecs (default: 50).
 
-\-\-no-penalty `<optional>`
+\-\-no-penalty `<BOOL>`
   If specified, no penalty will be used (default: not set).
 
-\-\-calc-penalty-bspline-accurately `<optional>`
+\-\-calc-penalty-bspline-accurately `<BOOL>`
   If set, the penalty matrix will be calculated using bspline package with an accurate method. If not set, an approximate method of bspline will be used (default: not set).
 
-\-\-calc-penalty-skfda `<optional>`
+\-\-calc-penalty-skfda `<BOOL>`
   If set, the penalty matrix will be calculated using skfda package an accurate method. If not set, an approximate method of bsplie will be used (default: not set).
 
+\-\-n-skip-vols-start `<INT>`
+  Number of initial fMRI volumes to discard from the beginning of the signal (default: 0).
+
+\-\-n-skip-vols-end `<ING>`
+  Number of initial fMRI volumes to discard from the end of the signal (default: 0).
+
+\-\-highpass `<FLOAT>`
+  High-pass filter cutoff frequency in Hz. Filters out slow drifts below this frequency (default: 0.01).
+
+\-\-lowpass `<FLOAT>`
+  Low-pass filter cutoff frequency in Hz. Filters out high-frequency noise above this frequency (default: 0.08).
 
 Examples
 --------

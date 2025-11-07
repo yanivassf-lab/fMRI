@@ -58,11 +58,13 @@ class FunctionalMRI:
         n_timepoints (int): number of time points per voxel.
     """
 
-    def __init__(self, nii_file: str, mask_file: str, degree: int, n_basis: list[int], threshold: float, num_pca_comp: int,
+    def __init__(self, nii_file: str, mask_file: str, degree: int, n_basis: list[int], threshold: float,
+                 num_pca_comp: int,
                  batch_size: int, output_folder: str, TR: float, smooth_size: int, lambda_min: float, lambda_max: float,
                  derivatives_num_p: int, derivatives_num_u: int, processed: bool, bad_margin_size: int,
                  no_penalty: bool = False, calc_penalty_bspline_accurately: bool = False,
-                 calc_penalty_skfda: bool = False) -> None:
+                 calc_penalty_skfda: bool = False, n_skip_vols_start: int = 0, n_skip_vols_end: int = 0,
+                 highpass: float = 0.01, lowpass: float = 0.08) -> None:
         """
         Initialize the fMRI processing pipeline.
 
@@ -90,6 +92,10 @@ class FunctionalMRI:
             calc_penalty_bspline_accurately (bool): if True, the penalty matrix will be calculated using spline package with an accurate method.
                                                     If False, an approximate method will be used also with spline package.
             calc_penalty_skfda (bool): if True, the penalty matrix will be calculated using skfda.gram_matrix.
+            n_skip_vols_start (int): Number of initial fMRI volumes to discard from the beginning of the signal.
+            n_skip_vols_end (int): Number of initial fMRI volumes to discard from the end of the signal.
+            highpass (float): High-pass filter cutoff frequency in Hz. Filters out slow drifts below this frequency.
+            lowpass (float): Low-pass filter cutoff frequency in Hz. Filters out high-frequency noise above this frequency.
         """
         logger.info("Load data...")
         # Store all parameters
@@ -114,16 +120,17 @@ class FunctionalMRI:
         self.calc_penalty_skfda = calc_penalty_skfda
 
         # Load fMRI data
-        data = LoadData(nii_file, mask_file)
-        self.fmri_data, self.mask, self.nii_affine = data.load_data(TR=TR, smooth_size=smooth_size, processed=processed)
+        data = LoadData(nii_file, mask_file, TR=TR, smooth_size=smooth_size, highpass=highpass, lowpass=lowpass)
+        fmri_data_all, self.mask, self.nii_affine = data.load_data(processed=processed)
 
+        self.fmri_data = fmri_data_all[:, n_skip_vols_start:-n_skip_vols_end]
         # Derived values
         self.orig_n_voxels = self.mask.shape
         self.n_voxels = self.fmri_data.shape[0]
         self.n_timepoints = self.fmri_data.shape[1]
-        self.times = np.arange(self.n_timepoints)
-        self.T_min = 0
-        self.T_max = (self.n_timepoints - 1)  # Assuming time points are indexed from 0 to n_timepoints-1
+        self.times = np.arange(self.n_timepoints)*self.TR
+        self.T_min = self.times[0]
+        self.T_max = self.times[-1]  # Assuming time points are indexed from 0 to n_timepoints-1
         self.n_basis = None
 
     def __new__(cls, *args, **kwargs):
@@ -146,7 +153,7 @@ class FunctionalMRI:
         logger.info(f"Original voxel dimensions: {self.orig_n_voxels}")
         logger.info(f"fmri_data shape (voxels × timepoints): {self.fmri_data.shape}")
         logger.info(f"Voxels after mask: {self.n_voxels}")
-        logger.info(f"Number of timepoints: {self.n_timepoints}")
+        logger.info(f"Number of timepoints: {self.n_timepoints}, starting from {self.T_min} to {self.T_max}")
         logger.info(f"Time range: {self.T_min} to {self.T_max}")
         logger.info(f"Repetition time (TR): {self.TR}")
         logger.info(f"Smoothing kernel size: {self.smooth_size}")
@@ -154,7 +161,7 @@ class FunctionalMRI:
 
         # Basis / PCA
         logger.info(f"B-spline degree: {self.degree}")
-        logger.info(f"# basis functions: {self.n_basis if self.n_basis else 'auto (via threshold)'}")
+        logger.info(f"# basis functions: {self.n_basis_list if self.n_basis_list != [0] else self.n_timepoints} ")
         logger.info(f"Interpolation threshold: {self.threshold}")
         logger.info(f"# PCA components: {self.num_pca_comp}")
 
@@ -207,13 +214,13 @@ class FunctionalMRI:
             self.n_basis = self.n_basis_list[0]
             C, F, basis_funs, mean_error, best_lambdas = self.calculate_n_basis_interpolation(self.n_basis)
             return C, F, basis_funs, best_lambdas
-        else:  # if user set threshold instead fixed number of n_basis
-            if len(self.n_basis_list) > 1:
-                range_n_basis = self.n_basis_list
-            else:
-                range_n_basis = range(self.degree + 1, self.n_timepoints + 20, 10)
-            n_basis_errors = np.zeros(len(range_n_basis))
-            for i, n_basis in enumerate(range_n_basis):  # try increasing
+        elif self.n_basis_list == [0]:
+            self.n_basis = self.n_timepoints
+            C, F, basis_funs, mean_error, best_lambdas = self.calculate_n_basis_interpolation(self.n_basis)
+            return C, F, basis_funs, best_lambdas
+        else:  # if user set list instead fixed number of n_basis
+            n_basis_errors = np.zeros(len(self.n_basis_list))
+            for i, n_basis in enumerate(self.n_basis_list):  # try increasing
                 C, F, basis_funs, mean_error, best_lambdas = self.calculate_n_basis_interpolation(n_basis)
                 n_basis_errors[i] = mean_error
                 if mean_error <= self.threshold:
@@ -221,7 +228,7 @@ class FunctionalMRI:
                     self.n_basis = n_basis
                     return C, F, basis_funs, best_lambdas
 
-            self.n_basis = range_n_basis[np.argmin(n_basis_errors)]
+            self.n_basis = self.n_basis_list[np.argmin(n_basis_errors)]
             logger.info(
                 f"Cannot achieve interpolation threshold, continue with {self.n_basis} basis functions with {np.min(n_basis_errors):.2f} mean error.")
             C, F, basis_funs, mean_error, best_lambdas = self.calculate_n_basis_interpolation(self.n_basis)

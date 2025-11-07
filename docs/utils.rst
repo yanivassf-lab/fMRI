@@ -30,6 +30,8 @@ The ``preprocess-nii-file`` script preprocesses a single 4D fMRI NIfTI file usin
 * ``--mask-file`` (str): Path to the 3D mask NIfTI file. If not provided, the script will prompt for input.
 * ``--TR`` (float): Repetition time (TR) in seconds. If not provided, it will be extracted from the NIfTI header.
 * ``--smooth_size`` (int): Box size of smoothing kernel (default: 5).
+* ``--highpass`` (float): High-pass filter cutoff frequency in Hz. Filters out slow drifts below this frequency (default: 0.01).
+* ``--lowpass`` (flpat): Low-pass filter cutoff frequency in Hz. Filters out high-frequency noise above this frequency (default: 0.08).
 
 **What the Script Does:**
 
@@ -52,7 +54,9 @@ The ``preprocess-nii-file`` script preprocesses a single 4D fMRI NIfTI file usin
                        --mask-file /path/to/brain_mask.nii.gz \
                        --output-folder /path/to/preprocessed_data/ \
                        --TR 0.75 \
-                       --smooth_size 3
+                       --smooth_size 3 \
+                       --highpass 0.01 \
+                       --lowpass 0.08
 
 **Output:**
 

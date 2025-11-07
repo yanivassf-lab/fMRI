@@ -11,14 +11,27 @@ logger = logging.getLogger("fmri_logger")
 
 
 class LoadData:
-    def __init__(self, nii_file: str, mask_file: str):
+    def __init__(self, nii_file: str, mask_file: str, TR: float = None, smooth_size: int = 5, highpass: float = 0.01,
+                 lowpass: float = 0.08, ):
+        """
+        Args:
+            nii_file (str): Path to the 4D fMRI NIfTI file.
+            mask_file (str): Path to the 3D mask NIfTI file.
+            TR (float): Repetition time in seconds. If None, it will be extracted from the NIfTI header.
+            smooth_size (int): Box size for smoothing kernel.
+            highpass (float): High-pass filter cutoff frequency in Hz. Filters out slow drifts below this frequency.
+            lowpass (float): Low-pass filter cutoff frequency in Hz. Filters out high-frequency noise above this frequency.
+        """
         self.nii_file = nii_file
         self.mask_file = mask_file
+        self.TR = TR
+        self.smooth_size = smooth_size
+        self.highpass = highpass
+        self.lowpass = lowpass
         self.filtered_file = None
         self.filtered_nii_rdata = None
 
-    def load_data(self, TR: float = None, smooth_size: int = 5, processed: bool = True,
-                  save_filtered_file: bool = False) -> tuple[
+    def load_data(self, processed: bool = True, save_filtered_file: bool = False) -> tuple[
         ndarray[tuple[Any, int], dtype[float64]], Any, Any]:
         """
         Load and preprocess fMRI data from a NIfTI file.
@@ -28,9 +41,6 @@ class LoadData:
         and the repetition time (TR).
 
         Parameters:
-            filename: Path to the NIfTI file containing fMRI data.
-            TR: Repetition time in seconds. If None, it will be extracted from the NIfTI header.
-            smooth_size: Box size for smoothing kernel.
             processed: If True, returns reorganized data without pre-processing; otherwise, applies preprocessing steps.
             save_filtered_file: If True, store the processed nii file for saving (by calling to save_filtered_data() method).
         Returns:
@@ -45,9 +55,9 @@ class LoadData:
 
         # Load binary brain mask (1 = brain voxel, 0 = background)
         nii_mask, mask = self.load_nifti_data(self.mask_file)
-        if not TR:
+        if not self.TR:
             zoom = nii_rdata.header.get_zooms()
-            TR = zoom[3] if len(zoom) >= 4 else 1.0
+            self.TR = zoom[3] if len(zoom) >= 4 else 1.0
 
         # Identify the coordinates of voxels within the mask
         xlocs, ylocs, zlocs = np.where(mask == 1)
@@ -55,7 +65,7 @@ class LoadData:
         if not processed:
             logger.info("Applying preprocessing steps: spatial smoothing and temporal filtering...")
             # Apply smoothing and temporal filtering
-            data = self.filter_fMRI(data, TR, smooth_size, st)
+            data = self.filter_fMRI(data, st)
             if save_filtered_file:
                 self.filtered_file = data
                 self.filtered_nii_rdata = nii_rdata if nii_rdata else nii_mask
@@ -83,7 +93,7 @@ class LoadData:
         nii = nib.load(filename)
         return nii, nii.get_fdata()
 
-    def filter_fMRI(self, data, TR, smooth_size, st):
+    def filter_fMRI(self, data, st):
         """
         Apply smoothing and temporal bandpass filtering to fMRI data using a Butterworth filter.
 
@@ -104,12 +114,12 @@ class LoadData:
         # Apply 3D smoothing to each time point independently
         srdata = np.zeros_like(data)
         for i in range(st):
-            srdata[..., i] = uniform_filter(data[..., i], size=smooth_size, mode='nearest')  # Spatial smoothing
+            srdata[..., i] = uniform_filter(data[..., i], size=self.smooth_size, mode='nearest')  # Spatial smoothing
 
         time_series = srdata.reshape(-1, srdata.shape[3])  # reshape to [n_voxels, time]
         f_high = 0.01  # lower cutoff frequency in Hz
         f_low = 0.08  # upper cutoff frequency in Hz
-        nyquist = 1 / (2 * TR)
+        nyquist = 1 / (2 * self.TR)
         Wn = [f_high / nyquist, f_low / nyquist]  # normalized cutoff frequencies
 
         # Ensure Wn is within (0, 1)

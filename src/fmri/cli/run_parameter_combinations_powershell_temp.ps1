@@ -30,7 +30,6 @@ $ENV_NAME = "fmri-env"
 
 # Parameter sets
 $derivatives = @(2, 1, 0)
-$thresholds = @(1e-6, 1e-3)
 $lambda_ranges = @("0 6", "-6 6", "-6 0")
 $n_basis_values = @(400, 300, 200, 100)
 
@@ -105,8 +104,9 @@ foreach ($n_basis in $n_basis_values) {
                      "--calc-penalty-skfda",
                      "--no-penalty",
                      "--num-pca-comp", "7",
-                     "--threshold", "1e-6",
-                     "--n-basis", "$n_basis")
+                     "--n-basis", "$n_basis"),
+                     "--n-skip-vols-start" "4",
+                     "--n-skip-vols-end", "12"
 
             # Start process in background
             $proc = Start-Process -FilePath $CONDA_BAT -ArgumentList $args -PassThru
@@ -129,47 +129,46 @@ while ($processes.Count -gt 0) {
 Write-Host "Starting PENALTY jobs..."
 foreach ($p in $derivatives) {
     foreach ($u in $derivatives) {
-        foreach ($thresh in $thresholds) {
-            foreach ($lambda in $lambda_ranges) {
-                $parts = $lambda -split " "
-                $min = $parts[0]
-                $max = $parts[1]
+        foreach ($lambda in $lambda_ranges) {
+            $parts = $lambda -split " "
+            $min = $parts[0]
+            $max = $parts[1]
 
-                foreach ($n_basis in $n_basis_values) {
-                    foreach ($bold_file in Get-ChildItem "$PROCESSED_DIR\*_filtered.nii") {
-                        $filename = $bold_file.Name
-                        $base = $filename -replace "-preproc_bold.*",""
-                        $mask_file = Join-Path $INPUT_DIR "$base-brain_mask.nii.gz"
+            foreach ($n_basis in $n_basis_values) {
+                foreach ($bold_file in Get-ChildItem "$PROCESSED_DIR\*_filtered.nii") {
+                    $filename = $bold_file.Name
+                    $base = $filename -replace "-preproc_bold.*",""
+                    $mask_file = Join-Path $INPUT_DIR "$base-brain_mask.nii.gz"
 
-                        if (Test-Path $mask_file) {
-                            $output_dir = Join-Path $BASE_OUTPUT_DIR "$base\p${p}_u${u}_t${thresh}_l${min}_${max}_nb${n_basis}"
-                            if (-not (Test-Path $output_dir)) { New-Item -ItemType Directory -Path $output_dir | Out-Null }
+                    if (Test-Path $mask_file) {
+                        $output_dir = Join-Path $BASE_OUTPUT_DIR "$base\p${p}_u${u}_l${min}_${max}_nb${n_basis}"
+                        if (-not (Test-Path $output_dir)) { New-Item -ItemType Directory -Path $output_dir | Out-Null }
 
-                            # --- Wait for a slot before launching the next job ---
-                            Wait-ForSlot -processesRef ([ref]$processes) -MAX_PARALLEL $MAX_PARALLEL
+                        # --- Wait for a slot before launching the next job ---
+                        Wait-ForSlot -processesRef ([ref]$processes) -MAX_PARALLEL $MAX_PARALLEL
 
-                            # Build arguments for conda run
-                            $args = @("run", "-n", $ENV_NAME, "fmri-main",
-                                     "--TR", "0.75",
-                                     "--nii-file", $bold_file.FullName,
-                                     "--mask-file", $mask_file,
-                                     "--output-folder", $output_dir,
-                                     "--processed",
-                                     "--calc-penalty-skfda",
-                                     "--derivatives-num-p", "$p",
-                                     "--derivatives-num-u", "$u",
-                                     "--lambda-min", "$min",
-                                     "--lambda-max", "$max",
-                                     "--threshold", "$thresh",
-                                     "--num-pca-comp", "7",
-                                     "--n-basis", "$n_basis")
+                        # Build arguments for conda run
+                        $args = @("run", "-n", $ENV_NAME, "fmri-main",
+                                 "--TR", "0.75",
+                                 "--nii-file", $bold_file.FullName,
+                                 "--mask-file", $mask_file,
+                                 "--output-folder", $output_dir,
+                                 "--processed",
+                                 "--calc-penalty-skfda",
+                                 "--derivatives-num-p", "$p",
+                                 "--derivatives-num-u", "$u",
+                                 "--lambda-min", "$min",
+                                 "--lambda-max", "$max",
+                                 "--num-pca-comp", "7",
+                                 "--n-basis", "$n_basis"),
+                                 "--n-skip-vols-start" "4",
+                                 "--n-skip-vols-end", "12"
 
-                            # Start process in background
-                            $proc = Start-Process -FilePath $CONDA_BAT -ArgumentList $args -PassThru
-                            # Use .Add() instead of += to avoid 'op_Addition' error
-                            $processes.Add($proc) | Out-Null
-                            Write-Host "Launched PENALTY job $($proc.Id): $base (P: $p, U: $u, Lambda: $lambda). Total running: $($processes.Count)"
-                        }
+                        # Start process in background
+                        $proc = Start-Process -FilePath $CONDA_BAT -ArgumentList $args -PassThru
+                        # Use .Add() instead of += to avoid 'op_Addition' error
+                        $processes.Add($proc) | Out-Null
+                        Write-Host "Launched PENALTY job $($proc.Id): $base (P: $p, U: $u, Lambda: $lambda). Total running: $($processes.Count)"
                     }
                 }
             }
