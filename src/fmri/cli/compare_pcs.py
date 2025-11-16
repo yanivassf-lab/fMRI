@@ -272,7 +272,7 @@ class ComparePCS:
                     self.pc_sim_auto_best_similar_pc,
                     self.pc_sim_auto_weight_similar_pc)
             elif self.combine_pcs:
-                rep_pcs_names_signals, rep_pcs_names = represent_pc.combine_pcs(F_list, times_list,
+                rep_pcs_names_signals, rep_pcs_names = represent_pc.combine_pcs(self.files_path, params, F_list, times_list,
                                                                                 self.combine_pcs_stimulus_times,
                                                                                 self.combine_pcs_bold_lag_seconds,
                                                                                 self.combine_pcs_correlation_threshold)
@@ -352,7 +352,7 @@ class ComparePCS:
                     self.update_best_scores(peaks_best_scores, peaks_best_scores_params, abs(peaks_score), params)
                     self.update_best_scores(peaks_best_op_pvals, peaks_best_op_pvals_params, peaks_pval, params)
                 except Exception as exc:
-                    self.logger.error(f'Parameter combination {params} generated an exception: {exc}')
+                    self.logger.exception(f'Parameter combination {params} generated an exception: {exc}')
         else:
             self.logger.info(f"Running parallel processing with {max_workers} workers.")
             # Parallel processing of parameter combinations
@@ -381,7 +381,7 @@ class ComparePCS:
                     except CancelledError:
                         self.logger.info("Some tasks were cancelled due to shutdown")
                     except Exception as exc:
-                        self.logger.error(f'Parameter combination {params} generated an exception: {exc}')
+                        self.logger.exception(f'Parameter combination {params} generated an exception: {exc}')
 
         # --- print the parameters with the best scores ---
         self.print_best_scores(pc_best_scores, pc_best_scores_params, 'pc score')

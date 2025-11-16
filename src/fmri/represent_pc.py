@@ -3,6 +3,8 @@ from itertools import combinations
 from dtaidistance import dtw
 from scipy.stats import pearsonr
 
+from .find_best_lags import calculate_lags_durations
+
 
 class RepresentPC:
     ""  "Base class for similarity metrics."""
@@ -106,7 +108,8 @@ class RepresentPC:
         rep_pcs_names = [pcs.pc_name(i) for i, pcs in zip(rep_pcs, self.pcs_list)]
         return rep_pcs_signals, rep_pcs_names
 
-    def combine_pcs(self, F_list, times_list, stimulus_times, bold_lag_seconds, correlation_threshold):
+    def combine_pcs(self, files_path, params, F_list, times_list, stimulus_times, bold_lag_seconds,
+                    correlation_threshold):
         """
         Combines relevant PCs based on windowed correlation with stimulus times.
 
@@ -117,37 +120,18 @@ class RepresentPC:
         self.logger.info(
             f"Combining relevant PCs based on Windowed Correlation (Threshold r={correlation_threshold})...")
 
+        n_components = self.pcs_list[0].shape[1]
+        pcs_to_test = list(range(1, n_components))  # Skip PC0
+        lags_durations = calculate_lags_durations(files_path, params, stimulus_times, pcs_to_test)
         combined_signals = []
         rep_pcs_names = []  # For logging
-
         for i in range(self.n_files):
             #  Get data for this subject
             pcs = self.pcs_list[i]  # (K, n_comp)
             F = F_list[i]  # (N, K)
             times = times_list[i]  # (N,)
             n_timepoints = len(times)
-            n_components = pcs.shape[1]
             mov_i = self.get_sub_mov(i) - 1  # movement index
-
-            # Build the target regressor (the "ideal" signal)
-            # This is now a "boxcar" or "window" regressor
-            target_regressor = np.zeros(n_timepoints)
-            for t_stim, b_lag in zip(stimulus_times[mov_i], bold_lag_seconds[mov_i]):
-                t_start = t_stim + b_lag
-                t_end = t_start + 15  # 15s window
-                self.logger.info(f"Subject {i}: Stimulus at {t_stim}s (lag {b_lag}s) -> window [{t_start}s, {t_end}s]")
-                # Find indices within this window
-                indices = np.where((times >= t_start) & (times <= t_end))[0]
-                if len(indices) > 0:
-                    target_regressor[indices] = 1.0  # Create a "box" of 1s
-
-            # Check if target regressor is all zeros (no stims in range)
-            if np.sum(target_regressor) == 0:
-                self.logger.warning(
-                    f"Subject {i}: No stimulus times fell within the analysis window. Target regressor is empty.")
-                combined_signals.append(np.zeros(n_timepoints))
-                rep_pcs_names.append("No stims in range")
-                continue
 
             # Find and sum all relevant PCs (skip PC0)
             final_signal = np.zeros(n_timepoints)
@@ -155,6 +139,8 @@ class RepresentPC:
             all_pc_signals = F @ pcs  # (N, n_comp)
 
             for j in range(1, n_components):
+                # for j in range(n_components):
+                _, _, _, target_regressor = lags_durations[(j, mov_i)]
                 pc_j_signal = all_pc_signals[:, j]
                 try:
                     corr, pval = pearsonr(pc_j_signal, target_regressor)
@@ -175,12 +161,95 @@ class RepresentPC:
                     final_signal += np.sign(corr) * pc_j_signal
                     rep_pcs_names_i += f"{corr_sign}{pc_j_name}(c={corr:.2f}) "
 
-
             combined_signals.append(final_signal)
             rep_pcs_names.append(rep_pcs_names_i if rep_pcs_names_i else "No PCs Found")
             self.logger.info(
                 f"Subject {i} combined PCs: {rep_pcs_names_i if rep_pcs_names_i else "No PCs Found"}")
         return combined_signals, rep_pcs_names
+
+    # def combine_pcs(self, files_path, params, F_list, times_list, stimulus_times, bold_lag_seconds, correlation_threshold):
+    #     """
+    #     Combines relevant PCs based on windowed correlation with stimulus times.
+    #
+    #     This method replaces the DTW logic with a Pearson correlation against
+    #     a "boxcar" regressor built from the stimulus times.
+    #     """
+    #
+    #     self.logger.info(
+    #         f"Combining relevant PCs based on Windowed Correlation (Threshold r={correlation_threshold})...")
+    #
+    #     n_components = self.pcs_list[0].shape[1]
+    #     pcs_to_test = list(range(1, n_components)) # Skip PC0
+    #     lags_durations = calculate_lags_durations(files_path, params, stimulus_times, pcs_to_test)
+    #     combined_signals = []
+    #     rep_pcs_names = []  # For logging
+    #
+    #     for i in range(self.n_files):
+    #         #  Get data for this subject
+    #         pcs = self.pcs_list[i]  # (K, n_comp)
+    #         F = F_list[i]  # (N, K)
+    #         times = times_list[i]  # (N,)
+    #         n_timepoints = len(times)
+    #         mov_i = self.get_sub_mov(i) - 1  # movement index
+    #
+    #         # Build the target regressor (the "ideal" signal)
+    #         # This is now a "boxcar" or "window" regressor
+    #         target_regressor = np.zeros(n_timepoints)
+    #         # wins = [[27.0, 20.0, 20.0, 20.0], [17.0, 25.0, 0.0, 25.0]]
+    #         # for t_stim, b_lag, win in zip(stimulus_times[mov_i], bold_lag_seconds[mov_i], wins[mov_i]):
+    #         for t_stim in stimulus_times[mov_i]:
+    #             b_lag = lags_durations[mov_i][stimulus_times[mov_i].index(t_stim)]
+    #             win = lags_durations[(files_path[i], mov_i)][pcs_to_test.index(1)][stimulus_times[mov_i].index(t_stim)]
+    #             # Create boxcar window
+    #             t_start = t_stim + b_lag
+    #             t_end = t_start + win
+    #             self.logger.info(f"Subject {i}: Stimulus at {t_stim}s (lag {b_lag}s) -> window [{t_start}s, {t_end}s]")
+    #             # Find indices within this window
+    #             indices = np.where((times >= t_start) & (times <= t_end))[0]
+    #             if len(indices) > 0:
+    #                 target_regressor[indices] = 1.0  # Create a "box" of 1s
+    #
+    #         # Check if target regressor is all zeros (no stims in range)
+    #         if np.sum(target_regressor) == 0:
+    #             self.logger.warning(
+    #                 f"Subject {i}: No stimulus times fell within the analysis window. Target regressor is empty.")
+    #             combined_signals.append(np.zeros(n_timepoints))
+    #             rep_pcs_names.append("No stims in range")
+    #             continue
+    #
+    #         # Find and sum all relevant PCs (skip PC0)
+    #         final_signal = np.zeros(n_timepoints)
+    #         rep_pcs_names_i = ""
+    #         all_pc_signals = F @ pcs  # (N, n_comp)
+    #
+    #         for j in range(1, n_components):
+    #         # for j in range(n_components):
+    #             pc_j_signal = all_pc_signals[:, j]
+    #             try:
+    #                 corr, pval = pearsonr(pc_j_signal, target_regressor)
+    #             except ValueError:
+    #                 corr = 0  # Handle zero-variance signals (e.g., if target is all zeros)
+    #
+    #             pc_j_name = pcs.pc_name(j)
+    #             # Log the result
+    #             self.logger.info("Subject %d, PC %s: Correlation=%.4f, thre=%.2f", i, pc_j_name, corr,
+    #                              correlation_threshold)
+    #
+    #             # If correlation is high, add it
+    #             if abs(corr) > correlation_threshold:
+    #                 # Use the correlation value as a weight.
+    #                 # This automatically handles the sign (corr is +/-)
+    #                 # and gives more weight to strongly correlated PCs.
+    #                 corr_sign = '+' if np.sign(corr) > 0 else '-'
+    #                 final_signal += np.sign(corr) * pc_j_signal
+    #                 rep_pcs_names_i += f"{corr_sign}{pc_j_name}(c={corr:.2f}) "
+    #
+    #
+    #         combined_signals.append(final_signal)
+    #         rep_pcs_names.append(rep_pcs_names_i if rep_pcs_names_i else "No PCs Found")
+    #         self.logger.info(
+    #             f"Subject {i} combined PCs: {rep_pcs_names_i if rep_pcs_names_i else "No PCs Found"}")
+    #     return combined_signals, rep_pcs_names
 
     # Old DTW-based method
     # ====================
@@ -235,3 +304,13 @@ class RepresentPC:
     #         rep_pcs_names.append(rep_pcs_names_i)
     #         self.logger.info(f"Subject {i} combined PCs: {rep_pcs_names_i}")
     #     return combined_signals, rep_pcs_names
+# 0.12, 0.28, lag=8, win=15
+# 0.13, 0.22, lags = [-5.0 -10.0 -6.0 -7.0], [-10.0 -13.0 -13.0 -12.0], win=27,
+# 0.0468, 0.6844, lags = [-5.0 -10.0 -6.0 -7.0], [-10.0 -13.0 0.0 -12.0], wins = [[20.0, 20.0, 25.0, 25.0], [20.0, 25.0, 0.0, 25.0]]
+# 0.20, 0.065 ,lags = [-3.0 -10.0 -6.0 -8.0], [-8.0 -13.0 0.0 -13.0], wins = [[27.0, 20.0, 20.0, 20.0], [17.0, 25.0, 0.0, 25.0]]
+# 0.19, 0.08, auto lags/durations no pc0. correlation threshold 0.1
+# 0.334, 0.0028 , auto lags/durations no pc0 - new version. correlation threshold 0.1
+# 0.01,0.87 , auto lags/durations no pc0 - new version. correlation threshold 0.15
+# 0.01, 0.87 , auto lags/durations no pc0 - new version. correlation threshold 0.08
+# 0.05, 0.62 , auto lags/durations no pc0 - new version. correlation threshold 0.11
+# 0.15, 0.18 , auto lags/durations no pc0 - new version. correlation threshold 0.09
