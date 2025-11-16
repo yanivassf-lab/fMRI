@@ -5,7 +5,7 @@ from scipy.stats import spearmanr
 
 class Similarity:
     ""  "Base class for similarity metrics."""
-    def __init__(self, n_subs, n_movs, logger):
+    def __init__(self, n_subs, n_movs):
         """
         Initialize with a similarity matrix and parameters.
 
@@ -23,7 +23,6 @@ class Similarity:
         """
         self.n_subs = n_subs
         self.n_movs = n_movs
-        self.logger = logger
         self.n_files = n_subs * n_movs
         self.sim_matrix = np.ones((self.n_files, self.n_files))
         self.score = None

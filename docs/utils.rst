@@ -351,16 +351,13 @@ Before running, update these variables in the script:
 1. **Auto-detection:** Automatically detects physical CPU cores (not virtual cores)
 2. **Thread Control:** Sets environment variables to limit BLAS/MKL threads per process
 
-Analysis Scripts
-----------------
-
-compare-pcs
-~~~~~~~~~~~
+Analysis Scripts - compare-pcs.py
+----------------------------------
 
 The ``compare-pcs`` script compares the principal components of different movements across subjects and parameter combinations. It generates similarity matrices and visualizations to identify optimal parameter settings.
 
 Algorithm
----------
+~~~~~~~~~
 
 1) **Scan inputs**
 
@@ -460,8 +457,50 @@ Algorithm
 
    - Keeps “top‑k” best combinations by each score and prints them at the end to the log.
 
+Combine PCs algorithm (used when ``--combine-pcs`` is set)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+When ``--combine-pcs`` is enabled the script builds a movement-specific target regressor from
+the provided ``--combine-pcs-stimulus-times`` and ``--combine-pcs-bold-lag-seconds`` and then
+selects and sums PCs whose temporal patterns match that regressor. Key steps:
+
+1. Build target regressor
+
+   - For each movement, create a zero signal of length ``N`` (timepoints) and place a ``1.0`` "spike"
+     at the nearest time index to each ``(stimulus_time + bold_lag)`` that falls inside the time range.
+
+2. Reconstruct PC time signals
+
+   - For each subject, compute all PC time signals via ``all_pc_signals = F @ pcs`` (shape ``N × n_components``).
+
+3. Score each PC with DTW
+
+   - For every PC (skipping PC0), compute Dynamic Time Warping (DTW) distance between the PC signal
+     and the target regressor, and also between the *inverted* PC signal and the target regressor.
+   - Use the smaller of the two distances (original vs inverted) as the PC's match score.
+
+4. Select and combine PCs
+
+   - If the minimal DTW distance for a PC is below ``--combine-pcs-correlation-threshold``
+     the PC is considered relevant and is added to the subject's final combined signal.
+   - If the inverted version matched better, the PC is added with inverted sign.
+   - A short textual descriptor (e.g., ``+pc_1 -pc_3``) is recorded per subject for logging.
+
+5. Output
+
+   - Returns one combined signal per subject and a textual summary of which PCs (and signs) were used.
+   - This procedure overrides ``--pc-sim-auto`` and ``--pc-num-comp`` (mutually exclusive).
+
+Notes
+
+- The DTW implementation from ``dtaidistance`` is used; default threshold is controlled by
+  ``--combine-pcs-correlation-threshold`` (default: 10.0).
+- Ensure the number of provided ``--combine-pcs-stimulus-times`` and
+  ``--combine-pcs-bold-lag-seconds`` lists equals the number of movements.
+
+
 Expected input structure
-------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~
 
 - Root folder (``--files-path``) should contain subject folders like:
 
@@ -487,8 +526,19 @@ Expected input structure
 - The parameter combination folder names are exactly those created by the sweep script (e.g., ``no_penalty_nb100`` or ``p0_u1_t1e-3_l-6_0_nb100``).
 - The file it reads per combination is ``eigvecs_eigval_F.npz``.
 
+
 Usage
------
+~~~~~
+
+**What the Script Does:**
+
+1. Scans the input folder to identify subjects and parameter combinations.
+2. Loads the necessary data files for each subject and parameter combination.
+3. Computes PC similarity and selects representative PCs based on correlations.
+4. Reconstructs time-signals from the selected PCs.
+5. Detects peaks in the reconstructed signals and computes peak similarity matrices.
+6. Calculates consistency scores for both PC and peak similarity matrices.
+7. Generates visualizations and logs the results.
 
 **Basic run**
 
@@ -498,41 +548,100 @@ Usage
        --files-path /path/to/fmri_combinations_results_skfda \
        --output-folder /path/to/output_folder
 
-**With options**
+**With options:**
+    .. code-block:: bash
 
-  .. code-block:: bash
+       compare-pcs \
+         --files-path ` /path/to/fmri_combinations_results_skfda` \
+         --output-folder ` /path/to/output_folder` \
+         --movements 1 2 3 \
+         --num-scores 10 \
+         --skip-timepoints 100 \
+         --pc-sim-auto \
+         --pc-sim-auto-best-similar-pc \
+         --pc-sim-auto-weight-similar-pc 2 \
+         --max-workers 1
 
-     compare-pcs \
-       --files-path /path/to/fmri_combinations_results_skfda \
-       --output-folder /path/to/output_folder \
-       --movements 1 2 3 \
-       --num-scores 10 \
-       --skip-timepoints 100 \
-       --best-similar-pc \
-       --weight-similar-pc \
-       --max-workers 1
+Key options:
 
-- Notes
+- ``--files-path``: path containing subject movement folders (see Expected input structure).
+- ``--output-folder``: must NOT exist (it will be created).
+- ``--movements``: movement indices (1..9).
+- ``--num-scores``: number of top parameter combinations to keep.
+- ``--pc-sim-auto``: automatically select representative PC per sample (based on correlations across samples).
+- ``--pc-sim-auto-best-similar-pc``: when used with ``--pc-sim-auto``, count only the single best match from each other file.
+- ``--pc-sim-auto-weight-similar-pc``: exponent applied to absolute correlations when scoring representative PCs.
+- ``--pc-num-comp``: select a specific PC index (starting at 0) for peak comparisons (mutually exclusive with ``--pc-sim-auto`` and ``--combine-pcs``).
+- ``--skip-pc-num``: list of PC indices to exclude from analysis.
+- ``--fix-orientation``: attempt orientation correction before peaks comparison.
+- ``--peaks-abs``: compare absolute peak heights (ignore sign).
+- ``--peaks-dist``: minimum distance between detected peaks (default: 5).
+- ``--skip-timepoints``: skip X timepoints at start/end when computing peaks.
+- ``--combine-pcs``: combine PCs based on stimulus timing and BOLD lag (overrides ``--pc-sim-auto`` and ``--pc-num-comp``).
+- ``--combine-pcs-stimulus-times``: supply a list of stimulus times per movement; repeat the flag once per movement (action='append').
+- ``--combine-pcs-bold-lag-seconds``: supply a list of BOLD lag values per movement; repeat the flag once per movement (action='append').
+- ``--combine-pcs-correlation-threshold``: DTW distance threshold for grouping/combining PCs (default: 10.0).
+- ``--max-workers``: 0 = auto (CPU count), 1 = sequential, >1 = parallel worker count.
 
-  - ``--files-path`` must exist and contain the structure above.
-  - ``--output-folder`` must NOT exist (it will be created).
-  - Movement numbers must be between 1 and 9.
-  - ``--num-scores`` is the number of top scores to keep for each movement and subject.
-  - ``--pc-sim-auto`` If set, find the best representative PC for each sample according to similarity to other samples's PCs.
-  - ``--pc-sim-auto-best-similar-pc`` If set, only the best matching PC from each other file is considered when calculating similarity; otherwise, all PCs are averaged (relevant only if ``--pc-sim-auto`` is True).
-  - ``--pc-sim-auto-weight-similar-pc`` Exponent to which the absolute correlation values are raised. Higher values give more weight to stronger correlations (relevant only if ``--pc-sim-auto`` is True).
-  - ``--pc-num-comp`` Number of PCs to compare - starting from 0 (relevant only if ``--pc-sim-auto`` is False).
-  - ``--skip-pc-num`` List of number of PCs to exclude from the entire analysis (starting from 0). If set to None, all components are used. (default: None)
-  - ``--fix-orientation`` If set, corrects for signal orientation before peaks similarity calculation.
-  - ``--peaks-abs`` If set, uses absolute peak heights for similarity calculation.
-  - ``--peaks-dist`` Distance between peaks to consider for similarity calculation (default: 5).
-  - ``--skip-timepoints`` Number of timepoints to skip at the beginning and end when comparing peaks.
-  - ``--max-workers`` Maximum number of parallel workers. 0=auto (CPU count), 1=sequential.
- - The script writes a log file (``compare_peaks_log.txt``) and one figure per parameter combination.
+Notes on mutual exclusion and validation:
+
+- One of ``--pc-sim-auto``, ``--pc-num-comp``, or ``--combine-pcs`` must be specified.
+- ``--pc-num-comp`` cannot be used together with ``--pc-sim-auto`` or ``--combine-pcs``.
+- ``--pc-sim-auto`` cannot be used together with ``--pc-num-comp`` or ``--combine-pcs``.
+- When using ``--combine-pcs``, the number of repeated ``--combine-pcs-stimulus-times`` and ``--combine-pcs-bold-lag-seconds`` entries must equal the number of movements.
+
+Three example command lines (two movements):
+
+- Example 1 \- use ``--pc-sim-auto``:
+.. code-block:: bash
+
+   compare-pcs \
+     --files-path ` /path/to/fmri_combinations_results_skfda` \
+     --output-folder ` /path/to/output_folder` \
+     --movements 1 2 \
+     --num-scores 10 \
+     --pc-sim-auto \
+     --pc-sim-auto-best-similar-pc \
+     --pc-sim-auto-weight-similar-pc 2 \
+     --max-workers 1
+
+- Example 2 \- use ``--pc-num-comp``:
+.. code-block:: bash
+
+   compare-pcs \
+     --files-path ` /path/to/fmri_combinations_results_skfda` \
+     --output-folder ` /path/to/output_folder` \
+     --movements 1 2 \
+     --num-scores 10 \
+     --pc-num-comp 0 \
+     --skip-pc-num 3 4 \
+     --max-workers 1
+
+- Example 3 \- use ``--combine-pcs`` with stimulus times, BOLD lag and distance threshold:
+.. code-block:: bash
+
+   compare-pcs \
+     --files-path ` /path/to/fmri_combinations_results_skfda` \
+     --output-folder ` /path/to/output_folder` \
+     --movements 1 2 \
+     --num-scores 10 \
+     --combine-pcs \
+     --combine-pcs-stimulus-times 10 20 30 \
+     --combine-pcs-stimulus-times 15 25 35 \
+     --combine-pcs-bold-lag-seconds 4.5 \
+     --combine-pcs-bold-lag-seconds 5.0 \
+     --combine-pcs-correlation-threshold 0.1 \
+     --max-workers 1
+
+Outputs
+- The script writes a log file (``compare_peaks_log.txt``) and one figure per parameter combination.
+- One figure and one ``similarity_<params>.txt`` per parameter combination (reconstructed signals, peaks and similarity matrices).
+
+
 
 
 Outputs
--------
+~~~~~~~
 
 - A log file with progress, inputs, and the best combinations by score.
 - For each combination, a figure named like: ``peaks_<param_comb>_pc.png`` with:

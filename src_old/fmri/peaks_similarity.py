@@ -1,25 +1,23 @@
 import numpy as np
 from scipy.signal import find_peaks
 from dtaidistance import dtw
-from scipy.signal import resample
-
 from .similarity import Similarity
 
 
 class PeaksSimilarity(Similarity):
-    def __init__(self, signals, n_subs, n_movs, fix_orientation=True, peaks_abs=False, peaks_dist=5, skip_timepoints=100, logger=None):
-        super().__init__(n_subs, n_movs, logger)
+    def __init__(self, signals, n_subs, n_movs, fix_orientation=True, peaks_abs=False, peaks_dist=5, skip_timepoints=100):
+        super().__init__(n_subs, n_movs)
         """
         Initialize the PeaksSimilarity class.
 
         Args:
             signals (list): list of signals
-            n_subs (int):      Number of subjects/samples
-            n_movs (int):      Number of movements/experiments
-            fix_orientation (bool): If True, corrects for signal orientation before similarity calculation.
-            peaks_abs (bool): If True, uses absolute peak heights for similarity calculation (not relevant if fix_orientation is True).
-            peaks_dist (int): Distance between peaks to consider for similarity calculation.
-            skip_timepoints (bool): Number of timesteps to skip at the start and end of each signal to avoid edge effects.
+            n_subs:      Number of subjects/samples
+            n_movs:      Number of movements/experiments
+            fix_orientation: If True, corrects for signal orientation before similarity calculation.
+            peaks_abs: If True, uses absolute peak heights for similarity calculation (not relevant if fix_orientation is True).
+            peaks_dist: Distance between peaks to consider for similarity calculation.
+            skip_timepoints: Number of timesteps to skip at the start and end of each signal to avoid edge effects.
         """
         self.signals = signals
         self.skip_timepoints = skip_timepoints
@@ -30,7 +28,6 @@ class PeaksSimilarity(Similarity):
         self.peaks_height = []
         self.peaks_signals = []
         self.reverted = None
-        self.resample_signals()
         self._extract_peaks_signal()
         if fix_orientation:
             self._calculate_similarity_score_correct_orientation()
@@ -38,11 +35,6 @@ class PeaksSimilarity(Similarity):
             self._calculate_similarity_score_orig_orientation()
 
 
-    def resample_signals(self):
-        average_len = int(np.mean([len(s) for s in self.signals]))
-        self.logger.info(f"Resampling signals to average length of {average_len} time points.")
-        for i in range(self.n_files):
-            self.signals[i] = resample(self.signals[i], average_len)
 
     # ====== Step 1: Find peaks ======
     def _get_peaks(self, signal):

@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
+from scipy.signal import resample
 
 matplotlib.use('Agg')  # Use non-interactive backend for multiprocessing
 import matplotlib.gridspec as gridspec
@@ -14,17 +15,14 @@ from concurrent.futures import ProcessPoolExecutor, as_completed, CancelledError
 
 from fmri.pc_similarity import PcSimilarity
 from fmri.peaks_similarity import PeaksSimilarity
-from fmri.utils import setup_logger, PCS
-from fmri.represent_pc import RepresentPC
+from fmri.utils import setup_logger
 
 
 class ComparePCS:
     def __init__(self, files_path, output_folder, movements, pc_sim_auto: bool,
                  pc_sim_auto_best_similar_pc: bool, pc_sim_auto_weight_similar_pc: int,
-                 pc_num_comp: int | None, fix_orientation: bool, peaks_abs: bool, peaks_dist: int, skip_timepoints: int,
-                 skip_pc_num: list[int], combine_pcs: bool, combine_pcs_stimulus_times: list[list[float]],
-                 combine_pcs_bold_lag_seconds: list[list[float]], combine_pcs_correlation_threshold=float,
-                 logger: logging.Logger = None):
+                 pc_num_comp: int, fix_orientation: bool, peaks_abs: bool, peaks_dist: int, skip_timepoints: int,
+                 skip_pc_num, logger):
         """
         Initialize the ComparePCS class.
 
@@ -40,11 +38,7 @@ class ComparePCS:
         - peaks_abs (bool): If True, uses absolute peak heights for similarity calculation.
         - peaks_dist (int): Minimum distance between peaks (in timepoints).
         - skip_timepoints (int): Number of timepoints to skip at the beginning and end when comparing peaks.
-        - skip_pc_num (list[int]): If not [], exclude the PCs in the list from the analysis.
-        - combine_pcs (bool): If True, combine PCs based on stimulus times and BOLD lag (overrides pc_sim_auto and pc_num_comp).
-        - combine_pcs_stimulus_times (list[list[float]]): List of stimulus times for each movement (in seconds).
-        - combine_pcs_bold_lag_seconds (list[list[float]]): List of BOLD lag times for each movement (in seconds).
-        - combine_pcs_correlation_threshold (float): DTW distance threshold for combining PCs.
+        - skip_pc_num (list[int]): If not None, exclude the PCs in the list from the analysis.
         - logger: Logger object for logging information.
         """
         self.files_path = files_path
@@ -55,10 +49,6 @@ class ComparePCS:
         self.pc_sim_auto_best_similar_pc = pc_sim_auto_best_similar_pc
         self.pc_sim_auto_weight_similar_pc = pc_sim_auto_weight_similar_pc
         self.pc_num_comp = pc_num_comp
-        self.combine_pcs = combine_pcs
-        self.combine_pcs_stimulus_times = combine_pcs_stimulus_times
-        self.combine_pcs_bold_lag_seconds = combine_pcs_bold_lag_seconds
-        self.combine_pcs_correlation_threshold = combine_pcs_correlation_threshold
         self.fix_orientation = fix_orientation
         self.skip_pc_num = skip_pc_num
         self.peaks_abs = peaks_abs
@@ -86,30 +76,30 @@ class ComparePCS:
         """
         pcs_list = []
         F_list = []
-        times_list = []
+        pcs_len = set()
         for i, sub in enumerate(self.file_list):
             store_data_file = os.path.join(sub, params, f"eigvecs_eigval_F.npz")
             try:
                 data = np.load(store_data_file)
-                eigvecs_sorted = data['eigvecs_sorted']
-                # eigvals_sorted = data['eigvals_sorted']
-                F = data['F']
-                times = data['times']
+                eigvecs_sorted = data['a']
+                # eigvals_sorted = data['b']
+                F = data['c']
             except Exception as e:
                 raise Exception(f"Error reading file {store_data_file}: {e}")
 
-            eigvecs_obj = PCS(eigvecs_sorted, self.skip_pc_num)
-            pcs_list.append(eigvecs_obj)
+            pcs_list.append(eigvecs_sorted)
+            pcs_len.add(eigvecs_sorted.shape[0])
+            if self.skip_pc_num is not None:
+                pcs_list = [x for i, x in enumerate(data) if i not in self.skip_pc_num]
             F_list.append(F)
-            times_list.append(times)
+            n_basis, n_pcs = eigvecs_sorted.shape
+            n_times = F.shape[0]
             self.logger.info(
-                f"Loaded sub-{self.get_sub_name(i)}_mov-{self.get_sub_mov(i)} with {eigvecs_obj.shape[1]} PCs, {eigvecs_obj.shape[0]} basis functions and {F.shape[0]} time points.")
-
-        pcs_lengths = set([pcs_list[i].shape[0] for i in range(len(pcs_list))])
-        if len(pcs_lengths) > 1:
+                f"Loaded sub-{self.get_sub_name(i)}_mov-{self.get_sub_mov(i)} with {n_pcs} PCs, {n_basis} basis functions and {n_times} time points.")
+        if len(pcs_len) > 1:
             self.calc_pc_score = False
             self.logger.info("There are different sizes of PCs, cannot calculate score.")
-        return pcs_list, F_list, times_list
+        return pcs_list, F_list
 
     def load_original_signals(self):
         """
@@ -118,6 +108,7 @@ class ComparePCS:
         Returns: List of original signals for each subject/movement.
         """
         org_signals = []
+        average_len = 0
         for i, sub in enumerate(self.file_list):
             org_sig_file = os.path.join(sub, self.params_comb[0], f"original_averaged_signal_intensity.txt")
             try:
@@ -126,10 +117,43 @@ class ComparePCS:
                     signal_y = np.array(lines[3].strip().split(), dtype=float)
             except Exception as e:
                 raise Exception(f"Error reading file {org_sig_file}: {e}")
+            n_times = len(signal_y)
+            average_len += n_times
             self.logger.info(
-                f"Loaded original signal for sub-{self.get_sub_name(i)}_mov-{self.get_sub_mov(i)} with {len(signal_y)} time points.")
+                f"Loaded original signal for sub-{self.get_sub_name(i)}_mov-{self.get_sub_mov(i)} with {n_times} time points.")
             org_signals.append(signal_y)
+
+        average_len = int(average_len / self.n_files)
+        self.logger.info(f"Resampling original signals to average length of {average_len} time points.")
+        for i in range(self.n_files):
+            org_signals[i] = resample(org_signals[i], average_len)
         return org_signals
+
+    def get_signals_from_seleted_pcs(self, pcs_list, F_list, main_pcs):
+        """
+        Get signals reconstructed from selected principal components.
+
+        Args:
+            pcs_list: list of principal component matrices for each subject/movement.
+            F_list:   list of signal matrices for each subject/movement.
+            main_pcs: list of selected principal component indices for each subject/movement.
+
+        Returns: List of reconstructed signals for each subject/movement.
+        """
+        signals = []
+        average_len = 0
+        for i in range(self.n_files):
+            pc_i = pcs_list[i][:, main_pcs[i]]
+            signal_i = F_list[i] @ pc_i
+            average_len += signal_i.shape[0]
+            signals.append(signal_i)
+
+        average_len = int(average_len / self.n_files)
+        self.logger.info(f"Resampling signals to average length of {average_len} time points.")
+        for i in range(self.n_files):
+            signals[i] = resample(signals[i], average_len)
+
+        return signals
 
     def extract_values_from_peaks(self, signals, peaks_sim, i):
         """Extract peak similarity values for subject/movement at index i."""
@@ -142,16 +166,24 @@ class ComparePCS:
             peaks_height_i *= -1
         return signal_i, peaks_idx_i, peaks_height_i, revereted_i
 
-    def plot_peaks_similarity(self, peaks_sim, rep_pcs_names_signals, axis, rep_pcs_names=None):
+    def plot_peaks_similarity(self, peaks_sim, selected_signals, axis, main_pcs=None):
         """Plot peaks similarity for all subjects and movements."""
         for i in range(self.n_files):
             signal_i, peaks_idx_i, peaks_height_i, revereted_i = self.extract_values_from_peaks(
-                rep_pcs_names_signals, peaks_sim, i)
+                selected_signals, peaks_sim, i)
             sub_name_i = self.get_sub_name(i)
             # i.e. for 3 movements with 4 subject per movement: 0,1,2,3 -> movement 1; 4,5,6,7 -> movement 2; 8,9,10,11 -> movement 3
             sub_movement = self.get_sub_mov(i)
             sub_num = self.get_sub_num(i)
-            pc_text = f", pc: {rep_pcs_names[i]} " if rep_pcs_names is not None else ""
+            if main_pcs is not None:
+                if self.skip_pc_num is not None:
+                    main_pcs_i = main_pcs[i]
+                    for j in self.skip_pc_num:
+                        if j <= main_pcs[i]:
+                            main_pcs_i += 1
+                else:
+                    main_pcs_i = main_pcs[i]
+            pc_text = f", pc: {main_pcs_i} " if main_pcs is not None else ""
             axis[sub_num].plot(np.arange(len(signal_i)), signal_i,
                                label=f"mov-{sub_movement}{pc_text} {', Reverted Signal' if revereted_i else ', Original Signal'}")
             axis[sub_num].scatter(peaks_idx_i, peaks_height_i, color='red', s=10, zorder=3)  # mark peaks
@@ -193,7 +225,7 @@ class ComparePCS:
         axis.set_xlabel('Signal Index')
         axis.set_ylabel('Signal Index')
 
-    def save_plot_data_to_txt(self, params, rep_pcs_names_signals, sim_objects_names, sim_objects, rep_pcs_names=None):
+    def save_plot_data_to_txt(self, params, selected_signals, sim_objects_names, sim_objects, main_pcs=None):
         txt_file = os.path.join(self.output_folder, f"similarity_{params}.txt")
         with open(txt_file, "w") as f:
             f.write(f"Parameters: {params}\n\n")
@@ -202,10 +234,10 @@ class ComparePCS:
             f.write("Peaks similarity per subject and movement:\n")
             for i in range(self.n_files):
                 signal_i, peaks_idx_i, peaks_height_i, revereted_i = self.extract_values_from_peaks(
-                    rep_pcs_names_signals, sim_objects[0], i)
+                    selected_signals, sim_objects[0], i)
                 sub_name_i = self.get_sub_name(i)
                 sub_movement = self.get_sub_mov(i)
-                pc_text = f", pc: {rep_pcs_names[i]}" if rep_pcs_names is not None else ""
+                pc_text = f", pc: {main_pcs[i]}" if main_pcs is not None else ""
                 f.write(
                     f"Subject {sub_name_i}, movement {sub_movement}{pc_text}, {'Reverted' if revereted_i else 'Original'}:\n")
                 f.write("Signal: " + ", ".join([f"{v:.4f}" for v in signal_i]) + "\n")
@@ -222,32 +254,37 @@ class ComparePCS:
 
         self.logger.info(f"Saved plot data to {txt_file}")
 
-    def plot_params(self, params, sim_objects_names, sim_objects, rep_pcs_names_signals, rep_pcs_names=None):
+    def plot_params(self, params, sim_objects_names, sim_objects, selected_signals, main_pcs=None):
         """Plot results for a given parameter combination."""
         fig = plt.figure(figsize=(35, 1.5 * len(self.file_list)))
         gs = gridspec.GridSpec(len(self.file_list), 2, width_ratios=[2, 1])  # 2x wider second column
         axes_left = [fig.add_subplot(gs[i, 0]) for i in range(self.n_files)]
         gs_right = gridspec.GridSpecFromSubplotSpec(2, 1, subplot_spec=gs[:, 1])
-        if rep_pcs_names is not None:
+        if main_pcs is not None:
             axes_right = [fig.add_subplot(gs_right[i, 0]) for i in range(2)]
-        else:  # original signals
+        else:
             axes_right = [fig.add_subplot(gs_right[0, 0])]
 
         # --- plot peaks similarity ---
-        self.plot_peaks_similarity(sim_objects[0], rep_pcs_names_signals, axes_left, rep_pcs_names)
+        self.plot_peaks_similarity(sim_objects[0], selected_signals, axes_left, main_pcs)
         # --- plot similarity matrices ---
         for i, sim_obj_name, sim_obj in zip(range(len(sim_objects)), sim_objects_names, sim_objects):
             self.plot_similarity_matrices(sim_obj.sim_matrix, f'Similarity {sim_obj_name}',
                                           f'Similarity Matrix {sim_obj_name}', axes_right[i])
         # --- finalize and save figure ---
-        title = "\n".join([f"Average Spearman correlation of {name} matrix: "
-                           f"{sim_obj.score:.4f}, average P-value: {1 - sim_obj.matrix_op_pval:.4f}"
-                           for name, sim_obj in zip(sim_objects_names, sim_objects)])
-        fig.suptitle(f"Params {params}\n\n" + title + "\n", fontsize=16)
+        title = "\n".join(
+            [
+                f"Average Spearman correlation of {name} matrix: {sim_obj.score:.4f}, average P-value: {1 - sim_obj.matrix_op_pval:.4f}"
+                for name, sim_obj in zip(sim_objects_names, sim_objects)])
+
+        fig.suptitle(
+            f"Params {params}\n\n" + title + "\n",
+            fontsize=16
+        )
         fig.tight_layout(rect=[0, 0, 1, 0.96])  # leave space for suptitle
         fig.savefig(os.path.join(self.output_folder, f"similarity_{params}.png"))
         plt.close(fig)
-        self.save_plot_data_to_txt(params, rep_pcs_names_signals, sim_objects_names, sim_objects, rep_pcs_names)
+        self.save_plot_data_to_txt(params, selected_signals, sim_objects_names, sim_objects, main_pcs)
 
     def process_single_combination(self, params, comb_num):
         """
@@ -257,38 +294,27 @@ class ComparePCS:
             tuple: (pc_sim.score, pc_sim.matrix_op_pval, peaks_sim.score, peaks_sim.matrix_op_pval, params)
         """
         # --- load pcs and signals ---
-        pcs_list, F_list, times_list = self.load_pcs_and_signals(params)
+        pcs_list, F_list = self.load_pcs_and_signals(params)
         # --- compare pcs ---
-        self.logger.info(f"Comparing pcs of {params} ({comb_num+1} of {len(self.params_comb)} combinations)")
+        self.logger.info(f"Comparing pcs of {params} ({comb_num} of {len(self.params_comb)} combinations)")
+        pc_sim = PcSimilarity(pcs_list, self.n_subs, self.n_movs, self.calc_pc_score)
         if self.calc_pc_score:
-            pc_sim = PcSimilarity(pcs_list, self.n_subs, self.n_movs, logger=self.logger)
             # --- calculate pc similarity score ---
             pc_sim.calculate_score()
         # --- get main pcs ---
-        if self.pc_sim_auto or self.combine_pcs:
-            represent_pc = RepresentPC(pcs_list, F_list, self.n_subs, self.n_movs, logger=self.logger)
-            if self.pc_sim_auto:
-                rep_pcs_names_signals, rep_pcs_names = represent_pc.find_representative_pcs(
-                    self.pc_sim_auto_best_similar_pc,
-                    self.pc_sim_auto_weight_similar_pc)
-            elif self.combine_pcs:
-                rep_pcs_names_signals, rep_pcs_names = represent_pc.combine_pcs(F_list, times_list,
-                                                                                self.combine_pcs_stimulus_times,
-                                                                                self.combine_pcs_bold_lag_seconds,
-                                                                                self.combine_pcs_correlation_threshold)
+        if self.pc_sim_auto:
+            main_pcs = pc_sim.find_representative_pcs(self.pc_sim_auto_best_similar_pc,
+                                                      self.pc_sim_auto_weight_similar_pc)
         else:
-            rep_pcs = np.zeros(len(self.file_list), dtype=int) + self.pc_num_comp
-            rep_pcs_names_signals = RepresentPC.get_signals_from_seleted_pcs(pcs_list, F_list, rep_pcs)
-            rep_pcs_names = [pcs_list[0].pc_name(self.pc_num_comp)] * len(self.file_list)
+            main_pcs = np.zeros(len(self.file_list), dtype=int) + self.pc_num_comp
 
         # --- get signals from selected pcs ---
-
+        selected_signals = self.get_signals_from_seleted_pcs(pcs_list, F_list, main_pcs)
         # --- calculate peaks similarity score on selected signals ---
-        self.logger.info(f"Comparing peaks of {params} ({comb_num+1} of {len(self.params_comb)} combinations)")
-        peaks_sim = PeaksSimilarity(rep_pcs_names_signals, self.n_subs, self.n_movs,
-                                    fix_orientation=self.fix_orientation,
+        self.logger.info(f"Comparing peaks of {params} ({comb_num} of {len(self.params_comb)} combinations)")
+        peaks_sim = PeaksSimilarity(selected_signals, self.n_subs, self.n_movs, fix_orientation=self.fix_orientation,
                                     peaks_abs=self.peaks_abs, peaks_dist=self.peaks_dist,
-                                    skip_timepoints=self.skip_timepoints, logger=self.logger)
+                                    skip_timepoints=self.skip_timepoints)
         # -- calculate peaks similarity score ---
         peaks_sim.calculate_score()
         # --- plot results ---
@@ -297,7 +323,7 @@ class ComparePCS:
             sim_objects_names, sim_objects = ['Peaks Similarity', 'PCs Similarity'], [peaks_sim, pc_sim]
         else:
             sim_objects_names, sim_objects = ['Peaks Similarity'], [peaks_sim]
-        self.plot_params(params, sim_objects_names, sim_objects, rep_pcs_names_signals, rep_pcs_names)
+        self.plot_params(params, sim_objects_names, sim_objects, selected_signals, main_pcs)
         # returns self.calc_pc_score for parallel run
         return self.calc_pc_score, pc_sim.score if self.calc_pc_score else None, pc_sim.matrix_op_pval if self.calc_pc_score else None, peaks_sim.score, peaks_sim.matrix_op_pval, params
 
@@ -313,7 +339,7 @@ class ComparePCS:
         # The orientation correction is not relevant when comparing original signals
         peaks_sim = PeaksSimilarity(org_signals, self.n_subs, self.n_movs, fix_orientation=False,
                                     peaks_abs=self.peaks_abs, peaks_dist=self.peaks_dist,
-                                    skip_timepoints=self.skip_timepoints, logger=self.logger)
+                                    skip_timepoints=self.skip_timepoints)
         # -- calculate peaks similarity score ---
         peaks_sim.calculate_score()
         # --- plot results ---
@@ -438,7 +464,7 @@ class ComparePCS:
         return sub_name
 
     def get_sub_mov(self, i: int) -> int:
-        """Get the movement number of the i-th file (starts from 1)."""
+        """Get the movement number from the file path at index i."""
         return int(i / self.n_subs) + 1
 
     def get_sub_num(self, i: int) -> int:
@@ -462,7 +488,7 @@ def main():
                         help="Exponent to which the absolute correlation values are raised. Higher values give more weight to stronger correlations (relevant only if pc_sim_auto is True).")
     parser.add_argument('--pc-num-comp', type=int, default=None,
                         help="Number of PCs to compare - starting from 0 (relevant only if pc_sim_auto is False).")
-    parser.add_argument('--skip-pc-num', type=int, nargs='+', default=[],
+    parser.add_argument('--skip-pc-num', type=int, nargs='+', default=None,
                         help="List of number of PCs to exclude from the entire analysis (starting from 0). If set to None, all components are used.")
     parser.add_argument('--fix-orientation', action='store_true',
                         help="If set, corrects for signal orientation before peaks similarity calculation.")
@@ -471,18 +497,9 @@ def main():
     parser.add_argument('--peaks-dist', type=int, default=5, help="Minimum distance between peaks (in timepoints).")
     parser.add_argument("--skip-timepoints", type=int, default=100,
                         help="Number of timepoints to skip at the beginning and end when comparing peaks.")
-    parser.add_argument('--combine-pcs', action='store_true',
-                        help="If set, combine PCs based on stimulus times and BOLD lag (overrides pc_sim_auto and pc_num_comp).")
-    parser.add_argument('--combine-pcs-stimulus-times', type=float, nargs='+', action='append', default=[],
-                        help="List of stimulus times for each movement (in seconds). Provide a list of lists, one per movement.")
-    parser.add_argument('--combine-pcs-bold-lag-seconds', type=float, nargs='+', action='append', default=[],
-                        help="List of BOLD lag times for each movement (in seconds). Provide a list of lists, one per movement.")
-    parser.add_argument('--combine-pcs-correlation-threshold', type=float, default=0.1,
-                        help="DTW distance threshold for combining PCs.")
     parser.add_argument("--max-workers", type=int, default=1,
                         help="Maximum number of parallel workers. 0=auto (CPU count), 1=sequential")
     args = parser.parse_args()
-
     if not os.path.exists(args.files_path):
         raise FileNotFoundError(
             f"Files folder '{args.files_path}' does not exist."
@@ -494,21 +511,10 @@ def main():
 
     if not all(1 <= m <= 9 for m in args.movements):
         raise ValueError("Movements should be between 1 and 9.")
-    if args.combine_pcs:
-        n_mov = len(args.movements)
-        if not (len(args.combine_pcs_stimulus_times) == len(args.combine_pcs_bold_lag_seconds) == n_mov):
-            raise ValueError(
-                f"--combine-pcs-stimulus-times and --combine-pcs-bold-lag_seconds must match number of movements ({n_mov})")
-        elif args.pc_sim_auto or args.pc_num_comp is not None:
-            raise ValueError("When --combine-pcs is set, --pc-sim-auto and pc-num-comp cannot be set.")
-    if args.pc_sim_auto:
-        if args.pc_num_comp is not None or args.combine_pcs:
-            raise ValueError("When --pc-sim-auto is set, --pc-num-comp cannot and --combine-pcs cannot be specified.")
-    if args.pc_num_comp is not None:
-        if args.pc_sim_auto or args.combine_pcs:
-            raise ValueError("When --pc-num-comp is set, --pc-sim-auto and --combine-pcs cannot be specified.")
-    if args.pc_num_comp is None and not args.pc_sim_auto and not args.combine_pcs:
-        raise ValueError("Either --pc-sim-auto, --pc-num-comp, or --combine-pcs must be specified.")
+    if not args.pc_sim_auto and args.pc_num_comp is None:
+        raise ValueError("If pc-sim-auto is False, the number of PCs to compare is required.")
+    elif args.pc_sim_auto and args.pc_num_comp is not None:
+        raise ValueError("If pc-sim-auto is True, the number of PCs to compare cannot be specified.")
 
     setup_logger(output_folder=args.output_folder, file_name="compare_peaks_log.txt", loger_name="compare_peaks_logger",
                  log_level=logging.INFO)
@@ -520,9 +526,7 @@ def main():
                              args.pc_sim_auto, args.pc_sim_auto_best_similar_pc,
                              args.pc_sim_auto_weight_similar_pc, args.pc_num_comp,
                              args.fix_orientation, args.peaks_abs, args.peaks_dist, args.skip_timepoints,
-                             args.skip_pc_num, args.combine_pcs, args.combine_pcs_stimulus_times,
-                             args.combine_pcs_bold_lag_seconds,
-                             args.combine_pcs_correlation_threshold, logger)
+                             args.skip_pc_num, logger)
     compare_pcs.compare(num_scores=args.num_scores, max_workers=effective_workers)
 
 

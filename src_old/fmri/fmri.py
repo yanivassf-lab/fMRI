@@ -475,8 +475,7 @@ class FunctionalMRI:
         sorted_indices = np.argsort(eigvals)[::-1][:self.num_pca_comp]
         eigvecs_sorted = eigvecs[:, sorted_indices]
         eigvals_sorted = eigvals[sorted_indices]
-        negative_eigvals = np.any(eigvals_sorted <= 0.0)
-        logger.warning(f"Negative eigenvalues found: {negative_eigvals}")
+
         # Compute temporal profiles
         pc_temporal_profiles = F @ eigvecs_sorted  # (n_timepoints, num_pca_comp)
 
@@ -490,8 +489,8 @@ class FunctionalMRI:
         for i in range(self.num_pca_comp):
             scores_i = C_tilde @ U @ eigvecs_sorted[:, i]  # shape: (n_voxels,)
             if np.sum(scores_i) < 0:  # if most of the scores are negative replace the sign
-                scores_i *= -1
-                # eigvecs_sorted[:, i] = -eigvecs_sorted[:, i]
+                scores_i = -scores_i
+                eigvecs_sorted[:, i] = -eigvecs_sorted[:, i]
             scores[:, i] = scores_i
         v_max_scores_pos = np.argmax(scores, axis=0)  # maximum score in each component
         # print(v_max_scores_pos, np.max(scores, axis=0))
@@ -521,15 +520,13 @@ class FunctionalMRI:
         store_data_file = os.path.join(self.output_folder, f"eigvecs_eigval_F.npz")
         # Save the arrays to a compressed file
         np.savez_compressed(store_data_file, a=eigvecs_sorted, b=eigvals_sorted, c=F)
-        np.savez_compressed(store_data_file, eigvecs_sorted=eigvecs_sorted, eigvals_sorted=eigvals_sorted, F=F, times=self.times)
         logger.info("Eigenvectors, eigenvalues and F matrix are saved to 'eigvecs_eigval_F.npz'")
         """
         For loading the arrays back, use:
             data = np.load(store_data_file)
-            eigvecs_sorted = data['eigvecs_sorted']
-            eigvals_sorted = data['eigvals_sorted']
-            F = data['F']
-            times = data['times']
+            eigvecs_sorted = data['a']
+            eigvals_sorted = data['b']
+            F = data['c']
         """
         for i in range(self.num_pca_comp):
             explained_vairance_i = (eigvals_sorted[i] * 100) / total_variance
