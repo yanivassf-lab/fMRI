@@ -7,7 +7,8 @@ from .similarity import Similarity
 
 
 class PeaksSimilarity(Similarity):
-    def __init__(self, signals, n_subs, n_movs, fix_orientation=True, peaks_abs=False, peaks_dist=5, skip_timepoints=100, logger=None):
+    def __init__(self, signals, n_subs, n_movs, fix_orientation=True, peaks_abs=False, peaks_dist=5,
+                 skip_timepoints=100, peaks_all_cpus=False, logger=None):
         super().__init__(n_subs, n_movs, logger)
         """
         Initialize the PeaksSimilarity class.
@@ -20,12 +21,15 @@ class PeaksSimilarity(Similarity):
             peaks_abs (bool): If True, uses absolute peak heights for similarity calculation (not relevant if fix_orientation is True).
             peaks_dist (int): Distance between peaks to consider for similarity calculation.
             skip_timepoints (bool): Number of timesteps to skip at the start and end of each signal to avoid edge effects.
+            peaks_all_cpus (bool): If True, uses all available CPUs for DTW distance matrix calculation.
+            logger: Logger instance for logging information.
         """
         self.signals = signals
         self.skip_timepoints = skip_timepoints
         self.fix_orientation = fix_orientation
         self.peaks_abs = peaks_abs
         self.peaks_dist = peaks_dist
+        self.peaks_all_cpus = peaks_all_cpus
         self.peaks_idx = []
         self.peaks_height = []
         self.peaks_signals = []
@@ -37,7 +41,6 @@ class PeaksSimilarity(Similarity):
         else:
             self._calculate_similarity_score_orig_orientation()
 
-
     def resample_signals(self):
         average_len = int(np.mean([len(s) for s in self.signals]))
         self.logger.info(f"Resampling signals to average length of {average_len} time points.")
@@ -47,7 +50,7 @@ class PeaksSimilarity(Similarity):
     # ====== Step 1: Find peaks ======
     def _get_peaks(self, signal):
         """Return indices and heights of both maxima and minima"""
-        peaks_up, _ = find_peaks(signal, distance=self.peaks_dist)# , height=0.3,
+        peaks_up, _ = find_peaks(signal, distance=self.peaks_dist)  # , height=0.3,
         heights_up = signal[peaks_up]
         peaks_down, _ = find_peaks(-signal)
         heights_down = signal[peaks_down]  # keep original sign
@@ -69,15 +72,20 @@ class PeaksSimilarity(Similarity):
     # ====== Step 2: DTW similarity ======
     def _calculate_similarity_score_correct_orientation(self):
         # 1. Cut edges
-        cut_peaks_signals = [p_sig[self.skip_timepoints:len(p_sig)-self.skip_timepoints] for p_sig in self.peaks_signals]
+        cut_peaks_signals = [p_sig[self.skip_timepoints:len(p_sig) - self.skip_timepoints] for p_sig in
+                             self.peaks_signals]
 
         # 2. Compute distance matrix for reversed signals
         cut_peaks_signals_rev = [np.negative(p_sig) for p_sig in cut_peaks_signals]  # invert each signal
         cut_peaks_signals_all = cut_peaks_signals_rev + cut_peaks_signals
-
-        dist_mat_all = dtw.distance_matrix(cut_peaks_signals_all, block=((0, 2*self.n_files),(self.n_files,2*self.n_files)))#,parallel=True, use_mp=True)
-        # dist_mat_all = dtw.distance_matrix(cut_peaks_signals_all, block=((0, 2*self.n_files),(self.n_files,2*self.n_files)),parallel=True, use_mp=True)
-        dist_mat_org = dist_mat_all[self.n_files:2*self.n_files, self.n_files:2*self.n_files]
+        if self.peaks_all_cpus:
+            dist_mat_all = dtw.distance_matrix(cut_peaks_signals_all,
+                                               block=((0, 2 * self.n_files), (self.n_files, 2 * self.n_files)),
+                                               parallel=True, use_mp=True)
+        else:
+            dist_mat_all = dtw.distance_matrix(cut_peaks_signals_all,
+                                               block=((0, 2 * self.n_files), (self.n_files, 2 * self.n_files)))
+        dist_mat_org = dist_mat_all[self.n_files:2 * self.n_files, self.n_files:2 * self.n_files]
         dist_mat_rev = dist_mat_all[:self.n_files, self.n_files:]
         # 3. Compute minimal distances and reversed flags
         dist_min_mat = np.minimum(dist_mat_org, dist_mat_rev)
@@ -129,13 +137,16 @@ class PeaksSimilarity(Similarity):
 
     def _calculate_similarity_score_orig_orientation(self):
 
-
         if self.peaks_abs:
-            cut_peaks_signals = [np.abs(p_sig[self.skip_timepoints:len(p_sig)-self.skip_timepoints]) for p_sig in self.peaks_signals]
+            cut_peaks_signals = [np.abs(p_sig[self.skip_timepoints:len(p_sig) - self.skip_timepoints]) for p_sig in
+                                 self.peaks_signals]
         else:
-            cut_peaks_signals = [p_sig[self.skip_timepoints:len(p_sig)-self.skip_timepoints] for p_sig in self.peaks_signals]
+            cut_peaks_signals = [p_sig[self.skip_timepoints:len(p_sig) - self.skip_timepoints] for p_sig in
+                                 self.peaks_signals]
 
-        dist_min_mat = dtw.distance_matrix(cut_peaks_signals)#, parallel=True, use_mp=True)
+        if self.peaks_all_cpus:
+            dist_min_mat = dtw.distance_matrix(cut_peaks_signals, parallel=True, use_mp=True)
+        else:
+            dist_min_mat = dtw.distance_matrix(cut_peaks_signals)
         self.reverted = np.zeros(self.n_files)
         self.sim_matrix = 1 / (1 + dist_min_mat)
-

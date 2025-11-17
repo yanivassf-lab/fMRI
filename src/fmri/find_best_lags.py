@@ -23,7 +23,7 @@ PCS_TO_TEST = [1, 2, 3, 4, 5, 6]
 PARAMS = "p2_u0"  # Default parameter folder to search for
 
 
-def load_pc_signal_from_txt(txt_file):
+def load_pc_signal_from_txt(txt_file, logger=None):
     """
     Loads the time and signal data from one of your temporal_profile_pc_X.txt files.
     """
@@ -46,9 +46,8 @@ def load_pc_signal_from_txt(txt_file):
 
         return times, signal
     except Exception as e:
-        print(f"  [Error] Could not read file {txt_file}: {e}")
+        logger.exception(f"  [Error] Could not read file {txt_file}: {e}")
         return None, None
-
 
 
 def fast_corr_matrix(X, y):
@@ -74,23 +73,22 @@ def build_regressor_vectorized(times, stim_times, lags, durs):
     return reg
 
 
-
 def find_best_params_vectorized_stable(m_id, file_list, stimulus_times, pc_index,
                                        lags_to_test, durations_to_test,
-                                       coarse_step=0.5):
+                                       coarse_step=0.5, logger=None):
     """
     Vectorized, deterministic optimization of lags and durations.
     Coarse grid + hill climbing per event, no randomness.
     """
-    print(f"\n=== Optimizing PC{pc_index} Movement: {m_id+1} (VECTOR STABLE) ===")
+    logger.info(f"\n=== Optimizing PC{pc_index} Movement: {m_id + 1} (VECTOR STABLE) ===")
 
     # ---------- Load signals ----------
     signals = []
     for fp, _ in file_list:
-        t, sig = load_pc_signal_from_txt(fp)
+        t, sig = load_pc_signal_from_txt(fp, logger)
         signals.append(sig)
     signals = np.vstack(signals)
-    times,_ = load_pc_signal_from_txt(file_list[0][0])
+    times, _ = load_pc_signal_from_txt(file_list[0][0], logger)
     n_events = len(stimulus_times)
 
     # ---------- 1. Coarse grid search per event ----------
@@ -125,7 +123,7 @@ def find_best_params_vectorized_stable(m_id, file_list, stimulus_times, pc_index
         base_corr = fast_corr_matrix(signals, base_reg).mean()
 
         for i in range(n_events):
-            for delta_lag, delta_dur in [(coarse_step,0),(-coarse_step,0),(0,coarse_step),(0,-coarse_step)]:
+            for delta_lag, delta_dur in [(coarse_step, 0), (-coarse_step, 0), (0, coarse_step), (0, -coarse_step)]:
                 new_lags = best_lags.copy()
                 new_durs = best_durs.copy()
                 new_lags[i] += delta_lag
@@ -143,9 +141,9 @@ def find_best_params_vectorized_stable(m_id, file_list, stimulus_times, pc_index
     final_reg = build_regressor_vectorized(times, stimulus_times, best_lags, best_durs)
     final_corr = fast_corr_matrix(signals, final_reg).mean()
 
-    print(f"  → Best mean correlation: {final_corr:.4f}")
-    print(f"  ✔ Lags: {best_lags}")
-    print(f"  ✔ Durations: {best_durs}")
+    logger.info(f"  → Best mean correlation: {final_corr:.4f}")
+    logger.info(f"  ✔ Lags: {best_lags}")
+    logger.info(f"  ✔ Durations: {best_durs}")
 
     return best_lags, best_durs, final_corr, final_reg
 
@@ -156,19 +154,18 @@ def fast_corr_matrix_vectorized(X, Y):
     Y: shape = (n_candidates, T)
     returns: correlations |corr| shape = (n_signals, n_candidates)
     """
-    Xc = X - X.mean(axis=1, keepdims=True)          # (n_signals, T)
-    Yc = Y - Y.mean(axis=1, keepdims=True)          # (n_candidates, T)
+    Xc = X - X.mean(axis=1, keepdims=True)  # (n_signals, T)
+    Yc = Y - Y.mean(axis=1, keepdims=True)  # (n_candidates, T)
 
     # חישוב מכפלה פנימית לכל זוג שורה
-    num = Xc @ Yc.T                                 # (n_signals, n_candidates)
-    den = np.sqrt(np.sum(Xc**2, axis=1)[:,None] * np.sum(Yc**2, axis=1)[None,:])
+    num = Xc @ Yc.T  # (n_signals, n_candidates)
+    den = np.sqrt(np.sum(Xc ** 2, axis=1)[:, None] * np.sum(Yc ** 2, axis=1)[None, :])
     corr = np.abs(num / den)
-    return corr                                     # (n_signals, n_candidates)
-
+    return corr  # (n_signals, n_candidates)
 
 
 def calculate_lags_durations(root_folder, params=None, stimulus_times=None, pcs_to_test=None, lags_to_test=LAGS_TO_TEST,
-                             durations_to_test=DURATIONS_TO_TEST):
+                             durations_to_test=DURATIONS_TO_TEST, logger=None):
     # We will store tuples: (file_path, movement_id)
     num_movements = len(stimulus_times)
     movement_ids = list(range(num_movements))  # or any iterable of movement IDs
@@ -178,7 +175,7 @@ def calculate_lags_durations(root_folder, params=None, stimulus_times=None, pcs_
         for pc_index in pcs_to_test
     }
 
-    print(f"Scanning for '{params}' files in {root_folder}...")
+    logger.info(f"Scanning for '{params}' files in {root_folder}...")
 
     for root, dirs, files in os.walk(root_folder, topdown=True):
         # We only care about folders matching our criteria
@@ -203,10 +200,10 @@ def calculate_lags_durations(root_folder, params=None, stimulus_times=None, pcs_
                 file_path = os.path.join(root, pc_filename)
                 files_to_process[pc_index][movement_id].append((file_path, movement_id))
 
-    print("File scan complete. Found:")
+    logger.info("File scan complete. Found:")
     for pc_index, movements in files_to_process.items():
         counts = ", ".join(f"{len(files)} files (Mov{m + 1})" for m, files in movements.items())
-        print(f"  PC{pc_index}: {counts}")
+        logger.info(f"  PC{pc_index}: {counts}")
 
     # --- 2. Run optimization for each PC and Movement ---
     final_results = {}
@@ -214,8 +211,13 @@ def calculate_lags_durations(root_folder, params=None, stimulus_times=None, pcs_
         for m_id, files in movements.items():
             if files:
                 best_lag, best_dur, best_corr, best_regressor = find_best_params_vectorized_stable(m_id,
-                    files, stimulus_times[m_id], pc_index, lags_to_test, durations_to_test, coarse_step=0.01
-                )
+                                                                                                   files,
+                                                                                                   stimulus_times[m_id],
+                                                                                                   pc_index,
+                                                                                                   lags_to_test,
+                                                                                                   durations_to_test,
+                                                                                                   coarse_step=0.01,
+                                                                                                   logger=logger)
                 final_results[(pc_index, m_id)] = (best_lag, best_dur, best_corr, best_regressor)
     return final_results
 
@@ -258,7 +260,6 @@ def main():
 if __name__ == "__main__":
     main()
     sys.exit(0)
-
 
 # ----- Old code for reference -----
 

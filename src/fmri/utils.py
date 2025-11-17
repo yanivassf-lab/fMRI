@@ -22,29 +22,45 @@ class PCS:
     __array_priority__ = 1000.0  # ensure our __array__ / methods are preferred
 
     def __init__(self, eigvecs_sorted, skip_pc_num):
-        self.pcs = eigvecs_sorted
-        self.skip_pc_num = set(skip_pc_num)  # faster lookups
+        self._pcs = eigvecs_sorted
+        self._skip_pc_num = set(skip_pc_num)  # faster lookups
 
     def __len__(self):
-        return self.pcs.shape[1] - len(self.skip_pc_num)
+        return self._pcs.shape[1] - len(self._skip_pc_num)
+
+    def get_orig_pcs(self):
+        return self._pcs
+
+    def get_skip_pc_num(self):
+        return self._skip_pc_num
+
+    def get_dummy_idx(self, real_idx):
+        # get the index in the filtered pcs corresponding to the original index
+        dummy_idx = real_idx
+        for j in self._skip_pc_num:
+            if j == real_idx:
+                return None  # this pc is skipped
+            if j < real_idx:
+                dummy_idx -= 1
+        return dummy_idx
 
     def _real_idx(self, idx):
         # handle negative indices
         if idx < 0:
             idx = len(self) + idx
         real_idx = idx
-        for j in sorted(self.skip_pc_num):
+        for j in sorted(self._skip_pc_num):
             if j <= real_idx:
                 real_idx += 1
         return real_idx
 
     def __getitem__(self, idx):
         r_idx = self._real_idx(idx)
-        return self.pcs[:, r_idx]
+        return self._pcs[:, r_idx]
 
     def __iter__(self):
-        for j, pc in enumerate(self.pcs.T):
-            if j not in self.skip_pc_num:
+        for j, pc in enumerate(self._pcs.T):
+            if j not in self._skip_pc_num:
                 yield pc
 
     def pc_name(self, idx) -> str:
@@ -52,13 +68,13 @@ class PCS:
 
     @property
     def shape(self):
-        n_rows = self.pcs.shape[0]
-        n_cols = self.pcs.shape[1] - len(self.skip_pc_num)
+        n_rows = self._pcs.shape[0]
+        n_cols = self._pcs.shape[1] - len(self._skip_pc_num)
         return (n_rows, n_cols)
 
     def transpose(self):
-        kept_cols = [j for j in range(self.pcs.shape[1]) if j not in self.skip_pc_num]
-        return self.pcs[:, kept_cols].T
+        kept_cols = [j for j in range(self._pcs.shape[1]) if j not in self._skip_pc_num]
+        return self._pcs[:, kept_cols].T
 
     @property
     def T(self):
@@ -66,8 +82,8 @@ class PCS:
 
     def _filtered(self):
         """Return the filtered matrix (kept columns only)."""
-        kept_cols = [j for j in range(self.pcs.shape[1]) if j not in self.skip_pc_num]
-        return self.pcs[:, kept_cols]
+        kept_cols = [j for j in range(self._pcs.shape[1]) if j not in self._skip_pc_num]
+        return self._pcs[:, kept_cols]
 
     # make numpy view of this object behave like the filtered matrix
     def __array__(self, dtype=None):

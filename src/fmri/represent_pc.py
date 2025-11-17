@@ -120,9 +120,14 @@ class RepresentPC:
         self.logger.info(
             f"Combining relevant PCs based on Windowed Correlation (Threshold r={correlation_threshold})...")
 
-        n_components = self.pcs_list[0].shape[1]
-        pcs_to_test = list(range(1, n_components))  # Skip PC0
-        lags_durations = calculate_lags_durations(files_path, params, stimulus_times, pcs_to_test)
+        pcs_matrix = self.pcs_list[0]
+        orig_n_components = pcs_matrix.get_orig_pcs().shape[1]
+        skip_pc_num = pcs_matrix.get_skip_pc_num().copy() # returns set of skipped pc numbers
+        skip_pc_num.add(0)  # Also skip PC0
+        pcs_to_test = [j for j in range(1, orig_n_components) if j not in skip_pc_num] # Skip PC0 and any additional skipped PCs
+        pcs_to_test_dummy_idx = [pcs_matrix.get_dummy_idx(i) for i in pcs_to_test]
+
+        lags_durations = calculate_lags_durations(files_path, params, stimulus_times, pcs_to_test, logger=self.logger)
         combined_signals = []
         rep_pcs_names = []  # For logging
         for i in range(self.n_files):
@@ -138,10 +143,9 @@ class RepresentPC:
             rep_pcs_names_i = ""
             all_pc_signals = F @ pcs  # (N, n_comp)
 
-            for j in range(1, n_components):
-                # for j in range(n_components):
+            for j, dj in zip(pcs_to_test, pcs_to_test_dummy_idx):
                 _, _, _, target_regressor = lags_durations[(j, mov_i)]
-                pc_j_signal = all_pc_signals[:, j]
+                pc_j_signal = all_pc_signals[:, dj]
                 try:
                     corr, pval = pearsonr(pc_j_signal, target_regressor)
                 except ValueError:

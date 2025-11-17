@@ -1,3 +1,5 @@
+from xmlrpc.client import FastParser
+
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
@@ -23,8 +25,8 @@ class ComparePCS:
                  pc_sim_auto_best_similar_pc: bool, pc_sim_auto_weight_similar_pc: int,
                  pc_num_comp: int | None, fix_orientation: bool, peaks_abs: bool, peaks_dist: int, skip_timepoints: int,
                  skip_pc_num: list[int], combine_pcs: bool, combine_pcs_stimulus_times: list[list[float]],
-                 combine_pcs_bold_lag_seconds: list[list[float]], combine_pcs_correlation_threshold=float,
-                 logger: logging.Logger = None):
+                 combine_pcs_bold_lag_seconds: list[list[float]], combine_pcs_correlation_threshold: float,
+                 peaks_all_cpus: bool, logger: logging.Logger = None):
         """
         Initialize the ComparePCS class.
 
@@ -45,6 +47,7 @@ class ComparePCS:
         - combine_pcs_stimulus_times (list[list[float]]): List of stimulus times for each movement (in seconds).
         - combine_pcs_bold_lag_seconds (list[list[float]]): List of BOLD lag times for each movement (in seconds).
         - combine_pcs_correlation_threshold (float): DTW distance threshold for combining PCs.
+        - peaks_all_cpus (bool): If True, use all available CPUs for DTW distance matrix calculation.
         - logger: Logger object for logging information.
         """
         self.files_path = files_path
@@ -63,6 +66,7 @@ class ComparePCS:
         self.skip_pc_num = skip_pc_num
         self.peaks_abs = peaks_abs
         self.peaks_dist = peaks_dist
+        self.peaks_all_cpus = peaks_all_cpus
         self.params_comb = self.get_list_of_params(files_path)
         self.file_list = self.get_list_of_files(files_path, movements)
         self.n_subs = int(len(self.file_list) / len(movements))
@@ -259,7 +263,7 @@ class ComparePCS:
         # --- load pcs and signals ---
         pcs_list, F_list, times_list = self.load_pcs_and_signals(params)
         # --- compare pcs ---
-        self.logger.info(f"Comparing pcs of {params} ({comb_num+1} of {len(self.params_comb)} combinations)")
+        self.logger.info(f"Comparing pcs of {params} ({comb_num + 1} of {len(self.params_comb)} combinations)")
         if self.calc_pc_score:
             pc_sim = PcSimilarity(pcs_list, self.n_subs, self.n_movs, logger=self.logger)
             # --- calculate pc similarity score ---
@@ -272,7 +276,8 @@ class ComparePCS:
                     self.pc_sim_auto_best_similar_pc,
                     self.pc_sim_auto_weight_similar_pc)
             elif self.combine_pcs:
-                rep_pcs_names_signals, rep_pcs_names = represent_pc.combine_pcs(self.files_path, params, F_list, times_list,
+                rep_pcs_names_signals, rep_pcs_names = represent_pc.combine_pcs(self.files_path, params, F_list,
+                                                                                times_list,
                                                                                 self.combine_pcs_stimulus_times,
                                                                                 self.combine_pcs_bold_lag_seconds,
                                                                                 self.combine_pcs_correlation_threshold)
@@ -284,11 +289,12 @@ class ComparePCS:
         # --- get signals from selected pcs ---
 
         # --- calculate peaks similarity score on selected signals ---
-        self.logger.info(f"Comparing peaks of {params} ({comb_num+1} of {len(self.params_comb)} combinations)")
+        self.logger.info(f"Comparing peaks of {params} ({comb_num + 1} of {len(self.params_comb)} combinations)")
         peaks_sim = PeaksSimilarity(rep_pcs_names_signals, self.n_subs, self.n_movs,
                                     fix_orientation=self.fix_orientation,
                                     peaks_abs=self.peaks_abs, peaks_dist=self.peaks_dist,
-                                    skip_timepoints=self.skip_timepoints, logger=self.logger)
+                                    skip_timepoints=self.skip_timepoints, peaks_all_cpus=self.peaks_all_cpus,
+                                    logger=self.logger)
         # -- calculate peaks similarity score ---
         peaks_sim.calculate_score()
         # --- plot results ---
@@ -313,7 +319,8 @@ class ComparePCS:
         # The orientation correction is not relevant when comparing original signals
         peaks_sim = PeaksSimilarity(org_signals, self.n_subs, self.n_movs, fix_orientation=False,
                                     peaks_abs=self.peaks_abs, peaks_dist=self.peaks_dist,
-                                    skip_timepoints=self.skip_timepoints, logger=self.logger)
+                                    skip_timepoints=self.skip_timepoints, peaks_all_cpus=self.peaks_all_cpus,
+                                    logger=self.logger)
         # -- calculate peaks similarity score ---
         peaks_sim.calculate_score()
         # --- plot results ---
@@ -481,6 +488,8 @@ def main():
                         help="DTW distance threshold for combining PCs.")
     parser.add_argument("--max-workers", type=int, default=1,
                         help="Maximum number of parallel workers. 0=auto (CPU count), 1=sequential")
+    parser.add_argument("--peaks-all-cpus", action='store_true',
+                        help="If set, use all available CPUs for DTW distance matrix calculation.")
     args = parser.parse_args()
 
     if not os.path.exists(args.files_path):
@@ -510,6 +519,7 @@ def main():
     if args.pc_num_comp is None and not args.pc_sim_auto and not args.combine_pcs:
         raise ValueError("Either --pc-sim-auto, --pc-num-comp, or --combine-pcs must be specified.")
 
+    args.skip_pc_num = sorted(args.skip_pc_num)
     setup_logger(output_folder=args.output_folder, file_name="compare_peaks_log.txt", loger_name="compare_peaks_logger",
                  log_level=logging.INFO)
     logger = logging.getLogger("compare_peaks_logger")
@@ -521,8 +531,8 @@ def main():
                              args.pc_sim_auto_weight_similar_pc, args.pc_num_comp,
                              args.fix_orientation, args.peaks_abs, args.peaks_dist, args.skip_timepoints,
                              args.skip_pc_num, args.combine_pcs, args.combine_pcs_stimulus_times,
-                             args.combine_pcs_bold_lag_seconds,
-                             args.combine_pcs_correlation_threshold, logger)
+                             args.combine_pcs_bold_lag_seconds, args.combine_pcs_correlation_threshold,
+                             args.peaks_all_cpus, logger)
     compare_pcs.compare(num_scores=args.num_scores, max_workers=effective_workers)
 
 
