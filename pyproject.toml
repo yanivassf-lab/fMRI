@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "Neuro-fPCA-fMRI"
-version = "0.0.1"
+version = "0.0.2"
 description = "Functional PCA on fMRI data to extract dominant temporal components."
 readme = "README.rst"
 authors = [
@@ -112,7 +112,7 @@ allow_untyped_defs = true
 disable_error_code = "attr-defined"
 
 [tool.bumpversion]
-current_version = "0.0.1"
+current_version = "0.0.2"
 commit = true
 tag = true
 
