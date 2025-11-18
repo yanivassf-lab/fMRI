@@ -12,7 +12,7 @@ Welcome to fMRI's documentation!
    utils
 
 
-This program, implements the methodology from the paper:
+This program implements the methodology from the paper:
 
 Roberto Viviani, Georg Grön and Manfred Spitzer.
 *Functional Principal Component Analysis of fMRI Data*.
