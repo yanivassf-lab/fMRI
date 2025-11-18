@@ -1,6 +1,6 @@
-====
-fMRI
-====
+===============
+Neuro-fPCA-fMRI
+===============
 
 
 .. image:: https://img.shields.io/pypi/v/fmri.svg
