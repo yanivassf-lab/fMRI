@@ -1,12 +1,9 @@
 import os
-import re
-from itertools import combinations
 
 import numpy as np
 import argparse
 import sys
-from scipy.stats import pearsonr
-from collections import defaultdict
+from fmri.utils import setup_logger
 
 # --- Configuration ---
 
@@ -20,7 +17,7 @@ DURATIONS_TO_TEST = np.arange(10, 35, 1.0)  # within 10 to 35 seconds
 # Define which PCs to test
 PCS_TO_TEST = [1, 2, 3, 4, 5, 6]
 
-PARAMS = "p2_u0"  # Default parameter folder to search for
+PARAMS = "p2_u0_sk100"  # Default parameter folder to search for
 
 
 def load_pc_signal_from_txt(txt_file, logger=None):
@@ -73,14 +70,14 @@ def build_regressor_vectorized(times, stim_times, lags, durs):
     return reg
 
 
-def find_best_params_vectorized_stable(m_id, file_list, stimulus_times, pc_index,
+def find_best_params_vectorized(m_id, file_list, stimulus_times, pc_index,
                                        lags_to_test, durations_to_test,
                                        coarse_step=0.5, logger=None):
     """
     Vectorized, deterministic optimization of lags and durations.
     Coarse grid + hill climbing per event, no randomness.
     """
-    logger.info(f"\n=== Optimizing PC{pc_index} Movement: {m_id + 1} (VECTOR STABLE) ===")
+    logger.info(f"\n=== Optimizing PC{pc_index} Movement: {m_id + 1} ===")
 
     # ---------- Load signals ----------
     signals = []
@@ -210,7 +207,7 @@ def calculate_lags_durations(root_folder, params=None, stimulus_times=None, pcs_
     for pc_index, movements in files_to_process.items():
         for m_id, files in movements.items():
             if files:
-                best_lag, best_dur, best_corr, best_regressor = find_best_params_vectorized_stable(m_id,
+                best_lag, best_dur, best_corr, best_regressor = find_best_params_vectorized(m_id,
                                                                                                    files,
                                                                                                    stimulus_times[m_id],
                                                                                                    pc_index,
@@ -242,10 +239,10 @@ def main():
     if not os.path.isdir(args.root_folder):
         print(f"Error: Path provided is not a valid directory: {args.root_folder}")
         sys.exit(1)
-
+    logger = setup_logger(output_folder=args.root_folder, file_name="find_best_lags_log.txt", loger_name="find_best_lags_logger")
     # Call your calculation function
     lags_durations = calculate_lags_durations(args.root_folder, args.params, args.stimulus_times, args.pcs_to_test,
-                                              args.lags_to_test, args.durations_to_test)
+                                              args.lags_to_test, args.durations_to_test, logger=logger)
 
     # --- 3. Print final recommendations ---
     print("\n\n--- FInal Parameter Recommendations ---")

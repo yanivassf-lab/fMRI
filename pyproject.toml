@@ -79,6 +79,7 @@ fmri-main = "fmri.cli.fmri_main:main"
 nifti-viewer = "fmri.cli.nifti_viewer:main"
 preprocess-nii-file = "fmri.cli.preprocess_nii_file:main"
 compare-pcs = "fmri.cli.compare_pcs:main"
+find-best-lags = "fmri.cli.find_best_lags:main"
 
 [project.optional-dependencies]
 dev = [

@@ -3,7 +3,7 @@ from itertools import combinations
 from dtaidistance import dtw
 from scipy.stats import pearsonr
 
-from .find_best_lags import calculate_lags_durations
+from fmri.find_best_lags import calculate_lags_durations, build_regressor_vectorized
 
 
 class RepresentPC:
@@ -108,8 +108,33 @@ class RepresentPC:
         rep_pcs_names = [pcs.pc_name(i) for i, pcs in zip(rep_pcs, self.pcs_list)]
         return rep_pcs_signals, rep_pcs_names
 
+    def auto_calc_lag_duartions(self):
+        """Automatically calculates lags and durations structure for all PCs except PC0 and any skipped PCs."""
+        # Determine PCs to test (skip PC0 and any additional skipped PCs)
+        pcs_matrix = self.pcs_list[0]
+        orig_n_components = pcs_matrix.get_orig_pcs().shape[1]
+        skip_pc_num = pcs_matrix.get_skip_pc_num().copy()  # returns set of skipped pc numbers
+        skip_pc_num.add(0)  # Also skip PC0
+        pcs_to_test = [j for j in range(1, orig_n_components) if
+                       j not in skip_pc_num]  # Skip PC0 and any additional skipped PCs
+        pcs_to_test_dummy_idx = [pcs_matrix.get_dummy_idx(i) for i in pcs_to_test]
+        return pcs_to_test, pcs_to_test_dummy_idx
+
+    def build_lags_durations_structure(self, times_list, stim_times, lags, durs, pcs_to_test):
+        """Builds a structure mapping PCs and movements to their corresponding lags, durations, and target regressors."""
+        lags_durations = {}
+        target_regressors = []
+        for mov_i in range(self.n_movs):
+            reg = build_regressor_vectorized(times_list[mov_i * self.n_subs], stim_times[mov_i], lags[mov_i],
+                                             durs[mov_i])
+            target_regressors.append(reg)
+        for mov_i in range(self.n_movs):
+            for j in pcs_to_test:
+                lags_durations[(j, mov_i)] = (lags[mov_i], durs[mov_i], 0, target_regressors[mov_i])
+        return lags_durations
+
     def combine_pcs(self, files_path, params, F_list, times_list, stimulus_times, bold_lag_seconds,
-                    correlation_threshold):
+                    bold_dur_seconds, correlation_threshold):
         """
         Combines relevant PCs based on windowed correlation with stimulus times.
 
@@ -120,14 +145,15 @@ class RepresentPC:
         self.logger.info(
             f"Combining relevant PCs based on Windowed Correlation (Threshold r={correlation_threshold})...")
 
-        pcs_matrix = self.pcs_list[0]
-        orig_n_components = pcs_matrix.get_orig_pcs().shape[1]
-        skip_pc_num = pcs_matrix.get_skip_pc_num().copy() # returns set of skipped pc numbers
-        skip_pc_num.add(0)  # Also skip PC0
-        pcs_to_test = [j for j in range(1, orig_n_components) if j not in skip_pc_num] # Skip PC0 and any additional skipped PCs
-        pcs_to_test_dummy_idx = [pcs_matrix.get_dummy_idx(i) for i in pcs_to_test]
+        pcs_to_test, pcs_to_test_dummy_idx = self.auto_calc_lag_duartions()
+        if not bold_lag_seconds:
+            lags_durations = calculate_lags_durations(files_path, params, stimulus_times, pcs_to_test,
+                                                      logger=self.logger)
 
-        lags_durations = calculate_lags_durations(files_path, params, stimulus_times, pcs_to_test, logger=self.logger)
+        else:
+            lags_durations = self.build_lags_durations_structure(times_list, stimulus_times, bold_lag_seconds,
+                                                                 bold_dur_seconds, pcs_to_test)
+
         combined_signals = []
         rep_pcs_names = []  # For logging
         for i in range(self.n_files):
@@ -308,10 +334,10 @@ class RepresentPC:
     #         rep_pcs_names.append(rep_pcs_names_i)
     #         self.logger.info(f"Subject {i} combined PCs: {rep_pcs_names_i}")
     #     return combined_signals, rep_pcs_names
-# 0.12, 0.28, lag=8, win=15
-# 0.13, 0.22, lags = [-5.0 -10.0 -6.0 -7.0], [-10.0 -13.0 -13.0 -12.0], win=27,
-# 0.0468, 0.6844, lags = [-5.0 -10.0 -6.0 -7.0], [-10.0 -13.0 0.0 -12.0], wins = [[20.0, 20.0, 25.0, 25.0], [20.0, 25.0, 0.0, 25.0]]
-# 0.20, 0.065 ,lags = [-3.0 -10.0 -6.0 -8.0], [-8.0 -13.0 0.0 -13.0], wins = [[27.0, 20.0, 20.0, 20.0], [17.0, 25.0, 0.0, 25.0]]
+# 0.12, 0.28, lag=8, durs=15
+# 0.13, 0.22, lags = [-5.0 -10.0 -6.0 -7.0], [-10.0 -13.0 -13.0 -12.0], durs=27,
+# 0.0468, 0.6844, lags = [-5.0 -10.0 -6.0 -7.0], [-10.0 -13.0 0.0 -12.0], durs = [[20.0, 20.0, 25.0, 25.0], [20.0, 25.0, 0.0, 25.0]]
+# 0.20, 0.065 ,lags = [-3.0 -10.0 -6.0 -8.0], [-8.0 -13.0 0.0 -13.0], durs = [[27.0, 20.0, 20.0, 20.0], [17.0, 25.0, 0.0, 25.0]]
 # 0.19, 0.08, auto lags/durations no pc0. correlation threshold 0.1
 # 0.334, 0.0028 , auto lags/durations no pc0 - new version. correlation threshold 0.1
 # 0.01,0.87 , auto lags/durations no pc0 - new version. correlation threshold 0.15

@@ -351,8 +351,8 @@ Before running, update these variables in the script:
 1. **Auto-detection:** Automatically detects physical CPU cores (not virtual cores)
 2. **Thread Control:** Sets environment variables to limit BLAS/MKL threads per process
 
-Analysis Scripts - compare-pcs.py
-----------------------------------
+Find best parameters combination - compare-pcs script
+-------------------------------------------------------
 
 The ``compare-pcs`` script compares the principal components of different movements across subjects and parameter combinations. It generates similarity matrices and visualizations to identify optimal parameter settings.
 
@@ -460,43 +460,47 @@ Algorithm
 Combine PCs algorithm (used when ``--combine-pcs`` is set)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-When ``--combine-pcs`` is enabled the script builds a movement-specific target regressor from
-the provided ``--combine-pcs-stimulus-times`` and ``--combine-pcs-bold-lag-seconds`` and then
-selects and sums PCs whose temporal patterns match that regressor. Key steps:
+The ``--combine-pcs`` mode selects and sums PCs using Pearson correlation
+against a movement-specific, windowed (boxcar) regressor.
 
-1. Build target regressor
+The procedure is:
 
-   - For each movement, create a zero signal of length ``N`` (timepoints) and place a ``1.0`` "spike"
-     at the nearest time index to each ``(stimulus_time + bold_lag)`` that falls inside the time range.
+1. Build target regressors (per movement)
+
+   - Given stimulus times for each movement (``--combine-pcs-stimulus-times``),
+     build target regressors that model the expected BOLD response.
+   - For each movement, a target regressor is produced either:
+     - Automatically by calling the lag/duration optimizer as described in
+       find_best_lags.py's ``calculate_lags_durations`` function;,
+       or
+     - From user‑supplied lists ``--combine-pcs-bold-lag-seconds`` and
+       ``--combine-pcs-bold-dur-seconds``.
+   - Each regressor is a boxcar (windows of 1.0 across the chosen durations) aligned
+     to ``(stimulus_time + bold_lag)`` and sampled at the subject's timepoints.
 
 2. Reconstruct PC time signals
 
-   - For each subject, compute all PC time signals via ``all_pc_signals = F @ pcs`` (shape ``N × n_components``).
+   - For each subject, compute all PC time signals via:
+     ``all_pc_signals = F @ pcs`` (shape ``N × n_components``).
 
-3. Score each PC with DTW
+3. Score each PC with Pearson correlation
 
-   - For every PC (skipping PC0), compute Dynamic Time Warping (DTW) distance between the PC signal
-     and the target regressor, and also between the *inverted* PC signal and the target regressor.
-   - Use the smaller of the two distances (original vs inverted) as the PC's match score.
+   - For every tested PC (except PC0), compute Pearson correlation between the PC signal and the
+     movement's target regressor.
+   - The absolute correlation (|r|) is used as the match strength.
 
 4. Select and combine PCs
 
-   - If the minimal DTW distance for a PC is below ``--combine-pcs-correlation-threshold``
-     the PC is considered relevant and is added to the subject's final combined signal.
-   - If the inverted version matched better, the PC is added with inverted sign.
-   - A short textual descriptor (e.g., ``+pc_1 -pc_3``) is recorded per subject for logging.
+   - A PC is considered relevant if ``abs(r) > --combine-pcs-correlation-threshold``.
+   - Relevant PCs are summed into a single combined signal for the subject:
+     - add ``+pc_j`` when r > 0
+     - add ``-pc_j`` when r < 0
+   - For logging, each subject receives a short descriptor like ``+pc_1(c=0.32) -pc_3(c=-0.21)``.
 
-5. Output
+5. Proceed with peak detection and similarity analysis
 
-   - Returns one combined signal per subject and a textual summary of which PCs (and signs) were used.
-   - This procedure overrides ``--pc-sim-auto`` and ``--pc-num-comp`` (mutually exclusive).
-
-Notes
-
-- The DTW implementation from ``dtaidistance`` is used; default threshold is controlled by
-  ``--combine-pcs-correlation-threshold`` (default: 10.0).
-- Ensure the number of provided ``--combine-pcs-stimulus-times`` and
-  ``--combine-pcs-bold-lag-seconds`` lists equals the number of movements.
+   - The combined signals are used for peak detection and similarity matrix
+     computation as described in steps 5-7 of the main algorithm.
 
 
 Expected input structure
@@ -548,20 +552,6 @@ Usage
        --files-path /path/to/fmri_combinations_results_skfda \
        --output-folder /path/to/output_folder
 
-**With options:**
-    .. code-block:: bash
-
-       compare-pcs \
-         --files-path ` /path/to/fmri_combinations_results_skfda` \
-         --output-folder ` /path/to/output_folder` \
-         --movements 1 2 3 \
-         --num-scores 10 \
-         --skip-timepoints 100 \
-         --pc-sim-auto \
-         --pc-sim-auto-best-similar-pc \
-         --pc-sim-auto-weight-similar-pc 2 \
-         --max-workers 1
-
 Key options:
 
 - ``--files-path``: path containing subject movement folders (see Expected input structure).
@@ -578,19 +568,15 @@ Key options:
 - ``--peaks-dist``: minimum distance between detected peaks (default: 5).
 - ``--skip-timepoints``: skip X timepoints at start/end when computing peaks.
 - ``--combine-pcs``: combine PCs based on stimulus timing and BOLD lag (overrides ``--pc-sim-auto`` and ``--pc-num-comp``).
-- ``--combine-pcs-stimulus-times``: supply a list of stimulus times per movement; repeat the flag once per movement (action='append').
-- ``--combine-pcs-bold-lag-seconds``: supply a list of BOLD lag values per movement; repeat the flag once per movement (action='append').
+- ``--combine-pcs-stimulus-times``: supply a list of stimulus times per movement; repeat the flag once per movement (action='append', default=[]).
+- `--combine-pcs-bold-lag-seconds`: provide a list of BOLD lag values per movement; repeat this flag once for each movement. If not set, these values are determined automatically (recommended) (action='append', default=[]]).
+- `--combine-pcs-bold-dur-seconds`: provide a list of BOLD duration values per movement; repeat this flag once for each movement. If not set, these values are determined automatically (recommended) (action='append', default=[]]).
 - ``--combine-pcs-correlation-threshold``: DTW distance threshold for grouping/combining PCs (default: 10.0).
 - ``--max-workers``: 0 = auto (CPU count), 1 = sequential, >1 = parallel worker count.
+- ``--peaks-all-cpus``: If set, use all available CPUs for DTW distance matrix calculation (very fast - appropriate if you use ``--max-worker 1``).
 
-Notes on mutual exclusion and validation:
 
-- One of ``--pc-sim-auto``, ``--pc-num-comp``, or ``--combine-pcs`` must be specified.
-- ``--pc-num-comp`` cannot be used together with ``--pc-sim-auto`` or ``--combine-pcs``.
-- ``--pc-sim-auto`` cannot be used together with ``--pc-num-comp`` or ``--combine-pcs``.
-- When using ``--combine-pcs``, the number of repeated ``--combine-pcs-stimulus-times`` and ``--combine-pcs-bold-lag-seconds`` entries must equal the number of movements.
-
-Three example command lines (two movements):
+Example command lines (two movements):
 
 - Example 1 \- use ``--pc-sim-auto``:
 .. code-block:: bash
@@ -617,7 +603,7 @@ Three example command lines (two movements):
      --skip-pc-num 3 4 \
      --max-workers 1
 
-- Example 3 \- use ``--combine-pcs`` with stimulus times, BOLD lag and distance threshold:
+- Example 3 \- use ``--combine-pcs`` with stimulus times and distance threshold, the lags and durations are determined automatically (recommended):
 .. code-block:: bash
 
    compare-pcs \
@@ -626,33 +612,129 @@ Three example command lines (two movements):
      --movements 1 2 \
      --num-scores 10 \
      --combine-pcs \
-     --combine-pcs-stimulus-times 10 20 30 \
-     --combine-pcs-stimulus-times 15 25 35 \
-     --combine-pcs-bold-lag-seconds 4.5 \
-     --combine-pcs-bold-lag-seconds 5.0 \
+     --combine-pcs-stimulus-times 30.0 150.75 324.75 360.75 427.5 \
+     --combine-pcs-stimulus-times 85.5 228.0 234.75 337.5 \
      --combine-pcs-correlation-threshold 0.1 \
      --max-workers 1
 
-Outputs
+- Example 4 \- use ``--combine-pcs`` with stimulus times, BOLD lag/duration and correlation threshold:
+.. code-block:: bash
+
+   compare-pcs \
+     --files-path ` /path/to/fmri_combinations_results_skfda` \
+     --output-folder ` /path/to/output_folder` \
+     --movements 1 2 \
+     --num-scores 10 \
+     --combine-pcs \
+     --combine-pcs-stimulus-times 30.0 150.75 324.75 360.75 427.5 \
+     --combine-pcs-stimulus-times 85.5 228.0 234.75 337.5 \
+     --combine-pcs-bold-lag-seconds -2.0 -3.0 -10.0 -6.0 -8.0 \
+     --combine-pcs-bold-lag-seconds -8.0 -13.0 0.0 -13.0 \
+     --combine-pcs-bold-dur-seconds 20.0 27.0 20.0 20.0 20.0 \
+     --combine-pcs-bold-dur-seconds 17.0 25.0 0.0 25.0 \
+     --combine-pcs-correlation-threshold 0.1 \
+     --max-workers 1
+
+
+Notes:
+
+- One of ``--pc-sim-auto``, ``--pc-num-comp``, or ``--combine-pcs`` must be specified.
+- ``--pc-num-comp`` cannot be used together with ``--pc-sim-auto`` or ``--combine-pcs``.
+- ``--pc-sim-auto`` cannot be used together with ``--pc-num-comp`` or ``--combine-pcs``.
+- When using ``--combine-pcs``, the number of repeated ``--combine-pcs-stimulus-times``, ``--combine-pcs-bold-lag-seconds`` and ``--combine-pcs-bold-dur-seconds`` entries must equal the number of movements.
+- The selection threshold refers to absolute Pearson correlation (range 0..1).
+  Recommended defaults are in the order of ``~0.08–0.15`` depending on data; the
+  command-line option is ``--combine-pcs-correlation-threshold``.
+- If ``--combine-pcs-bold-lag-seconds`` and/or
+  ``--combine-pcs-bold-dur-seconds`` are not supplied, lags/durations are computed
+  automatically per movement using ``calculate_lags_durations`` (see
+  ``fmri/cli/find_best_lags.py``).
+- Ensure the number of repeated ``--combine-pcs-stimulus-times`` entries matches
+  the number of movements. If lags/durations are supplied, provide them per movement.
+
+
+
+
+
+Outputs:
+~~~~~~
+
 - The script writes a log file (``compare_peaks_log.txt``) and one figure per parameter combination.
-- One figure and one ``similarity_<params>.txt`` per parameter combination (reconstructed signals, peaks and similarity matrices).
+- One figure ``similarity_<params>.png`` and one ``similarity_<params>.txt`` per parameter combination:
 
-
-
-
-Outputs
-~~~~~~~
-
-- A log file with progress, inputs, and the best combinations by score.
-- For each combination, a figure named like: ``peaks_<param_comb>_pc.png`` with:
   - Reconstructed signals and peak markers per subject
   - Two heatmaps: PC similarity and Peaks similarity
   - The two consistency scores for each matrix
 
-     .. figure:: _static/similarity_p1_u1_t1e-3_l0_6_nb100.png
+Example figure showing reconstructed signals and similarity matrices for a parameter combination using parameter ``--combine-pcs``.
+
+     .. figure:: _static/similarity_p2_u0_sk100.png
         :align: center
         :figwidth: 80%
         :alt: PCs and Peaks similarity
         :figclass: align-center
 
 
+Find the best lags and durations around stimulus times - find-best-lags script
+-------------------------------------------------------------------------------
+
+The ``find-best-lags`` script identifies optimal BOLD response lags and durations around specified stimulus times for fMRI data analysis.
+
+
+Brief overview
+~~~~~~~~~~~~~~~~~~
+
+The ``find-best-lags`` script searches a results tree (e.g. `fmri_combinations_results_skfda`),
+loads per-PC temporal profiles (``temporal_profile_pc_X.txt``) and finds the best BOLD
+lag and boxcar duration per stimulus event by maximizing mean Pearson correlation
+across subjects. It outputs recommendations for each (PC, movement) pair.
+
+Inputs and defaults
+~~~~~~~~~~~~~~~~~~~~~~
+
+- Positional: ``root_folder`` — root of the `fmri_combinations_results_skfda` tree.
+- Optional flags:
+
+  - ``--params`` parameter combination folder to analyze (default: `p2_u0_sk100`)
+  - ``--stimulus-times`` expected stimulus times (in seconds); repeat once per movement (action='append', default=[]).
+  - ``--lags-to-test`` values (in seconds) to test for BOLD lag (default: -10..10 s)
+  - ``--durations-to-test`` time windows (in seconds) to test for boxcar duration (default: 10..30 s)
+  - ``--pcs-to-test`` PC indices to analyze - with PC0 excluded (default: 1 2 3 4 5 6)
+
+Outputs
+~~~~~~~
+
+- Log file: ``find_best_lags_log.txt`` written under the provided ``root_folder``.
+- Printed and returned recommendations per (PC, movement): best lag, duration, mean correlation,
+  and the final regressor vector.
+
+Usage examples
+~~~~~~~~~~~~~~~~~~
+
+Minimal invocation:
+
+.. code-block:: bash
+
+   find-best-lags /path/to/fmri_combinations_results_skfda \
+     --params "p2_u0_sk100" \
+     --stimulus-times 30.0 150.75 324.75 360.75 427.5 \
+     --stimulus-times 85.5 228.0 234.75 337.5 \
+
+
+Custom search ranges:
+
+.. code-block:: bash
+
+   find-best-lags /path/to/fmri_combinations_results_skfda \
+     --params "p2_u0_sk100" \
+     --stimulus-times 30.0 150.75 324.75 360.75 427.5 \
+     --stimulus-times 85.5 228.0 234.75 337.5 \
+     --lags-to-test -15 -14 -13 -12 -11 -10 -9 -8 -7 -6 -5 -4 -3 -2 -1 0 1 2 3 4 5 6 7 8 9 \
+     --durations-to-test 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 \
+     --pcs-to-test 1 2 3
+
+Notes
+~~~~~
+
+- Repeat ``--stimulus-times`` once per movement present in your data.
+- Results are deterministic and saved to the log for reuse.

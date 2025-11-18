@@ -36,7 +36,7 @@ def main():
     parser.add_argument("--derivatives-num-p", type=int, default=2,
                         help="Number of derivatives in calculation of penalty matrix P (default: 2)")
     parser.add_argument("--derivatives-num-u", type=int, default=0,
-                        help="Number of derivatives in calculation of penalty matrix U (default: 0)")
+                        help="Number of derivatives used in calculating the penalty matrix (U) — not recommended to change from the default value (default: 0).")
     parser.add_argument("--processed", action='store_true',
                         help="If set, the data is already preprocessed. If not set, preprocessing will be applied.")
     parser.add_argument("--bad-margin-size", type=int, default=50,

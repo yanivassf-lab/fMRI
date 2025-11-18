@@ -19,8 +19,8 @@ STIM_TIMES_MOV1="--combine-pcs-stimulus-times 30.0 150.75 324.75 360.75 427.5"
 STIM_TIMES_MOV2="--combine-pcs-stimulus-times 85.5 228.0 234.75 337.5"
 
 # Define BOLD lag times for each movement
-BOLD_LAG_MOV1="--combine-pcs-bold-lag-seconds 8.0 8.0 8.0 8.0"
-BOLD_LAG_MOV2="--combine-pcs-bold-lag-seconds 8.0 8.0 8.0 8.0"
+#BOLD_LAG_MOV1="--combine-pcs-bold-lag-seconds 8.0 8.0 8.0 8.0"
+#BOLD_LAG_MOV2="--combine-pcs-bold-lag-seconds 8.0 8.0 8.0 8.0"
 
 # Correlation threshold for combining PCs (after normalization)
 CORRELATION_THR=0.1
@@ -70,7 +70,7 @@ for INPUT_PATH in "${INPUT_DIRS[@]}"; do
 
     # Define the new flags based on the times you set above
     # I'm using threshold=60 as we discussed (after normalization)
-    COMBINE_FLAGS="--combine-pcs --combine-pcs-correlation-threshold $CORRELATION_THR $STIM_TIMES_MOV1 $STIM_TIMES_MOV2 $BOLD_LAG_MOV1 $BOLD_LAG_MOV2"
+    COMBINE_FLAGS="--combine-pcs --combine-pcs-correlation-threshold $CORRELATION_THR $STIM_TIMES_MOV1 $STIM_TIMES_MOV2"
 
     OUTPUT_FOLDER_9="$BASE_OUTPUT_DIR/${INPUT_NAME}"
     mkdir -p "$OUTPUT_FOLDER_9" && $BASE_CMD --output-folder "$OUTPUT_FOLDER_9/combine_fixori" $COMBINE_FLAGS --fix-orientation &

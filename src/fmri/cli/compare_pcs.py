@@ -25,7 +25,9 @@ class ComparePCS:
                  pc_sim_auto_best_similar_pc: bool, pc_sim_auto_weight_similar_pc: int,
                  pc_num_comp: int | None, fix_orientation: bool, peaks_abs: bool, peaks_dist: int, skip_timepoints: int,
                  skip_pc_num: list[int], combine_pcs: bool, combine_pcs_stimulus_times: list[list[float]],
-                 combine_pcs_bold_lag_seconds: list[list[float]], combine_pcs_correlation_threshold: float,
+                 combine_pcs_bold_lag_seconds: list[list[float]] | None,
+                 combine_pcs_bold_dur_seconds: list[list[float]] | None,
+                 combine_pcs_correlation_threshold: float,
                  peaks_all_cpus: bool, logger: logging.Logger = None):
         """
         Initialize the ComparePCS class.
@@ -45,7 +47,8 @@ class ComparePCS:
         - skip_pc_num (list[int]): If not [], exclude the PCs in the list from the analysis.
         - combine_pcs (bool): If True, combine PCs based on stimulus times and BOLD lag (overrides pc_sim_auto and pc_num_comp).
         - combine_pcs_stimulus_times (list[list[float]]): List of stimulus times for each movement (in seconds).
-        - combine_pcs_bold_lag_seconds (list[list[float]]): List of BOLD lag times for each movement (in seconds).
+        - combine_pcs_bold_lag_seconds (list[list[float]]|None): List of BOLD lag times for each movement (in seconds).
+        - combine_pcs_bold_dur_seconds (list[list[float]]|None): List of BOLD duration times for each movement (in seconds).
         - combine_pcs_correlation_threshold (float): DTW distance threshold for combining PCs.
         - peaks_all_cpus (bool): If True, use all available CPUs for DTW distance matrix calculation.
         - logger: Logger object for logging information.
@@ -61,6 +64,7 @@ class ComparePCS:
         self.combine_pcs = combine_pcs
         self.combine_pcs_stimulus_times = combine_pcs_stimulus_times
         self.combine_pcs_bold_lag_seconds = combine_pcs_bold_lag_seconds
+        self.combine_pcs_bold_dur_seconds = combine_pcs_bold_dur_seconds
         self.combine_pcs_correlation_threshold = combine_pcs_correlation_threshold
         self.fix_orientation = fix_orientation
         self.skip_pc_num = skip_pc_num
@@ -280,6 +284,7 @@ class ComparePCS:
                                                                                 times_list,
                                                                                 self.combine_pcs_stimulus_times,
                                                                                 self.combine_pcs_bold_lag_seconds,
+                                                                                self.combine_pcs_bold_dur_seconds,
                                                                                 self.combine_pcs_correlation_threshold)
         else:
             rep_pcs = np.zeros(len(self.file_list), dtype=int) + self.pc_num_comp
@@ -468,7 +473,7 @@ def main():
     parser.add_argument('--pc-sim-auto-weight-similar-pc', type=int, default=2,
                         help="Exponent to which the absolute correlation values are raised. Higher values give more weight to stronger correlations (relevant only if pc_sim_auto is True).")
     parser.add_argument('--pc-num-comp', type=int, default=None,
-                        help="Number of PCs to compare - starting from 0 (relevant only if pc_sim_auto is False).")
+                        help="PC to compare - starting from 0 (relevant only if pc_sim_auto is False).")
     parser.add_argument('--skip-pc-num', type=int, nargs='+', default=[],
                         help="List of number of PCs to exclude from the entire analysis (starting from 0). If set to None, all components are used.")
     parser.add_argument('--fix-orientation', action='store_true',
@@ -483,7 +488,9 @@ def main():
     parser.add_argument('--combine-pcs-stimulus-times', type=float, nargs='+', action='append', default=[],
                         help="List of stimulus times for each movement (in seconds). Provide a list of lists, one per movement.")
     parser.add_argument('--combine-pcs-bold-lag-seconds', type=float, nargs='+', action='append', default=[],
-                        help="List of BOLD lag times for each movement (in seconds). Provide a list of lists, one per movement.")
+                        help="provide a list of BOLD lag values per movement; repeat this flag once for each movement. If not set, these values are determined automatically (recommended) (action='append', default=[]])")
+    parser.add_argument('--combine-pcs-bold-dur-seconds', type=float, nargs='+', action='append', default=[],
+                        help="provide a list of BOLD duration values per movement; repeat this flag once for each movement. If not set, these values are determined automatically (recommended) (action='append', default=[]])")
     parser.add_argument('--combine-pcs-correlation-threshold', type=float, default=0.1,
                         help="DTW distance threshold for combining PCs.")
     parser.add_argument("--max-workers", type=int, default=1,
@@ -491,6 +498,37 @@ def main():
     parser.add_argument("--peaks-all-cpus", action='store_true',
                         help="If set, use all available CPUs for DTW distance matrix calculation.")
     args = parser.parse_args()
+
+
+    if not all(1 <= m <= 9 for m in args.movements):
+        raise ValueError("Movements should be between 1 and 9.")
+    if args.combine_pcs:
+        if args.pc_sim_auto or args.pc_num_comp is not None:
+            raise ValueError("When --combine-pcs is set, --pc-sim-auto and pc-num-comp cannot be set.")
+        if not args.combine_pcs_stimulus_times:
+            raise ValueError("--pc-num-comp requires --combine-pcs-stimulus-times to be set.")
+        if args.combine_pcs_bold_lag_seconds or args.combine_pcs_bold_dur_seconds:
+            n_mov = len(args.combine_pcs_stimulus_times)
+            if not (len(args.combine_pcs_bold_lag_seconds) == len(args.combine_pcs_bold_dur_seconds) == len(
+                args.combine_pcs_stimulus_times) == n_mov):
+                raise ValueError(
+                    f"--combine-pcs-stimulus-times and --combine-pcs-bold-lag-seconds and --combine-pcs-bold-dur-seconds must match number of movements ({n_mov})")
+            for i in range(n_mov):
+                if not (len(args.combine_pcs_bold_lag_seconds[i]) == len(args.combine_pcs_bold_dur_seconds[i]) == len(
+                    args.combine_pcs_stimulus_times[i])):
+                    raise ValueError(
+                        f"--combine-pcs-bold-lag-seconds and --combine-pcs-bold-dur-seconds and --combine-pcs-stimulus-times must have the same length for each movement.")
+        else:
+            args.combine_pcs_bold_lag_seconds = None
+            args.combine_pcs_bold_dur_seconds = None
+    if args.pc_sim_auto:
+        if args.pc_num_comp is not None or args.combine_pcs:
+            raise ValueError("When --pc-sim-auto is set, --pc-num-comp cannot and --combine-pcs cannot be specified.")
+    if args.pc_num_comp is not None:
+        if args.pc_sim_auto or args.combine_pcs:
+            raise ValueError("When --pc-num-comp is set, --pc-sim-auto and --combine-pcs cannot be specified.")
+    if args.pc_num_comp is None and not args.pc_sim_auto and not args.combine_pcs:
+        raise ValueError("Either --pc-sim-auto, --pc-num-comp, or --combine-pcs must be specified.")
 
     if not os.path.exists(args.files_path):
         raise FileNotFoundError(
@@ -500,24 +538,6 @@ def main():
         raise FileExistsError(f"Output folder '{args.output_folder}' already exists.")
     else:
         os.makedirs(args.output_folder)
-
-    if not all(1 <= m <= 9 for m in args.movements):
-        raise ValueError("Movements should be between 1 and 9.")
-    if args.combine_pcs:
-        n_mov = len(args.movements)
-        if not (len(args.combine_pcs_stimulus_times) == len(args.combine_pcs_bold_lag_seconds) == n_mov):
-            raise ValueError(
-                f"--combine-pcs-stimulus-times and --combine-pcs-bold-lag_seconds must match number of movements ({n_mov})")
-        elif args.pc_sim_auto or args.pc_num_comp is not None:
-            raise ValueError("When --combine-pcs is set, --pc-sim-auto and pc-num-comp cannot be set.")
-    if args.pc_sim_auto:
-        if args.pc_num_comp is not None or args.combine_pcs:
-            raise ValueError("When --pc-sim-auto is set, --pc-num-comp cannot and --combine-pcs cannot be specified.")
-    if args.pc_num_comp is not None:
-        if args.pc_sim_auto or args.combine_pcs:
-            raise ValueError("When --pc-num-comp is set, --pc-sim-auto and --combine-pcs cannot be specified.")
-    if args.pc_num_comp is None and not args.pc_sim_auto and not args.combine_pcs:
-        raise ValueError("Either --pc-sim-auto, --pc-num-comp, or --combine-pcs must be specified.")
 
     args.skip_pc_num = sorted(args.skip_pc_num)
     setup_logger(output_folder=args.output_folder, file_name="compare_peaks_log.txt", loger_name="compare_peaks_logger",
@@ -531,8 +551,8 @@ def main():
                              args.pc_sim_auto_weight_similar_pc, args.pc_num_comp,
                              args.fix_orientation, args.peaks_abs, args.peaks_dist, args.skip_timepoints,
                              args.skip_pc_num, args.combine_pcs, args.combine_pcs_stimulus_times,
-                             args.combine_pcs_bold_lag_seconds, args.combine_pcs_correlation_threshold,
-                             args.peaks_all_cpus, logger)
+                             args.combine_pcs_bold_lag_seconds, args.combine_pcs_bold_dur_seconds,
+                             args.combine_pcs_correlation_threshold, args.peaks_all_cpus, logger)
     compare_pcs.compare(num_scores=args.num_scores, max_workers=effective_workers)
 
 
