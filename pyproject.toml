@@ -3,8 +3,8 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "fMRI"
-version = "0.0.1"
+name = "Neuro-fPCA-fMRI"
+version = "0.0.4"
 description = "Functional PCA on fMRI data to extract dominant temporal components."
 readme = "README.rst"
 authors = [
@@ -110,3 +110,13 @@ warn_no_return = true
 module = "tests.*"
 allow_untyped_defs = true
 disable_error_code = "attr-defined"
+
+[tool.bumpversion]
+current_version = "0.0.1"
+commit = true
+tag = true
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+search = 'version = "{current_version}"'
+replace = 'version = "{new_version}"'
