@@ -562,16 +562,16 @@ class FunctionalMRI:
         pc_temporal_profiles = F @ eigvecs_sorted  # (n_timepoints, num_pca_comp)
 
         # Flip sign so max absolute value is positive
-        max_idx = np.argmax(np.abs(pc_temporal_profiles[self.bad_margin_size:-self.bad_margin_size - 1, :]), axis=0)
-        flip_mask = pc_temporal_profiles[max_idx + self.bad_margin_size, np.arange(self.num_pca_comp)] < 0
-        eigvecs_sorted[:, flip_mask] *= -1
-        pc_temporal_profiles[:, flip_mask] *= -1
+        # max_idx = np.argmax(np.abs(pc_temporal_profiles[self.bad_margin_size:-self.bad_margin_size - 1, :]), axis=0)
+        # flip_mask = pc_temporal_profiles[max_idx + self.bad_margin_size, np.arange(self.num_pca_comp)] < 0
+        # eigvecs_sorted[:, flip_mask] *= -1
+        # pc_temporal_profiles[:, flip_mask] *= -1
 
         scores = np.zeros((n_voxels, self.num_pca_comp))
         for i in range(self.num_pca_comp):
             scores_i = C_tilde @ U @ eigvecs_sorted[:, i]  # shape: (n_voxels,)
-            if np.sum(scores_i) < 0:  # if most of the scores are negative, replace the sign
-                scores_i *= -1
+            # if np.sum(scores_i) < 0:  # if most of the scores are negative, replace the sign
+            #     scores_i *= -1
             # eigvecs_sorted[:, i] = -eigvecs_sorted[:, i]
             scores[:, i] = scores_i
         v_max_scores_pos = np.argmax(scores, axis=0)  # maximum score in each component
