@@ -45,7 +45,7 @@ class LoadData:
             save_filtered_file: If True, store the processed nii file for saving (by calling to save_filtered_data() method).
         Returns:
             tuple: A tuple containing:
-                - data_flat: 2D array of time series data (shape: [time, voxels]).
+                - data_flat: 2D array of time series data (shape: [voxels, times]).
                 - mask: 3D binary mask array indicating brain voxels.
                 - affine: Affine transformation matrix from the NIfTI header.
         """
@@ -76,7 +76,7 @@ class LoadData:
         data_flat = np.zeros((st, len(xlocs)))  # [time, voxels]
         for i in range(len(xlocs)):
             data_flat[:, i] = data[xlocs[i], ylocs[i], zlocs[i], :]
-        return data_flat.T, mask, nii_mask.affine
+        return data_flat.T, mask, nii_mask.affine # [voxels, times]
 
     def load_nifti_data(self, filename: str):
         """

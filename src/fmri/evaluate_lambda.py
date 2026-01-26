@@ -46,7 +46,7 @@ def compute_hat_matrices_all_lambda(F, FtF, P, n_timepoints, lambda_values):
     H_all_lambda = np.zeros((n_lambda, n_timepoints, n_timepoints))
     for i, lambda_const in enumerate(lambda_values):
         # logger.info(f"\t\tCompute hat matrix for lambda value: {lambda_const}")
-        H_all_lambda[i, :, :] = compute_hat_matrix(F, FtF, P, lambda_const)  # (n_lambda), n_timepoints, n_timepoints)
+        H_all_lambda[i, :, :] = compute_hat_matrix(F, FtF, P, lambda_const)  # (n_lambda, n_timepoints, n_timepoints)
     return H_all_lambda
 
 

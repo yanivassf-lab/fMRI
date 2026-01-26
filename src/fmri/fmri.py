@@ -16,9 +16,9 @@ from time import time
 import matplotlib
 import nibabel as nib
 import numpy as np
+from scipy.linalg import eigh
 from scipy.integrate import quad
 from scipy.interpolate import BSpline
-from scipy.linalg import eigvals
 from skfda.misc.operators import LinearDifferentialOperator
 from skfda.misc.operators import gram_matrix
 from skfda.representation.basis import BSplineBasis
@@ -31,6 +31,7 @@ import matplotlib.pyplot as plt
 
 from .preprocess import LoadData
 from .evaluate_lambda import select_lambda, compute_hat_matrices_all_lambda
+from .gcv_solver import solve_batch_gcv
 
 import logging
 
@@ -123,12 +124,12 @@ class FunctionalMRI:
         data = LoadData(nii_file, mask_file, TR=TR, smooth_size=smooth_size, highpass=highpass, lowpass=lowpass)
         fmri_data_all, self.mask, self.nii_affine = data.load_data(processed=processed)
 
-        self.fmri_data = fmri_data_all[:, n_skip_vols_start:-n_skip_vols_end]
+        self.fmri_data = fmri_data_all[:, n_skip_vols_start:fmri_data_all.shape[1] - n_skip_vols_end]
         # Derived values
         self.orig_n_voxels = self.mask.shape
         self.n_voxels = self.fmri_data.shape[0]
         self.n_timepoints = self.fmri_data.shape[1]
-        self.times = np.arange(n_skip_vols_start, self.n_timepoints+n_skip_vols_start) * self.TR
+        self.times = np.arange(n_skip_vols_start, self.n_timepoints + n_skip_vols_start) * self.TR
         self.T_min = self.times[0]
         self.T_max = self.times[-1]  # Assuming time points are indexed from 0 to n_timepoints-1
         self.n_basis = None
@@ -250,7 +251,8 @@ class FunctionalMRI:
             else:
                 P = self.penalty_matrix_bspline(basis_funs, derivative_order=self.derivatives_num_p)
         if self.calc_penalty_skfda:
-            F = np.nan_to_num(basis_funs(self.times)).squeeze().T  # (n_basis, n_points, 1)
+            F = np.nan_to_num(basis_funs(
+                self.times)).squeeze().T  # before transpose: (n_basis, n_timepoints, 1), after transpose: (n_timepoints, n_basis)
         else:
             # BSpline package:
             F = np.nan_to_num(basis_funs(self.times))  # (n_timepoints, n_basis)
@@ -385,11 +387,89 @@ class FunctionalMRI:
         # Solve the linear system for each voxel in the batch.
         # np.linalg.solve supports batched matrices if A_batch.shape is (n_voxels, n_basis, n_basis)
         # and RHS is (n_voxels, n_basis).
-        coeffs_exp = np.linalg.solve(A_batch, RHS)  # shape: (n_voxels, n_basis)
+        coeffs_exp = np.linalg.solve(A_batch, RHS)  # shape: (n_voxels, n_basis, 1)
         coeffs = coeffs_exp.squeeze(-1)
         return coeffs
 
     def calculate_coeff(self, F: np.ndarray, P: np.ndarray, n_basis: int) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Fit coefficients for spline basis functions to each voxel time series with optimal λ,
+        using vectorized Generalized Cross Validation (GCV).
+
+        Optimization:
+        Uses Generalized Eigenvalue Decomposition (scipy.linalg.eigh) to diagonalize
+        the penalty term. This reduces the complexity of testing multiple lambdas
+        from O(k^3) to O(k) per lambda, where k is n_basis.
+
+        Parameters:
+            F (ndarray): basis matrix (n_timepoints, n_basis).
+            P (ndarray): penalty matrix (n_basis, n_basis).
+            n_basis (int): number of basis functions.
+
+        Returns:
+            C (ndarray): filled coefficient matrix (n_voxels, n_basis).
+            best_lambdas (ndarray): best lambdas for each voxel.
+        """
+
+        logger.info("Fitting basis to each voxel with optimal λ using optimized GEVD...")
+
+        # 1. Setup Lambda Search Space
+        # 100 logarithmically spaced values
+        lambda_values = np.unique(np.logspace(self.lambda_min, self.lambda_max, 100))
+
+        # 2. Precomputations (Done once for the whole brain)
+        FtF = F.T @ F
+
+        # Add a tiny epsilon to P for numerical stability during decomposition
+        eps = 1e-12
+
+        # Perform Generalized Eigenvalue Decomposition: (F.T @ F) v = w * (P) v
+        # This is the most expensive step, but done only once.
+        # evals: (n_basis,) eigenvalues
+        # V: (n_basis, n_basis) eigenvectors
+        evals, V = eigh(FtF, P + eps * np.eye(n_basis))
+
+        # Precompute transformed matrices to speed up the batch loop
+        # F_V = F @ V (Projection of basis functions onto eigenvectors)
+        F_V = F @ V
+        # VT_FT = V.T @ F.T (Projection operator for the signal y)
+        VT_FT = V.T @ F.T
+
+        # 3. Initialize Result Containers
+        C = np.zeros((self.n_voxels, n_basis))
+        best_lambdas = np.zeros(self.n_voxels)
+        all_best_scores = np.zeros(self.n_voxels)
+
+        # 4. Process Voxels in Batches
+        for i in range(0, self.n_voxels, self.batch_size):
+            end = min(i + self.batch_size, self.n_voxels)
+            voxel_data_batch = self.fmri_data[i:end]  # (batch_size, n_timepoints)
+
+            # Call the optimized solver
+            # Note: We pass the precomputed decomposition matrices
+            coeff_batch, lambdas_batch, scores_batch = solve_batch_gcv(
+                voxel_data_batch=voxel_data_batch,
+                F_V=F_V,
+                VT_FT=VT_FT,
+                V=V,
+                evals=evals,
+                lambda_values=lambda_values
+            )
+
+            # Store results
+            C[i:end, :] = coeff_batch
+            best_lambdas[i:end] = lambdas_batch
+            all_best_scores[i:end] = scores_batch
+
+        logger.info(
+            f"Average best lambda: {np.mean(best_lambdas):.4f}, "
+            f"Average best GCV: {np.mean(all_best_scores):.4f} "
+            f"(n_basis={n_basis})"
+        )
+
+        return C, best_lambdas
+
+    def calculate_coeff_old(self, F: np.ndarray, P: np.ndarray, n_basis: int) -> tuple[np.ndarray, np.ndarray]:
         """
         Fit coefficients for spline basis functions to each voxel time series with optimal λ, in batches.
 
@@ -476,7 +556,8 @@ class FunctionalMRI:
         eigvecs_sorted = eigvecs[:, sorted_indices]
         eigvals_sorted = eigvals[sorted_indices]
         negative_eigvals = np.any(eigvals_sorted <= 0.0)
-        logger.warning(f"Negative eigenvalues found: {negative_eigvals}")
+        if negative_eigvals:
+            logger.warning(f"Negative eigenvalues found: {eigvals_sorted}")
         # Compute temporal profiles
         pc_temporal_profiles = F @ eigvecs_sorted  # (n_timepoints, num_pca_comp)
 
@@ -489,9 +570,9 @@ class FunctionalMRI:
         scores = np.zeros((n_voxels, self.num_pca_comp))
         for i in range(self.num_pca_comp):
             scores_i = C_tilde @ U @ eigvecs_sorted[:, i]  # shape: (n_voxels,)
-            if np.sum(scores_i) < 0:  # if most of the scores are negative replace the sign
+            if np.sum(scores_i) < 0:  # if most of the scores are negative, replace the sign
                 scores_i *= -1
-                # eigvecs_sorted[:, i] = -eigvecs_sorted[:, i]
+            # eigvecs_sorted[:, i] = -eigvecs_sorted[:, i]
             scores[:, i] = scores_i
         v_max_scores_pos = np.argmax(scores, axis=0)  # maximum score in each component
         # print(v_max_scores_pos, np.max(scores, axis=0))
@@ -521,7 +602,8 @@ class FunctionalMRI:
         store_data_file = os.path.join(self.output_folder, f"eigvecs_eigval_F.npz")
         # Save the arrays to a compressed file
         np.savez_compressed(store_data_file, a=eigvecs_sorted, b=eigvals_sorted, c=F)
-        np.savez_compressed(store_data_file, eigvecs_sorted=eigvecs_sorted, eigvals_sorted=eigvals_sorted, F=F, times=self.times)
+        np.savez_compressed(store_data_file, eigvecs_sorted=eigvecs_sorted, eigvals_sorted=eigvals_sorted, F=F,
+                            times=self.times)
         logger.info("Eigenvectors, eigenvalues and F matrix are saved to 'eigvecs_eigval_F.npz'")
         """
         For loading the arrays back, use:
@@ -557,9 +639,14 @@ class FunctionalMRI:
 
             logger.info(f"Plotting temporal profile of eigenfunction {i}...")
             plt.figure(figsize=(10, 4))
+
+            max_time = int(max(self.times))
+            ticks = np.arange(0, max_time + 20, 20)
+            plt.xticks(ticks, rotation=45)
+
             plt.plot(self.times, pc_temporal_profiles[:, i], color='blue')
             plt.title(f'temporal profile of eigenfunction {i} ({explained_vairance_i}% var)')
-            plt.xlabel('Time (scans)')
+            plt.xlabel('Time (seconds)')
             plt.ylabel('Intensity')
             plt.grid(True)
             intence_txt = os.path.join(self.output_folder, f"temporal_profile_pc_{i}.txt")
@@ -614,9 +701,14 @@ class FunctionalMRI:
         logger.info(f"Plotting original average signal intensity ...")
         signal_intensity = np.average(self.fmri_data, axis=0)
         plt.figure(figsize=(10, 4))
+
+        max_time = int(max(self.times))
+        ticks = np.arange(0, max_time + 20, 20)
+        plt.xticks(ticks, rotation=45)
+
         plt.plot(self.times, signal_intensity, color='blue')
         plt.title(f'Original average Signal Intensity')
-        plt.xlabel('Time (scans)')
+        plt.xlabel('Time (seconds)')
         plt.ylabel('Intensity')
         plt.grid(True)
         orig_intence_txt = os.path.join(self.output_folder, f"original_averaged_signal_intensity.txt")
