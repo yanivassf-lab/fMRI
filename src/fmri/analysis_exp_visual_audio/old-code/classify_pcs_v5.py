@@ -43,7 +43,7 @@ HRF_DURATION = 32.0
 
 def plot_temporal(temporal_sig, pc_name, peak_delay, output_path):
     plt.figure(figsize=(15, 5))
-    times = np.arange(0, len(temporal_sig)) * TR
+    times = np.arange(0, len(temporal_sig))*TR
     plt.plot(times, temporal_sig, color='black', linewidth=1.5, label='Temporal')
     max_time = max(times)
     ticks = np.arange(0, max_time + 20, 20)
@@ -82,7 +82,6 @@ def spm_hrf(tr, peak_delay=6, duration=30):
     t = np.arange(0, duration, dt)
     hrf = stats.gamma.pdf(t, peak_delay)
     return hrf / np.sum(hrf)
-
 
 def create_design_matrix(n_points, blocks, tr, peak_delay, undershoot_delay, stimulus_duration_sec=None):
     """
@@ -145,10 +144,10 @@ def create_design_matrix(n_points, blocks, tr, peak_delay, undershoot_delay, sti
     # Positive values = Activation, Negative values = Rest/Suppression.
     return pd.DataFrame({
         'Model_Visual': reg_v,
-        'box_v': box_v,  # - np.mean(reg_v),
-        'Model_Auditory': reg_a,  # - np.mean(reg_a),
+        'box_v': box_v, # - np.mean(reg_v),
+        'Model_Auditory': reg_a, # - np.mean(reg_a),
         'box_a': box_a,
-        'Model_Interaction': reg_va,  # - np.mean(reg_va)
+        'Model_Interaction': reg_va, # - np.mean(reg_va)
         'box_va': box_va
     })
 
@@ -187,10 +186,9 @@ def calculate_amplitude(signal, blocks, tr, target_cond, peak_delay):
 
     return np.mean(active_vals) - np.mean(rest_vals)
 
-
 def calculate_corr(recon_sig, design_df):
     recon_sig_v = recon_sig.copy()
-    recon_sig_v[design_df['box_v'] == 0] = 0
+    recon_sig_v[design_df['box_v']==0] = 0
     r_v, p_v = stats.pearsonr(recon_sig_v, design_df['Model_Visual'])
     recon_sig_a = recon_sig.copy()
     recon_sig_a[design_df['box_a'] == 0] = 0
@@ -198,8 +196,7 @@ def calculate_corr(recon_sig, design_df):
     recon_sig_va = recon_sig.copy()
     recon_sig_va[design_df['box_va'] == 0] = 0
     r_va, p_va = stats.pearsonr(recon_sig_va, design_df['Model_Interaction'])
-    return r_va, p_va, r_a, p_a, r_va, p_va
-
+    return r_v, p_v, r_a, p_a, r_va, p_va
 
 def run_contrast_analysis(output_path, ts_files, nii_files, regions_class_origin,
                           regions_multimodal_class_origin, stimulus_duration_sec, peak_delay, undershoot_delay):
@@ -311,8 +308,7 @@ def run_contrast_analysis(output_path, ts_files, nii_files, regions_class_origin
     sns.heatmap(pivot_r_v['Corr_Visual'], ax=axes[0], cmap='coolwarm', vmin=vis_min, vmax=vis_max,
                 annot=annot_matrix_r_v, fmt="", linewidths=0.5, annot_kws={'size': 8})
     color_labels(axes[0], region_vis_prob)
-    corr_corr_v = add_correlation_to_heatmap(axes[0], df, pivot_r_v['Corr_Visual'],
-                                             'Visual Correlations\n(Bold = p < 0.05)\nGreen - visual, Brown - audio')
+    corr_corr_v = add_correlation_to_heatmap(axes[0], df, pivot_r_v['Corr_Visual'], 'Visual Correlations\n(Bold = p < 0.05)\nGreen - visual, Brown - audio')
 
     # --- 2. Auditory Corrlation ---
     pivot_r_a = df.pivot(index='Region', columns='PC', values=['Corr_Auditory', 'Pval_Auditory'])
@@ -330,50 +326,49 @@ def run_contrast_analysis(output_path, ts_files, nii_files, regions_class_origin
                 annot=annot_matrix_r_va, fmt="", linewidths=0.5, annot_kws={'size': 8})
     color_labels(axes[2], region_vis_prob_va, use_va=True)
     corr_corr_va = add_correlation_to_heatmap(axes[2], df, pivot_r_va['Corr_Interaction'],
-                                              'Interaction Correlations\n(Bold = p < 0.05)\nGreen - visual+audio, Brown - no-common',
-                                              use_va=True)
+                                             'Interaction Correlations\n(Bold = p < 0.05)\nGreen - visual+audio, Brown - no-common', use_va=True)
 
-    # # ===================================
-    # # Amplitude
-    # # ===================================
-    #
-    # # --- 1. Visual Amplitude ---
-    # pivot_v = df.pivot(index='Region', columns='PC', values='Amp_Visual')
-    # vis_max = np.percentile(df['Amp_Visual'].values, 97)
-    # vis_min = np.percentile(df['Amp_Visual'].values, 5)
-    # sns.heatmap(pivot_v, ax=axes[3], cmap='coolwarm', vmin=vis_min, vmax=vis_max,
-    #             annot=True, fmt='.1f', linewidths=0.5, annot_kws={'size': 8})
-    # color_labels(axes[3], region_vis_prob)
-    # corr_amp_v = add_correlation_to_heatmap(axes[3], df, pivot_v, 'Visual Amplitude\nGreen - visual, Brown - audio')
-    #
-    # # --- 2. Auditory Amplitude ---
-    # pivot_a = df.pivot(index='Region', columns='PC', values='Amp_Auditory')
-    # # aud_max = np.percentile(df['Amp_Auditory'].values, 95)
-    # # aud_min = np.percentile(df['Amp_Auditory'].values, 5)
-    # sns.heatmap(pivot_a, ax=axes[4], cmap='coolwarm', vmin=vis_min, vmax=vis_max,
-    #             annot=True, fmt='.1f', linewidths=0.5, annot_kws={'size': 8})
-    # color_labels(axes[4], region_vis_prob)  # Just for coloring
-    # corr_amp_a = add_correlation_to_heatmap(axes[4], df, pivot_a, 'Auditory Amplitude\nGreen - visual, Brown - audio')
-    #
-    # # --- 3. Interaction Amplitude: VA
-    # pivot_va = df.pivot(index='Region', columns='PC', values='Amp_Interaction')
-    # # inter_max = np.percentile(df['Amp_Interaction'].values, 95)
-    # # inter_min = np.percentile(df['Amp_Interaction'].values, 5)
-    # sns.heatmap(pivot_va, ax=axes[5], cmap='coolwarm', center=0,
-    #             vmin=vis_min, vmax=vis_max,
-    #             annot=True, fmt='.1f', linewidths=0.5, annot_kws={'size': 8})
-    # color_labels(axes[5], region_vis_prob_va, use_va=True)
-    # corr_amp_va = add_correlation_to_heatmap(axes[5], df, pivot_va, 'Interaction: VA\nGreen - visual+audio, Brown - no-common', use_va=True)
-    #
-    # # --- 4. CONTRAST: V - A  ---
-    # pivot_contrast = df.pivot(index='Region', columns='PC', values='Contrast_V_minus_A')
-    # # contrast_max = np.percentile(df['Contrast_V_minus_A'].values, 95)
-    # # contrast_min = np.percentile(df['Contrast_V_minus_A'].values, 5)
-    # sns.heatmap(pivot_contrast, ax=axes[6], cmap='coolwarm', center=0,
-    #             vmin=vis_min, vmax=vis_max,
-    #             annot=True, fmt='.1f', linewidths=0.5, annot_kws={'size': 8})
-    # color_labels(axes[6], region_vis_prob)
-    # corr_amp_contrast = add_correlation_to_heatmap(axes[6], df, pivot_contrast, 'CONTRAST: Visual - Auditory\nGreen - visual, Brown - audio')
+    # ===================================
+    # Amplitude
+    # ===================================
+
+    # --- 1. Visual Amplitude ---
+    pivot_v = df.pivot(index='Region', columns='PC', values='Amp_Visual')
+    vis_max = np.percentile(df['Amp_Visual'].values, 97)
+    vis_min = np.percentile(df['Amp_Visual'].values, 5)
+    sns.heatmap(pivot_v, ax=axes[3], cmap='coolwarm', vmin=vis_min, vmax=vis_max,
+                annot=True, fmt='.1f', linewidths=0.5, annot_kws={'size': 8})
+    color_labels(axes[3], region_vis_prob)
+    corr_amp_v = add_correlation_to_heatmap(axes[3], df, pivot_v, 'Visual Amplitude\nGreen - visual, Brown - audio')
+
+    # --- 2. Auditory Amplitude ---
+    pivot_a = df.pivot(index='Region', columns='PC', values='Amp_Auditory')
+    # aud_max = np.percentile(df['Amp_Auditory'].values, 95)
+    # aud_min = np.percentile(df['Amp_Auditory'].values, 5)
+    sns.heatmap(pivot_a, ax=axes[4], cmap='coolwarm', vmin=vis_min, vmax=vis_max,
+                annot=True, fmt='.1f', linewidths=0.5, annot_kws={'size': 8})
+    color_labels(axes[4], region_vis_prob)  # Just for coloring
+    corr_amp_a = add_correlation_to_heatmap(axes[4], df, pivot_a, 'Auditory Amplitude\nGreen - visual, Brown - audio')
+
+    # --- 3. Interaction Amplitude: VA
+    pivot_va = df.pivot(index='Region', columns='PC', values='Amp_Interaction')
+    # inter_max = np.percentile(df['Amp_Interaction'].values, 95)
+    # inter_min = np.percentile(df['Amp_Interaction'].values, 5)
+    sns.heatmap(pivot_va, ax=axes[5], cmap='coolwarm', center=0,
+                vmin=vis_min, vmax=vis_max,
+                annot=True, fmt='.1f', linewidths=0.5, annot_kws={'size': 8})
+    color_labels(axes[5], region_vis_prob_va, use_va=True)
+    corr_amp_va = add_correlation_to_heatmap(axes[5], df, pivot_va, 'Interaction: VA\nGreen - visual+audio, Brown - no-common', use_va=True)
+
+    # --- 4. CONTRAST: V - A  ---
+    pivot_contrast = df.pivot(index='Region', columns='PC', values='Contrast_V_minus_A')
+    # contrast_max = np.percentile(df['Contrast_V_minus_A'].values, 95)
+    # contrast_min = np.percentile(df['Contrast_V_minus_A'].values, 5)
+    sns.heatmap(pivot_contrast, ax=axes[6], cmap='coolwarm', center=0,
+                vmin=vis_min, vmax=vis_max,
+                annot=True, fmt='.1f', linewidths=0.5, annot_kws={'size': 8})
+    color_labels(axes[6], region_vis_prob)
+    corr_amp_contrast = add_correlation_to_heatmap(axes[6], df, pivot_contrast, 'CONTRAST: Visual - Auditory\nGreen - visual, Brown - audio')
 
     plt.tight_layout()
     plt.savefig(os.path.join(output_path, 'CONTRAST_Analysis.png'), dpi=100, bbox_inches='tight')
@@ -381,15 +376,16 @@ def run_contrast_analysis(output_path, ts_files, nii_files, regions_class_origin
 
     print(f"\n✅ Saved: {os.path.join(output_path, 'CONTRAST_Analysis.png')}")
     # Replace the two print loops with:
-    # save_correlation_tables(corr_amp_v, corr_amp_a, corr_amp_contrast, corr_amp_va, output_path)
-    save_correlation_tables(corr_corr_v, corr_corr_a, corr_corr_va, output_path)
+    save_correlation_tables(corr_amp_v, corr_amp_a, corr_amp_contrast, corr_amp_va, output_path)
 
     # Add after that:
-    # analyze_and_export_results(df, corr_amp_contrast, output_path, correlation_threshold=0.2, top_n=10)
-    analyze_and_export_results(df, corr_corr_v, output_path, correlation_threshold=0.2, top_n=10)
+    analyze_and_export_results(df, corr_amp_contrast, output_path,
+                               correlation_threshold=0.2, top_n=10)
+
+    return df, corr_amp_contrast
 
 
-def analyze_and_export_results(df, corr_corr_v, output_path,
+def analyze_and_export_results(df, corr_contrast, output_path,
                                correlation_threshold=0.2, top_n=10):
     """
     Analyze PCs based on their correlation with visual probability and export results.
@@ -415,7 +411,7 @@ def analyze_and_export_results(df, corr_corr_v, output_path,
     log("PC CLASSIFICATION AND TOP REGIONS ANALYSIS")
     log("=" * 80)
 
-    for corr in corr_corr_v:
+    for corr in corr_contrast:
         pc_name = corr['pc']
         pearson_r = corr['pearson_r']
         spearman_r = corr['spearman_r']
@@ -480,7 +476,7 @@ def analyze_and_export_results(df, corr_corr_v, output_path,
     return output_lines
 
 
-def save_correlation_tables(corr_v, corr_a, corr_va, output_path):
+def save_correlation_tables(corr_v, corr_a, corr_contrast, corr_va, output_path):
     """
     Save correlation tables to file AND print to screen.
     Call this instead of the inline print statements.
@@ -498,22 +494,24 @@ def save_correlation_tables(corr_v, corr_a, corr_va, output_path):
         pc = corr_v[i]['pc']
         v_r = f"{corr_v[i]['pearson_r']:+.2f}{corr_v[i]['sig_p']}"
         a_r = f"{corr_a[i]['pearson_r']:+.2f}{corr_a[i]['sig_p']}"
+        c_r = f"{corr_contrast[i]['pearson_r']:+.2f}{corr_contrast[i]['sig_p']}"
         va_r = f"{corr_va[i]['pearson_r']:+.2f}{corr_va[i]['sig_p']}"
-        lines.append(f"{pc:<8} {v_r:>12} {a_r:>14} {va_r:>12}")
+        lines.append(f"{pc:<8} {v_r:>12} {a_r:>14} {c_r:>14} {va_r:>12}")
 
     lines.append("")
     lines.append("=" * 70)
     lines.append("SPEARMAN CORRELATION SUMMARY WITH VIDEO PROBABILITY")
     lines.append("=" * 70)
-    lines.append(f"{'PC':<8} {'Visual Amp':>12} {'Auditory Amp':>14}")
+    lines.append(f"{'PC':<8} {'Visual Amp':>12} {'Auditory Amp':>14} {'Contrast V-A':>14} {'Contrast VA':>12}")
     lines.append("-" * 70)
 
     for i in range(len(corr_v)):
         pc = corr_v[i]['pc']
         v_r = f"{corr_v[i]['spearman_r']:+.2f}{corr_v[i]['sig_s']}"
         a_r = f"{corr_a[i]['spearman_r']:+.2f}{corr_a[i]['sig_s']}"
+        c_r = f"{corr_contrast[i]['spearman_r']:+.2f}{corr_contrast[i]['sig_s']}"
         va_r = f"{corr_va[i]['spearman_r']:+.2f}{corr_va[i]['sig_s']}"
-        lines.append(f"{pc:<8} {v_r:>12} {a_r:>14} {va_r:>12}")
+        lines.append(f"{pc:<8} {v_r:>12} {a_r:>14} {c_r:>14} {va_r:>12}")
 
     # Print to screen
     for line in lines:
@@ -552,6 +550,6 @@ if __name__ == '__main__':
     nii_files = {f'PC_{i}': os.path.join(args.path, f'eigenfunction_{i}_importance_map.nii.gz') for i in
                  range(args.n_pcs)}
 
-    run_contrast_analysis(args.path, ts_files, nii_files, args.regions_class_origin,
-                          args.regions_multimodal_class_origin, args.stimulus_duration_sec,
-                          args.peak_delay, args.undershoot_delay)
+    df, corr_contrast = run_contrast_analysis(args.path, ts_files, nii_files, args.regions_class_origin,
+                                              args.regions_multimodal_class_origin, args.stimulus_duration_sec,
+                                              args.peak_delay, args.undershoot_delay)

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "Neuro-fPCA-fMRI"
-version = "0.0.4"
+version = "0.0.5"
 description = "Functional PCA on fMRI data to extract dominant temporal components."
 readme = "README.rst"
 authors = [

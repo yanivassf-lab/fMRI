@@ -669,7 +669,7 @@ class FunctionalMRI:
             plt.plot(self.times, Y_hat_v_max_score, color='blue')
             plt.scatter(self.times, Y_v_max_score, color='red')
             plt.title(f'Signal and best voxel\'s fitted function: Eigenfunction {i}')
-            plt.xlabel('Time (scans)')
+            plt.xlabel('Time (seconds)')
             plt.ylabel('Intensity')
             plt.grid(True)
             ax = plt.gca()

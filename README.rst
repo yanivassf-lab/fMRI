@@ -16,6 +16,7 @@ Full Documentation
 
 * Github Repository: https://github.com/yanivassf-lab/fMRI
 * Documentation: https://fmri.readthedocs.io
+* PyPI Package: https://pypi.org/project/Neuro-fPCA-fMRI
 
 Overview
 --------

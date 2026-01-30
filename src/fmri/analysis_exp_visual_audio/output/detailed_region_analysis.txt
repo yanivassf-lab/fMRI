@@ -1,0 +1,330 @@
+
+================================================================================
+DETAILED REGION ANALYSIS PER PC
+Top regions driving the signal during Visual, Auditory, and Interaction blocks
+================================================================================
+
+
+############################## PC_0 ##############################
+Global Context: -> CLASSIFIED AS VISUAL SCENE (r=0.67***)
+
+  --- Top 10 Regions during VISUAL Blocks (Sorted by Corr_Visual) ---
+  Region                                          Corr_Vis   Vis_Prob
+  -------------------------------------------------------------------
+  7Networks_RH_Vis_4                                 +0.48       0.95
+  7Networks_RH_Cont_pCun_1                           +0.48       0.50
+  7Networks_LH_Vis_3                                 +0.48       0.95
+  7Networks_LH_Vis_7                                 +0.48       0.95
+  7Networks_LH_Vis_9                                 +0.48       0.95
+  7Networks_LH_DorsAttn_Post_1                       +0.48       0.75
+  7Networks_LH_DorsAttn_Post_5                       +0.48       0.75
+  7Networks_RH_Vis_2                                 +0.48       0.95
+  7Networks_RH_Vis_3                                 +0.48       0.95
+  7Networks_LH_Vis_2                                 +0.48       0.95
+
+  --- Top 10 Regions during AUDITORY Blocks (Sorted by Corr_Auditory) ---
+  Region                                          Corr_Aud   Vis_Prob
+  -------------------------------------------------------------------
+  7Networks_LH_Cont_Cing_1                           +0.83       0.50
+  7Networks_LH_Vis_1                                 +0.83       0.95
+  7Networks_LH_SomMot_2                              +0.83       0.39
+  7Networks_LH_SomMot_4                              +0.83       0.39
+  7Networks_LH_SomMot_6                              +0.83       0.39
+  7Networks_LH_DorsAttn_Post_6                       +0.83       0.75
+  7Networks_LH_DorsAttn_PrCv_1                       +0.83       0.75
+  7Networks_LH_DorsAttn_FEF_1                        +0.83       0.75
+  7Networks_LH_SalVentAttn_ParOper_1                 +0.83       0.40
+  7Networks_LH_SalVentAttn_FrOperIns_2               +0.83       0.40
+
+  --- Top 10 Regions during INTERACTION Blocks (Sorted by Corr_Interaction) ---
+  Region                                           Corr_VA   Vis_Prob
+  -------------------------------------------------------------------
+  7Networks_LH_Vis_6                                 +0.67       0.95
+  7Networks_LH_Default_Par_1                         +0.67       0.45
+  7Networks_LH_Vis_2                                 +0.67       0.95
+  7Networks_LH_Vis_3                                 +0.67       0.95
+  7Networks_LH_Vis_4                                 +0.67       0.95
+  7Networks_LH_Vis_5                                 +0.67       0.95
+  7Networks_LH_Vis_7                                 +0.67       0.95
+  7Networks_LH_Vis_8                                 +0.67       0.95
+  7Networks_LH_Vis_9                                 +0.67       0.95
+  7Networks_LH_DorsAttn_Post_1                       +0.67       0.75
+
+
+############################## PC_1 ##############################
+Global Context: -> MIXED/UNCLEAR (r=0.04)
+
+  --- Top 10 Regions during VISUAL Blocks (Sorted by Corr_Visual) ---
+  Region                                          Corr_Vis   Vis_Prob
+  -------------------------------------------------------------------
+  7Networks_LH_Default_Par_2                         +0.15       0.45
+  7Networks_LH_Vis_4                                 +0.15       0.95
+  7Networks_LH_Vis_9                                 +0.15       0.95
+  7Networks_LH_SomMot_3                              +0.15       0.39
+  7Networks_LH_SomMot_4                              +0.15       0.39
+  7Networks_LH_SomMot_5                              +0.15       0.39
+  7Networks_LH_SomMot_6                              +0.15       0.39
+  7Networks_LH_DorsAttn_Post_2                       +0.15       0.75
+  7Networks_LH_DorsAttn_Post_3                       +0.15       0.75
+  7Networks_LH_DorsAttn_Post_5                       +0.15       0.75
+
+  --- Top 10 Regions during AUDITORY Blocks (Sorted by Corr_Auditory) ---
+  Region                                          Corr_Aud   Vis_Prob
+  -------------------------------------------------------------------
+  7Networks_LH_Vis_9                                 +0.14       0.95
+  7Networks_LH_SomMot_3                              +0.14       0.39
+  7Networks_LH_SomMot_5                              +0.14       0.39
+  7Networks_LH_SomMot_6                              +0.14       0.39
+  7Networks_LH_DorsAttn_Post_2                       +0.14       0.75
+  7Networks_LH_DorsAttn_Post_6                       +0.14       0.75
+  7Networks_LH_SalVentAttn_Med_3                     +0.14       0.40
+  7Networks_LH_Default_PFC_6                         +0.14       0.35
+  7Networks_RH_SomMot_5                              +0.14       0.39
+  7Networks_RH_SomMot_7                              +0.14       0.39
+
+  --- Top 10 Regions during INTERACTION Blocks (Sorted by Corr_Interaction) ---
+  Region                                           Corr_VA   Vis_Prob
+  -------------------------------------------------------------------
+  7Networks_LH_SalVentAttn_FrOperIns_2               +0.02       0.40
+  7Networks_RH_Default_PFCv_1                        +0.02       0.00
+  7Networks_RH_Default_pCunPCC_1                     +0.02       0.39
+  7Networks_LH_SalVentAttn_ParOper_1                 +0.02       0.40
+  7Networks_LH_SalVentAttn_FrOperIns_1               +0.02       0.40
+  7Networks_LH_SalVentAttn_Med_1                     +0.02       0.40
+  7Networks_LH_Default_PFC_2                         +0.02       0.35
+  7Networks_RH_Vis_6                                 +0.02       0.95
+  7Networks_RH_Vis_7                                 +0.02       0.95
+  7Networks_RH_Limbic_TempPole_1                     +0.02       0.35
+
+
+############################## PC_2 ##############################
+Global Context: -> CLASSIFIED AS AUDITORY/NON-VISUAL (r=-0.21*)
+
+  --- Top 10 Regions during VISUAL Blocks (Sorted by Corr_Visual) ---
+  Region                                          Corr_Vis   Vis_Prob
+  -------------------------------------------------------------------
+  7Networks_LH_Vis_1                                 +0.05       0.95
+  7Networks_LH_DorsAttn_Post_6                       +0.05       0.75
+  7Networks_LH_SalVentAttn_Med_3                     +0.05       0.40
+  7Networks_RH_SomMot_4                              +0.05       0.39
+  7Networks_RH_SomMot_7                              +0.05       0.39
+  7Networks_RH_SomMot_8                              +0.05       0.39
+  7Networks_LH_Vis_2                                 +0.05       0.95
+  7Networks_LH_Vis_5                                 +0.05       0.95
+  7Networks_LH_Vis_8                                 +0.05       0.95
+  7Networks_LH_SomMot_6                              +0.05       0.39
+
+  --- Top 10 Regions during AUDITORY Blocks (Sorted by Corr_Auditory) ---
+  Region                                          Corr_Aud   Vis_Prob
+  -------------------------------------------------------------------
+  7Networks_LH_Vis_6                                 +0.62       0.95
+  7Networks_LH_Vis_9                                 +0.62       0.95
+  7Networks_LH_SomMot_2                              +0.62       0.39
+  7Networks_LH_SomMot_3                              +0.62       0.39
+  7Networks_LH_SomMot_5                              +0.62       0.39
+  7Networks_LH_DorsAttn_Post_2                       +0.62       0.75
+  7Networks_LH_DorsAttn_Post_3                       +0.62       0.75
+  7Networks_LH_SalVentAttn_FrOperIns_2               +0.62       0.40
+  7Networks_LH_Limbic_TempPole_2                     +0.62       0.35
+  7Networks_LH_Cont_Par_1                            +0.62       0.50
+
+  --- Top 10 Regions during INTERACTION Blocks (Sorted by Corr_Interaction) ---
+  Region                                           Corr_VA   Vis_Prob
+  -------------------------------------------------------------------
+  7Networks_LH_Vis_3                                 +0.15       0.95
+  7Networks_LH_Vis_6                                 +0.15       0.95
+  7Networks_LH_SomMot_1                              +0.15       0.39
+  7Networks_LH_SomMot_3                              +0.15       0.39
+  7Networks_LH_DorsAttn_Post_1                       +0.15       0.75
+  7Networks_LH_DorsAttn_Post_3                       +0.15       0.75
+  7Networks_LH_DorsAttn_Post_4                       +0.15       0.75
+  7Networks_LH_DorsAttn_Post_5                       +0.15       0.75
+  7Networks_LH_SalVentAttn_ParOper_1                 +0.15       0.40
+  7Networks_LH_SalVentAttn_FrOperIns_2               +0.15       0.40
+
+
+############################## PC_3 ##############################
+Global Context: -> CLASSIFIED AS AUDITORY/NON-VISUAL (r=-0.21*)
+
+  --- Top 10 Regions during VISUAL Blocks (Sorted by Corr_Visual) ---
+  Region                                          Corr_Vis   Vis_Prob
+  -------------------------------------------------------------------
+  7Networks_LH_Vis_5                                 +0.51       0.95
+  7Networks_LH_DorsAttn_Post_5                       +0.51       0.75
+  7Networks_LH_SalVentAttn_Med_2                     +0.51       0.40
+  7Networks_LH_Limbic_TempPole_2                     +0.51       0.35
+  7Networks_LH_Cont_PFCl_1                           +0.51       0.50
+  7Networks_LH_Default_Par_2                         +0.51       0.45
+  7Networks_LH_Default_PFC_2                         +0.51       0.35
+  7Networks_LH_Default_PFC_3                         +0.51       0.35
+  7Networks_LH_Default_PFC_4                         +0.51       0.35
+  7Networks_LH_Default_PFC_5                         +0.51       0.35
+
+  --- Top 10 Regions during AUDITORY Blocks (Sorted by Corr_Auditory) ---
+  Region                                          Corr_Aud   Vis_Prob
+  -------------------------------------------------------------------
+  7Networks_LH_SomMot_2                              +0.16       0.39
+  7Networks_RH_Limbic_OFC_1                          +0.16       0.35
+  7Networks_LH_SomMot_1                              +0.16       0.39
+  7Networks_LH_SomMot_5                              +0.16       0.39
+  7Networks_LH_SalVentAttn_FrOperIns_1               +0.16       0.40
+  7Networks_RH_DorsAttn_PrCv_1                       +0.16       0.75
+  7Networks_RH_Cont_pCun_1                           +0.16       0.50
+  7Networks_RH_Default_Temp_2                        +0.16       0.40
+  7Networks_LH_SalVentAttn_ParOper_1                 +0.16       0.40
+  7Networks_LH_SalVentAttn_Med_1                     +0.16       0.40
+
+  --- Top 10 Regions during INTERACTION Blocks (Sorted by Corr_Interaction) ---
+  Region                                           Corr_VA   Vis_Prob
+  -------------------------------------------------------------------
+  7Networks_LH_DorsAttn_Post_4                       +0.45       0.75
+  7Networks_LH_Vis_1                                 +0.45       0.95
+  7Networks_LH_DorsAttn_Post_2                       +0.45       0.75
+  7Networks_LH_DorsAttn_Post_6                       +0.45       0.75
+  7Networks_RH_SomMot_4                              +0.45       0.39
+  7Networks_LH_Vis_3                                 +0.45       0.95
+  7Networks_LH_Vis_6                                 +0.45       0.95
+  7Networks_LH_Vis_7                                 +0.45       0.95
+  7Networks_LH_Vis_8                                 +0.45       0.95
+  7Networks_LH_Vis_9                                 +0.45       0.95
+
+
+############################## PC_4 ##############################
+Global Context: -> CLASSIFIED AS VISUAL SCENE (r=0.21*)
+
+  --- Top 10 Regions during VISUAL Blocks (Sorted by Corr_Visual) ---
+  Region                                          Corr_Vis   Vis_Prob
+  -------------------------------------------------------------------
+  7Networks_LH_Vis_6                                 +0.35       0.95
+  7Networks_LH_DorsAttn_PrCv_1                       +0.35       0.75
+  7Networks_LH_Cont_Cing_1                           +0.35       0.50
+  7Networks_RH_SomMot_7                              +0.35       0.39
+  7Networks_RH_SomMot_8                              +0.35       0.39
+  7Networks_RH_SalVentAttn_Med_1                     +0.35       0.40
+  7Networks_RH_Limbic_TempPole_1                     +0.35       0.35
+  7Networks_RH_Cont_Par_1                            +0.35       0.50
+  7Networks_RH_Cont_Cing_1                           +0.35       0.50
+  7Networks_RH_Cont_PFCmp_1                          +0.35       0.50
+
+  --- Top 10 Regions during AUDITORY Blocks (Sorted by Corr_Auditory) ---
+  Region                                          Corr_Aud   Vis_Prob
+  -------------------------------------------------------------------
+  7Networks_LH_SomMot_4                              +0.15       0.39
+  7Networks_LH_DorsAttn_Post_2                       +0.15       0.75
+  7Networks_LH_DorsAttn_Post_5                       +0.15       0.75
+  7Networks_LH_DorsAttn_Post_6                       +0.15       0.75
+  7Networks_LH_SalVentAttn_Med_2                     +0.15       0.40
+  7Networks_LH_Default_Temp_1                        +0.15       0.40
+  7Networks_RH_SomMot_1                              +0.15       0.39
+  7Networks_RH_SomMot_6                              +0.15       0.39
+  7Networks_RH_DorsAttn_Post_2                       +0.15       0.75
+  7Networks_RH_Default_pCunPCC_1                     +0.15       0.39
+
+  --- Top 10 Regions during INTERACTION Blocks (Sorted by Corr_Interaction) ---
+  Region                                           Corr_VA   Vis_Prob
+  -------------------------------------------------------------------
+  7Networks_LH_SomMot_2                              +0.20       0.39
+  7Networks_LH_SomMot_3                              +0.20       0.39
+  7Networks_LH_SomMot_4                              +0.20       0.39
+  7Networks_LH_DorsAttn_Post_2                       +0.20       0.75
+  7Networks_LH_DorsAttn_Post_3                       +0.20       0.75
+  7Networks_LH_DorsAttn_Post_5                       +0.20       0.75
+  7Networks_LH_SalVentAttn_ParOper_1                 +0.20       0.40
+  7Networks_LH_SalVentAttn_Med_1                     +0.20       0.40
+  7Networks_LH_SalVentAttn_Med_2                     +0.20       0.40
+  7Networks_LH_Cont_PFCl_1                           +0.20       0.50
+
+
+############################## PC_5 ##############################
+Global Context: -> MIXED/UNCLEAR (r=-0.03)
+
+  --- Top 10 Regions during VISUAL Blocks (Sorted by Corr_Visual) ---
+  Region                                          Corr_Vis   Vis_Prob
+  -------------------------------------------------------------------
+  7Networks_LH_Vis_4                                 +0.16       0.95
+  7Networks_LH_SalVentAttn_PFCl_1                    +0.16       0.40
+  7Networks_LH_Limbic_TempPole_1                     +0.16       0.35
+  7Networks_LH_Limbic_TempPole_2                     +0.16       0.35
+  7Networks_LH_Cont_Cing_1                           +0.16       0.50
+  7Networks_RH_Vis_8                                 +0.16       0.95
+  7Networks_RH_Cont_Par_2                            +0.16       0.50
+  7Networks_RH_Cont_PFCl_1                           +0.16       0.50
+  7Networks_RH_Cont_pCun_1                           +0.16       0.50
+  7Networks_RH_Default_PFCv_1                        +0.16       0.00
+
+  --- Top 10 Regions during AUDITORY Blocks (Sorted by Corr_Auditory) ---
+  Region                                          Corr_Aud   Vis_Prob
+  -------------------------------------------------------------------
+  7Networks_LH_SomMot_2                              +0.24       0.39
+  7Networks_LH_DorsAttn_Post_5                       +0.24       0.75
+  7Networks_RH_DorsAttn_Post_1                       +0.24       0.75
+  7Networks_LH_Vis_1                                 +0.24       0.95
+  7Networks_LH_Vis_3                                 +0.24       0.95
+  7Networks_LH_Vis_8                                 +0.24       0.95
+  7Networks_LH_SomMot_1                              +0.24       0.39
+  7Networks_LH_SomMot_3                              +0.24       0.39
+  7Networks_LH_DorsAttn_Post_1                       +0.24       0.75
+  7Networks_LH_DorsAttn_Post_2                       +0.24       0.75
+
+  --- Top 10 Regions during INTERACTION Blocks (Sorted by Corr_Interaction) ---
+  Region                                           Corr_VA   Vis_Prob
+  -------------------------------------------------------------------
+  7Networks_LH_Vis_1                                 +0.42       0.95
+  7Networks_LH_SomMot_6                              +0.42       0.39
+  7Networks_LH_DorsAttn_Post_2                       +0.42       0.75
+  7Networks_LH_DorsAttn_PrCv_1                       +0.42       0.75
+  7Networks_LH_SalVentAttn_Med_1                     +0.42       0.40
+  7Networks_LH_SalVentAttn_Med_2                     +0.42       0.40
+  7Networks_LH_SalVentAttn_Med_3                     +0.42       0.40
+  7Networks_LH_Default_PFC_1                         +0.42       0.35
+  7Networks_LH_Default_PFC_6                         +0.42       0.35
+  7Networks_LH_Default_pCunPCC_2                     +0.42       0.39
+
+
+############################## PC_6 ##############################
+Global Context: -> MIXED/UNCLEAR (r=-0.09)
+
+  --- Top 10 Regions during VISUAL Blocks (Sorted by Corr_Visual) ---
+  Region                                          Corr_Vis   Vis_Prob
+  -------------------------------------------------------------------
+  7Networks_LH_Vis_8                                 +0.40       0.95
+  7Networks_LH_DorsAttn_Post_4                       +0.40       0.75
+  7Networks_LH_DorsAttn_Post_6                       +0.40       0.75
+  7Networks_LH_SalVentAttn_Med_3                     +0.40       0.40
+  7Networks_LH_Default_Temp_1                        +0.40       0.40
+  7Networks_LH_Default_PFC_3                         +0.40       0.35
+  7Networks_LH_Default_pCunPCC_2                     +0.40       0.39
+  7Networks_RH_Vis_1                                 +0.40       0.95
+  7Networks_RH_Vis_3                                 +0.40       0.95
+  7Networks_RH_Vis_6                                 +0.40       0.95
+
+  --- Top 10 Regions during AUDITORY Blocks (Sorted by Corr_Auditory) ---
+  Region                                          Corr_Aud   Vis_Prob
+  -------------------------------------------------------------------
+  7Networks_LH_DorsAttn_Post_2                       +0.46       0.75
+  7Networks_LH_Vis_9                                 +0.46       0.95
+  7Networks_RH_Cont_Par_1                            +0.46       0.50
+  7Networks_LH_Vis_1                                 +0.46       0.95
+  7Networks_LH_Vis_3                                 +0.46       0.95
+  7Networks_LH_SomMot_1                              +0.46       0.39
+  7Networks_LH_DorsAttn_Post_1                       +0.46       0.75
+  7Networks_LH_DorsAttn_FEF_1                        +0.46       0.75
+  7Networks_LH_SalVentAttn_ParOper_1                 +0.46       0.40
+  7Networks_LH_Limbic_TempPole_2                     +0.46       0.35
+
+  --- Top 10 Regions during INTERACTION Blocks (Sorted by Corr_Interaction) ---
+  Region                                           Corr_VA   Vis_Prob
+  -------------------------------------------------------------------
+  7Networks_LH_Limbic_OFC_1                          +0.41       0.35
+  7Networks_RH_SomMot_7                              +0.41       0.39
+  7Networks_LH_Vis_1                                 +0.41       0.95
+  7Networks_LH_Vis_2                                 +0.41       0.95
+  7Networks_LH_Vis_3                                 +0.41       0.95
+  7Networks_LH_Vis_6                                 +0.41       0.95
+  7Networks_LH_Vis_9                                 +0.41       0.95
+  7Networks_LH_SomMot_1                              +0.41       0.39
+  7Networks_LH_SomMot_3                              +0.41       0.39
+  7Networks_LH_SomMot_4                              +0.41       0.39
+
+
+💾 Full data saved to: ./output/full_correlation_results.csv
