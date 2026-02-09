@@ -1,0 +1,11 @@
+region_pattern,v,a,va,confidence
+7Networks_Vis,0.75,0.05,0.20,0.95
+7Networks_DorsAttn,0.55,0.15,0.30,0.80
+7Networks_SomMot,0.15,0.35,0.50,0.75
+7Networks_SalVentAttn,0.20,0.25,0.55,0.80
+7Networks_Limbic,0.15,0.40,0.45,0.75
+7Networks_Cont,0.30,0.30,0.40,0.70
+7Networks_Default_PFC,0.25,0.50,0.25,0.65
+7Networks_Default_Temp,0.25,0.35,0.40,0.65
+7Networks_Default_Par,0.30,0.35,0.35,0.55
+7Networks_Default_pCunPCC,0.25,0.45,0.30,0.55

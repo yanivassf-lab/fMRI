@@ -1,0 +1,11 @@
+region_pattern,v,a,va,confidence,notes
+7Networks_*_Vis_*,0.85,0.05,0.10,0.95,Primary visual cortex strictly unimodal visual (Felleman 1991)
+7Networks_*_DorsAttn_*,0.45,0.15,0.40,0.75,IPS multimodal for spatial attention (Macaluso 2005)
+7Networks_*_SomMot_*,0.15,0.35,0.50,0.80,Strong AV rhythm integration (Grahn 2007 Zatorre 2007)
+7Networks_*_SalVentAttn_*,0.12,0.18,0.70,0.90,Classic superadditive AV hub - Insula STS TPJ (Calvert 2001 Beauchamp 2004)
+7Networks_*_Limbic_*,0.15,0.30,0.55,0.75,Emotional AV integration (Klasen 2011 Ethofer 2006)
+7Networks_*_Cont_*,0.30,0.30,0.40,0.65,Context-dependent - can show suppression under load (Loose 2003)
+7Networks_*_Default_PFC_*,0.25,0.40,0.35,0.65,Semantic processing more audio; suppressed by demanding AV tasks
+7Networks_*_Default_Temp_*,0.20,0.30,0.50,0.70,Near STS - narrative AV integration (Lerner 2011)
+7Networks_*_Default_Par_*,0.25,0.25,0.50,0.75,Angular gyrus semantic integration (Seghier 2013)
+7Networks_*_Default_pCunPCC_*,0.35,0.25,0.40,0.60,Episodic memory - context-dependent (Cavanna 2006)

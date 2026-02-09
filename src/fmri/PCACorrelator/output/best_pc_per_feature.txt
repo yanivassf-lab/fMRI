@@ -1,0 +1,440 @@
+
+====================================================================================================
+FEATURE: A
+====================================================================================================
+Best PC: PC_0
+Pearson correlation with region probabilities: +0.5333 ***
+Spearman correlation: +0.4253
+
+Region                                              Correlation      P-Value  Region Prob
+--------------------------------------------------------------------------------------
+ 1. 7Networks_LH_Cont_Cing_1                              +0.8324     0.000000       0.3000
+ 2. 7Networks_LH_Vis_1                                    +0.8324     0.000000       0.0500
+ 3. 7Networks_RH_SomMot_4                                 +0.8324     0.000000       0.3500
+ 4. 7Networks_RH_DorsAttn_FEF_1                           +0.8324     0.000000       0.1500
+ 5. 7Networks_RH_DorsAttn_PrCv_1                          +0.8324     0.000000       0.1500
+ 6. 7Networks_RH_DorsAttn_Post_5                          +0.8324     0.000000       0.1500
+ 7. 7Networks_RH_DorsAttn_Post_2                          +0.8324     0.000000       0.1500
+ 8. 7Networks_RH_SomMot_8                                 +0.8324     0.000000       0.3500
+ 9. 7Networks_RH_SomMot_7                                 +0.8324     0.000000       0.3500
+10. 7Networks_RH_SomMot_6                                 +0.8324     0.000000       0.3500
+11. 7Networks_RH_SomMot_2                                 +0.8324     0.000000       0.3500
+12. 7Networks_LH_Default_PFC_1                            +0.8324     0.000000       0.4000
+13. 7Networks_RH_SomMot_1                                 +0.8324     0.000000       0.3500
+14. 7Networks_RH_Vis_6                                    +0.8324     0.000000       0.0500
+15. 7Networks_LH_Default_pCunPCC_2                        +0.8324     0.000000       0.2500
+16. 7Networks_LH_Default_pCunPCC_1                        +0.8324     0.000000       0.2500
+17. 7Networks_LH_Default_PFC_5                            +0.8324     0.000000       0.4000
+18. 7Networks_LH_Default_PFC_4                            +0.8324     0.000000       0.4000
+19. 7Networks_RH_SalVentAttn_TempOccPar_2                 +0.8324     0.000000       0.1800
+20. 7Networks_RH_SalVentAttn_FrOperIns_1                  +0.8324     0.000000       0.1800
+21. 7Networks_RH_SalVentAttn_Med_1                        +0.8324     0.000000       0.1800
+22. 7Networks_RH_SalVentAttn_Med_2                        +0.8324     0.000000       0.1800
+23. 7Networks_RH_Default_PFCdPFCm_2                       +0.8324     0.000000       0.0000
+24. 7Networks_RH_Default_PFCv_2                           +0.8324     0.000000       0.0000
+25. 7Networks_RH_Default_PFCv_1                           +0.8324     0.000000       0.0000
+26. 7Networks_RH_Default_Temp_3                           +0.8324     0.000000       0.3000
+27. 7Networks_RH_Default_Temp_2                           +0.8324     0.000000       0.3000
+28. 7Networks_RH_Default_Temp_1                           +0.8324     0.000000       0.3000
+29. 7Networks_RH_Default_Par_1                            +0.8324     0.000000       0.2500
+30. 7Networks_RH_Cont_PFCmp_1                             +0.8324     0.000000       0.3000
+31. 7Networks_RH_Cont_Cing_1                              +0.8324     0.000000       0.3000
+32. 7Networks_RH_Cont_PFCl_4                              +0.8324     0.000000       0.3000
+33. 7Networks_RH_Cont_PFCl_3                              +0.8324     0.000000       0.3000
+34. 7Networks_RH_Cont_PFCl_2                              +0.8324     0.000000       0.3000
+35. 7Networks_RH_Cont_PFCl_1                              +0.8324     0.000000       0.3000
+36. 7Networks_RH_Cont_Par_2                               +0.8324     0.000000       0.3000
+37. 7Networks_RH_Cont_Par_1                               +0.8324     0.000000       0.3000
+38. 7Networks_LH_Default_PFC_3                            +0.8324     0.000000       0.4000
+39. 7Networks_RH_Default_pCunPCC_2                        +0.8324     0.000000       0.2500
+40. 7Networks_LH_SomMot_2                                 +0.8324     0.000000       0.3500
+41. 7Networks_LH_Limbic_TempPole_2                        +0.8324     0.000000       0.3000
+42. 7Networks_LH_SalVentAttn_FrOperIns_2                  +0.8324     0.000000       0.1800
+43. 7Networks_LH_SalVentAttn_PFCl_1                       +0.8324     0.000000       0.1800
+44. 7Networks_LH_SalVentAttn_Med_2                        +0.8324     0.000000       0.1800
+45. 7Networks_LH_SalVentAttn_Med_3                        +0.8324     0.000000       0.1800
+46. 7Networks_LH_SomMot_4                                 +0.8324     0.000000       0.3500
+47. 7Networks_LH_SalVentAttn_ParOper_1                    +0.8324     0.000000       0.1800
+48. 7Networks_LH_DorsAttn_FEF_1                           +0.8324     0.000000       0.1500
+49. 7Networks_LH_DorsAttn_PrCv_1                          +0.8324     0.000000       0.1500
+50. 7Networks_LH_SomMot_6                                 +0.8324     0.000000       0.3500
+51. 7Networks_LH_Cont_pCun_1                              +0.8324     0.000000       0.3000
+52. 7Networks_LH_Default_Temp_2                           +0.8324     0.000000       0.3000
+53. 7Networks_LH_DorsAttn_Post_6                          +0.8324     0.000000       0.1500
+54. 7Networks_LH_Cont_PFCl_1                              +0.8324     0.000000       0.3000
+55. 7Networks_LH_Default_Temp_1                           +0.8324     0.000000       0.3000
+56. 7Networks_LH_Cont_Par_1                               +0.8324     0.000000       0.3000
+57. 7Networks_LH_DorsAttn_Post_2                          +0.8324     0.000000       0.1500
+58. 7Networks_RH_DorsAttn_Post_3                          +0.8324     0.000000       0.1500
+59. 7Networks_RH_SomMot_5                                 +0.8324     0.000000       0.3500
+60. 7Networks_LH_Limbic_OFC_1                             +0.8324     0.000000       0.3000
+61. 7Networks_RH_Limbic_OFC_1                             +0.8324     0.000000       0.3000
+62. 7Networks_LH_Default_PFC_6                            +0.8324     0.000000       0.4000
+63. 7Networks_LH_SomMot_3                                 +0.8324     0.000000       0.3500
+64. 7Networks_LH_Default_PFC_7                            +0.8324     0.000000       0.4000
+65. 7Networks_LH_SomMot_5                                 +0.8324     0.000000       0.3500
+66. 7Networks_LH_Default_Par_2                            +0.8324     0.000000       0.2500
+67. 7Networks_LH_SalVentAttn_FrOperIns_1                  +0.8324     0.000000       0.1800
+68. 7Networks_RH_Limbic_TempPole_1                        +0.8324     0.000000       0.3000
+69. 7Networks_LH_SalVentAttn_Med_1                        +0.8324     0.000000       0.1800
+70. 7Networks_RH_SomMot_3                                 +0.8324     0.000000       0.3500
+71. 7Networks_LH_Limbic_TempPole_1                        +0.8324     0.000000       0.3000
+72. 7Networks_LH_SomMot_1                                 +0.8324     0.000000       0.3500
+73. 7Networks_RH_Default_PFCdPFCm_1                       +0.8324     0.000000       0.0000
+74. 7Networks_RH_Default_PFCdPFCm_3                       +0.8324     0.000000       0.0000
+75. 7Networks_LH_Default_PFC_2                            +0.8324     0.000000       0.4000
+76. 7Networks_LH_Default_Par_1                            -0.8324     1.000000       0.2500
+77. 7Networks_RH_DorsAttn_Post_4                          -0.8324     1.000000       0.1500
+78. 7Networks_RH_Cont_pCun_1                              -0.8324     1.000000       0.3000
+79. 7Networks_LH_Vis_3                                    -0.8324     1.000000       0.0500
+80. 7Networks_RH_Vis_5                                    -0.8324     1.000000       0.0500
+81. 7Networks_LH_DorsAttn_Post_4                          -0.8324     1.000000       0.1500
+82. 7Networks_LH_Vis_8                                    -0.8324     1.000000       0.0500
+83. 7Networks_RH_Default_pCunPCC_1                        -0.8324     1.000000       0.2500
+84. 7Networks_LH_Vis_2                                    -0.8324     1.000000       0.0500
+85. 7Networks_RH_Vis_2                                    -0.8324     1.000000       0.0500
+86. 7Networks_LH_Vis_4                                    -0.8324     1.000000       0.0500
+87. 7Networks_LH_Vis_5                                    -0.8324     1.000000       0.0500
+88. 7Networks_LH_Vis_6                                    -0.8324     1.000000       0.0500
+89. 7Networks_LH_Vis_7                                    -0.8324     1.000000       0.0500
+90. 7Networks_LH_DorsAttn_Post_3                          -0.8324     1.000000       0.1500
+91. 7Networks_LH_Vis_9                                    -0.8324     1.000000       0.0500
+92. 7Networks_RH_Vis_3                                    -0.8324     1.000000       0.0500
+93. 7Networks_RH_Vis_4                                    -0.8324     1.000000       0.0500
+94. 7Networks_RH_Vis_7                                    -0.8324     1.000000       0.0500
+95. 7Networks_RH_Vis_8                                    -0.8324     1.000000       0.0500
+96. 7Networks_RH_DorsAttn_Post_1                          -0.8324     1.000000       0.1500
+97. 7Networks_LH_DorsAttn_Post_1                          -0.8324     1.000000       0.1500
+98. 7Networks_RH_SalVentAttn_TempOccPar_1                 -0.8324     1.000000       0.1800
+99. 7Networks_LH_DorsAttn_Post_5                          -0.8324     1.000000       0.1500
+100. 7Networks_RH_Vis_1                                    -0.8324     1.000000       0.0500
+
+====================================================================================================
+FEATURE: V
+====================================================================================================
+Best PC: PC_0
+Pearson correlation with region probabilities: +0.7074 ***
+Spearman correlation: +0.5564
+
+Region                                              Correlation      P-Value  Region Prob
+--------------------------------------------------------------------------------------
+ 1. 7Networks_RH_Cont_pCun_1                              +0.4792     0.000000       0.3000
+ 2. 7Networks_RH_Vis_4                                    +0.4792     0.000000       0.8500
+ 3. 7Networks_RH_Vis_2                                    +0.4792     0.000000       0.8500
+ 4. 7Networks_LH_Vis_7                                    +0.4792     0.000000       0.8500
+ 5. 7Networks_LH_DorsAttn_Post_1                          +0.4792     0.000000       0.4500
+ 6. 7Networks_LH_Vis_9                                    +0.4792     0.000000       0.8500
+ 7. 7Networks_LH_DorsAttn_Post_5                          +0.4792     0.000000       0.4500
+ 8. 7Networks_RH_Vis_3                                    +0.4792     0.000000       0.8500
+ 9. 7Networks_LH_Vis_3                                    +0.4792     0.000000       0.8500
+10. 7Networks_RH_Vis_7                                    +0.4792     0.000000       0.8500
+11. 7Networks_RH_Vis_5                                    +0.4792     0.000000       0.8500
+12. 7Networks_LH_DorsAttn_Post_4                          +0.4792     0.000000       0.4500
+13. 7Networks_LH_Default_Par_1                            +0.4792     0.000000       0.2500
+14. 7Networks_RH_DorsAttn_Post_1                          +0.4792     0.000000       0.4500
+15. 7Networks_RH_DorsAttn_Post_4                          +0.4792     0.000000       0.4500
+16. 7Networks_RH_SalVentAttn_TempOccPar_1                 +0.4792     0.000000       0.1200
+17. 7Networks_LH_Vis_2                                    +0.4792     0.000000       0.8500
+18. 7Networks_RH_Vis_8                                    +0.4792     0.000000       0.8500
+19. 7Networks_RH_Vis_1                                    +0.4792     0.000000       0.8500
+20. 7Networks_LH_DorsAttn_Post_3                          +0.4792     0.000000       0.4500
+21. 7Networks_LH_Vis_4                                    +0.4792     0.000000       0.8500
+22. 7Networks_LH_Vis_5                                    +0.4792     0.000000       0.8500
+23. 7Networks_LH_Vis_6                                    +0.4792     0.000000       0.8500
+24. 7Networks_LH_Vis_8                                    +0.4792     0.000000       0.8500
+25. 7Networks_RH_Default_pCunPCC_1                        +0.4792     0.000000       0.3500
+26. 7Networks_LH_Default_Par_2                            -0.4792     1.000000       0.2500
+27. 7Networks_LH_Default_Temp_2                           -0.4792     1.000000       0.2000
+28. 7Networks_RH_Cont_Cing_1                              -0.4792     1.000000       0.3000
+29. 7Networks_RH_Vis_6                                    -0.4792     1.000000       0.8500
+30. 7Networks_RH_SomMot_3                                 -0.4792     1.000000       0.1500
+31. 7Networks_RH_Default_PFCdPFCm_3                       -0.4792     1.000000       0.0000
+32. 7Networks_RH_SomMot_4                                 -0.4792     1.000000       0.1500
+33. 7Networks_RH_SomMot_6                                 -0.4792     1.000000       0.1500
+34. 7Networks_RH_SomMot_7                                 -0.4792     1.000000       0.1500
+35. 7Networks_RH_Default_PFCdPFCm_1                       -0.4792     1.000000       0.0000
+36. 7Networks_RH_DorsAttn_Post_2                          -0.4792     1.000000       0.4500
+37. 7Networks_RH_DorsAttn_Post_3                          -0.4792     1.000000       0.4500
+38. 7Networks_RH_Default_PFCv_2                           -0.4792     1.000000       0.0000
+39. 7Networks_RH_DorsAttn_Post_5                          -0.4792     1.000000       0.4500
+40. 7Networks_RH_DorsAttn_PrCv_1                          -0.4792     1.000000       0.4500
+41. 7Networks_RH_DorsAttn_FEF_1                           -0.4792     1.000000       0.4500
+42. 7Networks_RH_Default_Temp_2                           -0.4792     1.000000       0.2000
+43. 7Networks_RH_Limbic_TempPole_1                        -0.4792     1.000000       0.1500
+44. 7Networks_RH_Cont_Par_1                               -0.4792     1.000000       0.3000
+45. 7Networks_RH_Default_Par_1                            -0.4792     1.000000       0.2500
+46. 7Networks_RH_Cont_PFCl_1                              -0.4792     1.000000       0.3000
+47. 7Networks_RH_Cont_PFCl_3                              -0.4792     1.000000       0.3000
+48. 7Networks_RH_Cont_PFCl_4                              -0.4792     1.000000       0.3000
+49. 7Networks_RH_Cont_Par_2                               -0.4792     1.000000       0.3000
+50. 7Networks_LH_Vis_1                                    -0.4792     1.000000       0.8500
+51. 7Networks_LH_Default_pCunPCC_2                        -0.4792     1.000000       0.3500
+52. 7Networks_LH_Cont_Cing_1                              -0.4792     1.000000       0.3000
+53. 7Networks_LH_SalVentAttn_FrOperIns_1                  -0.4792     1.000000       0.1200
+54. 7Networks_LH_SalVentAttn_ParOper_1                    -0.4792     1.000000       0.1200
+55. 7Networks_LH_Default_pCunPCC_1                        -0.4792     1.000000       0.3500
+56. 7Networks_LH_SalVentAttn_Med_3                        -0.4792     1.000000       0.1200
+57. 7Networks_LH_Limbic_OFC_1                             -0.4792     1.000000       0.1500
+58. 7Networks_LH_Limbic_TempPole_2                        -0.4792     1.000000       0.1500
+59. 7Networks_LH_DorsAttn_Post_2                          -0.4792     1.000000       0.4500
+60. 7Networks_LH_SalVentAttn_PFCl_1                       -0.4792     1.000000       0.1200
+61. 7Networks_LH_Cont_pCun_1                              -0.4792     1.000000       0.3000
+62. 7Networks_LH_SomMot_3                                 -0.4792     1.000000       0.1500
+63. 7Networks_LH_SomMot_4                                 -0.4792     1.000000       0.1500
+64. 7Networks_LH_Default_PFC_6                            -0.4792     1.000000       0.2500
+65. 7Networks_LH_SalVentAttn_FrOperIns_2                  -0.4792     1.000000       0.1200
+66. 7Networks_LH_Default_PFC_1                            -0.4792     1.000000       0.2500
+67. 7Networks_LH_SomMot_6                                 -0.4792     1.000000       0.1500
+68. 7Networks_RH_Default_PFCv_1                           -0.4792     1.000000       0.0000
+69. 7Networks_RH_Cont_PFCmp_1                             -0.4792     1.000000       0.3000
+70. 7Networks_RH_Default_Temp_3                           -0.4792     1.000000       0.2000
+71. 7Networks_LH_DorsAttn_Post_6                          -0.4792     1.000000       0.4500
+72. 7Networks_RH_Default_Temp_1                           -0.4792     1.000000       0.2000
+73. 7Networks_RH_Default_PFCdPFCm_2                       -0.4792     1.000000       0.0000
+74. 7Networks_LH_DorsAttn_PrCv_1                          -0.4792     1.000000       0.4500
+75. 7Networks_LH_DorsAttn_FEF_1                           -0.4792     1.000000       0.4500
+76. 7Networks_RH_Cont_PFCl_2                              -0.4792     1.000000       0.3000
+77. 7Networks_LH_SomMot_2                                 -0.4792     1.000000       0.1500
+78. 7Networks_LH_SomMot_1                                 -0.4792     1.000000       0.1500
+79. 7Networks_LH_SomMot_5                                 -0.4792     1.000000       0.1500
+80. 7Networks_RH_SalVentAttn_FrOperIns_1                  -0.4792     1.000000       0.1200
+81. 7Networks_RH_Limbic_OFC_1                             -0.4792     1.000000       0.1500
+82. 7Networks_RH_SalVentAttn_Med_2                        -0.4792     1.000000       0.1200
+83. 7Networks_LH_Default_PFC_7                            -0.4792     1.000000       0.2500
+84. 7Networks_LH_Default_PFC_5                            -0.4792     1.000000       0.2500
+85. 7Networks_LH_Default_PFC_4                            -0.4792     1.000000       0.2500
+86. 7Networks_LH_Default_PFC_3                            -0.4792     1.000000       0.2500
+87. 7Networks_LH_Default_PFC_2                            -0.4792     1.000000       0.2500
+88. 7Networks_RH_SomMot_1                                 -0.4792     1.000000       0.1500
+89. 7Networks_LH_Default_Temp_1                           -0.4792     1.000000       0.2000
+90. 7Networks_RH_SomMot_5                                 -0.4792     1.000000       0.1500
+91. 7Networks_RH_SomMot_8                                 -0.4792     1.000000       0.1500
+92. 7Networks_LH_Cont_Par_1                               -0.4792     1.000000       0.3000
+93. 7Networks_LH_Limbic_TempPole_1                        -0.4792     1.000000       0.1500
+94. 7Networks_LH_SalVentAttn_Med_2                        -0.4792     1.000000       0.1200
+95. 7Networks_LH_SalVentAttn_Med_1                        -0.4792     1.000000       0.1200
+96. 7Networks_RH_SalVentAttn_TempOccPar_2                 -0.4792     1.000000       0.1200
+97. 7Networks_RH_SalVentAttn_Med_1                        -0.4792     1.000000       0.1200
+98. 7Networks_RH_Default_pCunPCC_2                        -0.4792     1.000000       0.3500
+99. 7Networks_LH_Cont_PFCl_1                              -0.4792     1.000000       0.3000
+100. 7Networks_RH_SomMot_2                                 -0.4792     1.000000       0.1500
+
+====================================================================================================
+FEATURE: VA
+====================================================================================================
+Best PC: PC_4
+Pearson correlation with region probabilities: +0.3028 **
+Spearman correlation: +0.2300
+
+Region                                              Correlation      P-Value  Region Prob
+--------------------------------------------------------------------------------------
+ 1. 7Networks_LH_Cont_PFCl_1                              +0.2015     0.004017       0.4000
+ 2. 7Networks_LH_SomMot_3                                 +0.2015     0.004017       0.5000
+ 3. 7Networks_RH_SomMot_3                                 +0.2015     0.004017       0.5000
+ 4. 7Networks_LH_SalVentAttn_ParOper_1                    +0.2015     0.004017       0.7000
+ 5. 7Networks_RH_SomMot_4                                 +0.2015     0.004017       0.5000
+ 6. 7Networks_LH_DorsAttn_Post_5                          +0.2015     0.004017       0.4000
+ 7. 7Networks_LH_DorsAttn_Post_3                          +0.2015     0.004017       0.4000
+ 8. 7Networks_LH_DorsAttn_Post_2                          +0.2015     0.004017       0.4000
+ 9. 7Networks_LH_SalVentAttn_Med_1                        +0.2015     0.004017       0.7000
+10. 7Networks_LH_SomMot_4                                 +0.2015     0.004017       0.5000
+11. 7Networks_LH_SalVentAttn_Med_2                        +0.2015     0.004017       0.7000
+12. 7Networks_LH_SomMot_2                                 +0.2015     0.004017       0.5000
+13. 7Networks_RH_SalVentAttn_Med_2                        +0.2015     0.004017       0.7000
+14. 7Networks_LH_Default_Temp_2                           +0.2015     0.004017       0.5000
+15. 7Networks_LH_Default_PFC_5                            +0.2015     0.004017       0.3500
+16. 7Networks_RH_Default_PFCdPFCm_1                       +0.2015     0.004017       0.0000
+17. 7Networks_LH_Default_PFC_1                            +0.2015     0.004017       0.3500
+18. 7Networks_RH_Default_pCunPCC_1                        +0.2015     0.004017       0.4000
+19. 7Networks_LH_Default_PFC_6                            +0.2015     0.004017       0.3500
+20. 7Networks_LH_Default_Temp_1                           +0.2015     0.004017       0.5000
+21. 7Networks_LH_Default_pCunPCC_1                        +0.2015     0.004017       0.4000
+22. 7Networks_LH_Limbic_TempPole_2                        +0.2015     0.004017       0.5500
+23. 7Networks_LH_Default_pCunPCC_2                        +0.2015     0.004017       0.4000
+24. 7Networks_RH_Vis_4                                    +0.2015     0.004017       0.1000
+25. 7Networks_RH_SomMot_1                                 +0.2015     0.004017       0.5000
+26. 7Networks_RH_Default_pCunPCC_2                        +0.2015     0.004017       0.4000
+27. 7Networks_RH_SomMot_5                                 +0.2015     0.004017       0.5000
+28. 7Networks_LH_SalVentAttn_PFCl_1                       +0.2015     0.004017       0.7000
+29. 7Networks_LH_DorsAttn_Post_6                          +0.2015     0.004017       0.4000
+30. 7Networks_RH_SomMot_6                                 +0.2015     0.004017       0.5000
+31. 7Networks_RH_DorsAttn_Post_1                          +0.2015     0.004017       0.4000
+32. 7Networks_RH_DorsAttn_Post_2                          +0.2015     0.004017       0.4000
+33. 7Networks_LH_SomMot_5                                 +0.2015     0.004017       0.5000
+34. 7Networks_RH_DorsAttn_Post_5                          +0.2015     0.004017       0.4000
+35. 7Networks_RH_Default_Temp_3                           +0.2015     0.004017       0.5000
+36. 7Networks_LH_Vis_4                                    +0.2015     0.004017       0.1000
+37. 7Networks_LH_Default_PFC_2                            +0.2015     0.004017       0.3500
+38. 7Networks_RH_SomMot_2                                 +0.2015     0.004017       0.5000
+39. 7Networks_LH_Default_PFC_3                            +0.2015     0.004017       0.3500
+40. 7Networks_LH_Default_PFC_7                            +0.2015     0.004017       0.3500
+41. 7Networks_RH_SalVentAttn_TempOccPar_2                 +0.2015     0.004017       0.7000
+42. 7Networks_RH_Default_Temp_2                           +0.2015     0.004017       0.5000
+43. 7Networks_LH_Default_PFC_4                            +0.2015     0.004017       0.3500
+44. 7Networks_LH_Vis_1                                    +0.2015     0.004017       0.1000
+45. 7Networks_LH_Default_Par_2                            +0.2015     0.004017       0.5000
+46. 7Networks_LH_Cont_pCun_1                              +0.2015     0.004017       0.4000
+47. 7Networks_LH_DorsAttn_Post_1                          +0.2015     0.004017       0.4000
+48. 7Networks_LH_SomMot_1                                 +0.2015     0.004017       0.5000
+49. 7Networks_LH_DorsAttn_Post_4                          +0.2015     0.004017       0.4000
+50. 7Networks_LH_DorsAttn_FEF_1                           +0.2015     0.004017       0.4000
+51. 7Networks_LH_Limbic_OFC_1                             +0.2015     0.004017       0.5500
+52. 7Networks_LH_Default_Par_1                            +0.2015     0.004017       0.5000
+53. 7Networks_LH_SalVentAttn_Med_3                        +0.2015     0.004017       0.7000
+54. 7Networks_RH_Vis_8                                    -0.2015     0.995983       0.1000
+55. 7Networks_RH_Cont_PFCl_4                              -0.2015     0.995983       0.4000
+56. 7Networks_RH_Default_Par_1                            -0.2015     0.995983       0.5000
+57. 7Networks_RH_SalVentAttn_TempOccPar_1                 -0.2015     0.995983       0.7000
+58. 7Networks_LH_Vis_6                                    -0.2015     0.995983       0.1000
+59. 7Networks_RH_Cont_PFCl_3                              -0.2015     0.995983       0.4000
+60. 7Networks_RH_Vis_6                                    -0.2015     0.995983       0.1000
+61. 7Networks_RH_Default_PFCv_1                           -0.2015     0.995983       0.0000
+62. 7Networks_RH_Cont_Par_1                               -0.2015     0.995983       0.4000
+63. 7Networks_RH_SalVentAttn_FrOperIns_1                  -0.2015     0.995983       0.7000
+64. 7Networks_RH_Default_PFCdPFCm_2                       -0.2015     0.995983       0.0000
+65. 7Networks_LH_Vis_3                                    -0.2015     0.995983       0.1000
+66. 7Networks_LH_Cont_Par_1                               -0.2015     0.995983       0.4000
+67. 7Networks_LH_Cont_Cing_1                              -0.2015     0.995983       0.4000
+68. 7Networks_RH_DorsAttn_Post_3                          -0.2015     0.995983       0.4000
+69. 7Networks_RH_Cont_PFCl_1                              -0.2015     0.995983       0.4000
+70. 7Networks_RH_Default_Temp_1                           -0.2015     0.995983       0.5000
+71. 7Networks_RH_Cont_Cing_1                              -0.2015     0.995983       0.4000
+72. 7Networks_RH_Cont_PFCmp_1                             -0.2015     0.995983       0.4000
+73. 7Networks_RH_Limbic_OFC_1                             -0.2015     0.995983       0.5500
+74. 7Networks_LH_Vis_7                                    -0.2015     0.995983       0.1000
+75. 7Networks_RH_Default_PFCv_2                           -0.2015     0.995983       0.0000
+76. 7Networks_LH_Vis_5                                    -0.2015     0.995983       0.1000
+77. 7Networks_RH_Limbic_TempPole_1                        -0.2015     0.995983       0.5500
+78. 7Networks_RH_DorsAttn_FEF_1                           -0.2015     0.995983       0.4000
+79. 7Networks_RH_SalVentAttn_Med_1                        -0.2015     0.995983       0.7000
+80. 7Networks_LH_Limbic_TempPole_1                        -0.2015     0.995983       0.5500
+81. 7Networks_LH_Vis_2                                    -0.2015     0.995983       0.1000
+82. 7Networks_RH_DorsAttn_PrCv_1                          -0.2015     0.995983       0.4000
+83. 7Networks_RH_Vis_2                                    -0.2015     0.995983       0.1000
+84. 7Networks_RH_Vis_7                                    -0.2015     0.995983       0.1000
+85. 7Networks_RH_SomMot_7                                 -0.2015     0.995983       0.5000
+86. 7Networks_LH_Vis_8                                    -0.2015     0.995983       0.1000
+87. 7Networks_RH_Vis_3                                    -0.2015     0.995983       0.1000
+88. 7Networks_LH_SalVentAttn_FrOperIns_2                  -0.2015     0.995983       0.7000
+89. 7Networks_LH_SalVentAttn_FrOperIns_1                  -0.2015     0.995983       0.7000
+90. 7Networks_LH_DorsAttn_PrCv_1                          -0.2015     0.995983       0.4000
+91. 7Networks_RH_Cont_pCun_1                              -0.2015     0.995983       0.4000
+92. 7Networks_RH_SomMot_8                                 -0.2015     0.995983       0.5000
+93. 7Networks_LH_SomMot_6                                 -0.2015     0.995983       0.5000
+94. 7Networks_RH_DorsAttn_Post_4                          -0.2015     0.995983       0.4000
+95. 7Networks_RH_Cont_PFCl_2                              -0.2015     0.995983       0.4000
+96. 7Networks_RH_Cont_Par_2                               -0.2015     0.995983       0.4000
+97. 7Networks_LH_Vis_9                                    -0.2015     0.995983       0.1000
+98. 7Networks_RH_Vis_1                                    -0.2015     0.995983       0.1000
+99. 7Networks_RH_Vis_5                                    -0.2015     0.995983       0.1000
+100. 7Networks_RH_Default_PFCdPFCm_3                       -0.2015     0.995983       0.0000
+
+====================================================================================================
+FEATURE: X
+====================================================================================================
+Best PC: PC_3
+Pearson correlation with region probabilities: +0.1614 
+Spearman correlation: +0.0784
+
+Region                                              Correlation      P-Value  Region Prob
+--------------------------------------------------------------------------------------
+ 1. 7Networks_LH_Vis_1                                    +0.5057     0.000001       0.5000
+ 2. 7Networks_RH_DorsAttn_Post_4                          +0.5057     0.000001       0.5000
+ 3. 7Networks_RH_Vis_3                                    +0.5057     0.000001       0.5000
+ 4. 7Networks_RH_Vis_5                                    +0.5057     0.000001       0.5000
+ 5. 7Networks_RH_Vis_6                                    +0.5057     0.000001       0.5000
+ 6. 7Networks_RH_SomMot_1                                 +0.5057     0.000001       0.5000
+ 7. 7Networks_RH_SomMot_2                                 +0.5057     0.000001       0.5000
+ 8. 7Networks_RH_SomMot_3                                 +0.5057     0.000001       0.5000
+ 9. 7Networks_RH_SomMot_6                                 +0.5057     0.000001       0.5000
+10. 7Networks_RH_SomMot_7                                 +0.5057     0.000001       0.5000
+11. 7Networks_RH_DorsAttn_Post_1                          +0.5057     0.000001       0.5000
+12. 7Networks_RH_DorsAttn_Post_2                          +0.5057     0.000001       0.5000
+13. 7Networks_RH_DorsAttn_Post_5                          +0.5057     0.000001       0.5000
+14. 7Networks_LH_SalVentAttn_Med_1                        +0.5057     0.000001       0.5000
+15. 7Networks_RH_DorsAttn_PrCv_1                          +0.5057     0.000001       0.5000
+16. 7Networks_RH_SalVentAttn_TempOccPar_1                 +0.5057     0.000001       0.5000
+17. 7Networks_RH_SalVentAttn_FrOperIns_1                  +0.5057     0.000001       0.5000
+18. 7Networks_RH_SalVentAttn_Med_1                        +0.5057     0.000001       0.5000
+19. 7Networks_RH_SalVentAttn_Med_2                        +0.5057     0.000001       0.5000
+20. 7Networks_RH_Limbic_OFC_1                             +0.5057     0.000001       0.5000
+21. 7Networks_RH_Limbic_TempPole_1                        +0.5057     0.000001       0.5000
+22. 7Networks_RH_Default_Temp_2                           +0.5057     0.000001       0.5000
+23. 7Networks_RH_Default_Temp_3                           +0.5057     0.000001       0.5000
+24. 7Networks_RH_Default_PFCv_2                           +0.5057     0.000001       0.0000
+25. 7Networks_LH_SalVentAttn_Med_3                        +0.5057     0.000001       0.5000
+26. 7Networks_RH_Vis_1                                    +0.5057     0.000001       0.5000
+27. 7Networks_LH_DorsAttn_Post_3                          +0.5057     0.000001       0.5000
+28. 7Networks_LH_DorsAttn_Post_6                          +0.5057     0.000001       0.5000
+29. 7Networks_LH_DorsAttn_Post_2                          +0.5057     0.000001       0.5000
+30. 7Networks_LH_Vis_6                                    +0.5057     0.000001       0.5000
+31. 7Networks_LH_SomMot_3                                 +0.5057     0.000001       0.5000
+32. 7Networks_LH_DorsAttn_FEF_1                           +0.5057     0.000001       0.5000
+33. 7Networks_LH_SomMot_1                                 +0.5057     0.000001       0.5000
+34. 7Networks_LH_Vis_3                                    +0.5057     0.000001       0.5000
+35. 7Networks_RH_Vis_8                                    +0.5057     0.000001       0.5000
+36. 7Networks_RH_Vis_7                                    +0.5057     0.000001       0.5000
+37. 7Networks_RH_SalVentAttn_TempOccPar_2                 +0.5057     0.000001       0.5000
+38. 7Networks_RH_SomMot_8                                 +0.5057     0.000001       0.5000
+39. 7Networks_LH_SomMot_5                                 +0.5057     0.000001       0.5000
+40. 7Networks_LH_SalVentAttn_ParOper_1                    +0.5057     0.000001       0.5000
+41. 7Networks_LH_SomMot_4                                 +0.5057     0.000001       0.5000
+42. 7Networks_LH_DorsAttn_Post_4                          +0.5057     0.000001       0.5000
+43. 7Networks_RH_SomMot_4                                 +0.5057     0.000001       0.5000
+44. 7Networks_RH_DorsAttn_FEF_1                           +0.5057     0.000001       0.5000
+45. 7Networks_LH_SomMot_2                                 +0.5057     0.000001       0.5000
+46. 7Networks_RH_SomMot_5                                 +0.5057     0.000001       0.5000
+47. 7Networks_LH_SomMot_6                                 +0.5057     0.000001       0.5000
+48. 7Networks_LH_Vis_9                                    +0.5057     0.000001       0.5000
+49. 7Networks_LH_Vis_8                                    +0.5057     0.000001       0.5000
+50. 7Networks_LH_Vis_7                                    +0.5057     0.000001       0.5000
+51. 7Networks_LH_Default_Par_1                            +0.5057     0.000001       0.5000
+52. 7Networks_RH_Cont_pCun_1                              +0.5057     0.000001       0.5000
+53. 7Networks_LH_SalVentAttn_FrOperIns_1                  +0.5057     0.000001       0.5000
+54. 7Networks_RH_Default_pCunPCC_1                        +0.5057     0.000001       0.5000
+55. 7Networks_LH_SalVentAttn_FrOperIns_2                  +0.5057     0.000001       0.5000
+56. 7Networks_RH_Cont_PFCl_1                              -0.5057     0.999999       0.5000
+57. 7Networks_RH_Cont_PFCl_2                              -0.5057     0.999999       0.5000
+58. 7Networks_RH_Cont_PFCl_3                              -0.5057     0.999999       0.5000
+59. 7Networks_RH_Cont_Cing_1                              -0.5057     0.999999       0.5000
+60. 7Networks_RH_Cont_PFCmp_1                             -0.5057     0.999999       0.5000
+61. 7Networks_LH_Vis_5                                    -0.5057     0.999999       0.5000
+62. 7Networks_RH_Default_PFCv_1                           -0.5057     0.999999       0.0000
+63. 7Networks_RH_Default_PFCdPFCm_1                       -0.5057     0.999999       0.0000
+64. 7Networks_RH_Default_PFCdPFCm_2                       -0.5057     0.999999       0.0000
+65. 7Networks_LH_SalVentAttn_PFCl_1                       -0.5057     0.999999       0.5000
+66. 7Networks_LH_DorsAttn_Post_5                          -0.5057     0.999999       0.5000
+67. 7Networks_LH_Limbic_TempPole_1                        -0.5057     0.999999       0.5000
+68. 7Networks_LH_Cont_Cing_1                              -0.5057     0.999999       0.5000
+69. 7Networks_LH_Default_PFC_2                            -0.5057     0.999999       0.5000
+70. 7Networks_LH_Default_PFC_4                            -0.5057     0.999999       0.5000
+71. 7Networks_LH_Default_pCunPCC_1                        -0.5057     0.999999       0.5000
+72. 7Networks_LH_Default_PFC_6                            -0.5057     0.999999       0.5000
+73. 7Networks_RH_Vis_2                                    -0.5057     0.999999       0.5000
+74. 7Networks_LH_Default_Temp_1                           -0.5057     0.999999       0.5000
+75. 7Networks_LH_Limbic_TempPole_2                        -0.5057     0.999999       0.5000
+76. 7Networks_LH_Cont_Par_1                               -0.5057     0.999999       0.5000
+77. 7Networks_RH_Cont_PFCl_4                              -0.5057     0.999999       0.5000
+78. 7Networks_LH_Vis_4                                    -0.5057     0.999999       0.5000
+79. 7Networks_LH_Limbic_OFC_1                             -0.5057     0.999999       0.5000
+80. 7Networks_LH_Cont_PFCl_1                              -0.5057     0.999999       0.5000
+81. 7Networks_RH_Default_PFCdPFCm_3                       -0.5057     0.999999       0.0000
+82. 7Networks_RH_Default_Temp_1                           -0.5057     0.999999       0.5000
+83. 7Networks_RH_Default_Par_1                            -0.5057     0.999999       0.5000
+84. 7Networks_LH_Cont_pCun_1                              -0.5057     0.999999       0.5000
+85. 7Networks_LH_SalVentAttn_Med_2                        -0.5057     0.999999       0.5000
+86. 7Networks_LH_Default_PFC_1                            -0.5057     0.999999       0.5000
+87. 7Networks_LH_Default_Temp_2                           -0.5057     0.999999       0.5000
+88. 7Networks_LH_Default_Par_2                            -0.5057     0.999999       0.5000
+89. 7Networks_LH_DorsAttn_Post_1                          -0.5057     0.999999       0.5000
+90. 7Networks_RH_Cont_Par_2                               -0.5057     0.999999       0.5000
+91. 7Networks_RH_Cont_Par_1                               -0.5057     0.999999       0.5000
+92. 7Networks_LH_Default_PFC_3                            -0.5057     0.999999       0.5000
+93. 7Networks_LH_Default_PFC_5                            -0.5057     0.999999       0.5000
+94. 7Networks_LH_Default_PFC_7                            -0.5057     0.999999       0.5000
+95. 7Networks_LH_Default_pCunPCC_2                        -0.5057     0.999999       0.5000
+96. 7Networks_LH_Vis_2                                    -0.5057     0.999999       0.5000
+97. 7Networks_RH_Vis_4                                    -0.5057     0.999999       0.5000
+98. 7Networks_RH_DorsAttn_Post_3                          -0.5057     0.999999       0.5000
+99. 7Networks_LH_DorsAttn_PrCv_1                          -0.5057     0.999999       0.5000
+100. 7Networks_RH_Default_pCunPCC_2                        -0.5057     0.999999       0.5000

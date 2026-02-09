@@ -2,17 +2,17 @@
 
 INPUT_DIR="/Users/user/Documents/pythonProject/fMRI-runs/fMRI-files/files_from_amir_for_test/raw-files"
 PROCESSED_DIR="/Users/user/Documents/pythonProject/fMRI-runs/outputs/preprocessed_data"
-BASE_OUTPUT_DIR="/Users/user/Documents/pythonProject/fMRI-runs/outputs/run_params_comb/fmri_combinations_results_skfda_skip_0_volums_100_basis"
+BASE_OUTPUT_DIR="/Users/user/Documents/pythonProject/fMRI-runs/outputs/run_params_comb/fmri_combinations_results_skfda_skip_100_volums_100_basis_correct_direction"
 
 # Activate Python environment
 source "/Users/user/Documents/pythonProject/fMRI-env/bin/activate"
 
 # Parameter sets
-derivatives_p=(2 1 0)
-derivatives_u=(0 1 2)
+derivatives_p=(2)
+derivatives_u=(0)
 lambda_ranges=("-6 12")
 n_basis_values=(100)
-skips_start=(0)
+skips_start=(100)
 MAX_PARALLEL=2  # Maximum number of parallel processes
 
 
