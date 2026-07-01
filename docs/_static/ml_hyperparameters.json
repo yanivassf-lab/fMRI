@@ -1,0 +1,28 @@
+{
+  "LR": {
+    "selectkbest__k": [100, 200, 300],
+    "logisticregression__C": [0.01, 0.1, 1.0, 10.0]
+  },
+  "SVM": {
+    "selectkbest__k": [100, 200, 300],
+    "svc__C": [0.1, 1.0, 10.0]
+  },
+  "DTree": {
+    "selectfrommodel__max_features": [100, 300, 500],
+    "decisiontreeclassifier__max_depth": [2, 6, null],
+    "decisiontreeclassifier__min_samples_leaf": [1, 5]
+  },
+  "RandForest": {
+    "selectfrommodel__max_features": [10, 50, 100],
+    "randomforestclassifier__n_estimators": [300],
+    "randomforestclassifier__max_depth": [null, 10, 20],
+    "randomforestclassifier__min_samples_leaf": [1, 2]
+  },
+  "NN": {
+    "selectkbest__k": [100, 200, 300],
+    "deepsklearnwrapper__latent_dim": [4, 8, 16],
+    "deepsklearnwrapper__epochs": [150],
+    "deepsklearnwrapper__lr": [0.0001],
+    "deepsklearnwrapper__weight_decay": [0.0001]
+  }
+}

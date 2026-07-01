@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "Neuro-fPCA-fMRI"
-version = "0.0.7"
+version = "0.0.8"
 description = "Functional PCA on fMRI data to extract dominant temporal components."
 readme = "README.rst"
 authors = [
@@ -17,24 +17,29 @@ classifiers = [
     # Add any classifiers you need.
 ]
 license = "GPL-3.0-only"
-dependencies = [
-    "pip",
-    "bump2version==0.5.11",
-    "wheel==0.33.6",
-    "watchdog==6.0.0",
-    "tox==3.14.0",
-    "coverage==4.5.4",
-    "Sphinx==7.2.6",
-    "twine==5.0.0",
-    "ruff==0.3.5",
-    "pytest==6.2.4",
-    "matplotlib==3.10.1",
-    "nibabel==5.3.2",
-    "numpy==2.2.3",
-    "scipy==1.15.2",
-    "scikit-fda==0.10.1",
-    "dtaidistance==2.3.13"
-]
+#dependencies = [
+#    "pip",
+#    "bump2version==0.5.11",
+#    "wheel==0.33.6",
+#    "watchdog==6.0.0",
+#    "tox==3.14.0",
+#    "coverage==4.5.4",
+#    "Sphinx==7.2.6",
+#    "twine==5.0.0",
+#    "ruff==0.3.5",
+#    "pytest==6.2.4",
+#    "matplotlib>=3.9.0",
+#    "nibabel==5.3.2",
+#    "numpy<2.0,>=1.26.0",
+#    "scipy>=1.13.1",
+#    "scikit-learn>=1.4",
+#    "scikit-learn-extra==0.3.0",
+#    "scikit-fda==0.9.1",
+#    "dtaidistance==2.3.13",
+#    "umap-learn>=0.5.12",
+#    "shap==0.41.0",
+#    "plotly"
+#]
 
 # For conda
 # optional: instructions to create a conda environment
@@ -45,9 +50,10 @@ dependencies = [
 # Activate the environment and install dependencies:
 # mamba activate fmri-stable
 # Install the required packages:
-# mamba install -c conda-forge numpy scipy mkl mkl-service matplotlib nibabel scikit-fda dtaidistance
+# mamba install -c conda-forge numpy scipy mkl mkl-service pandas matplotlib seaborn scikit-learn scikit-learn-extra imbalanced-learn plotly joblib nilearn nibabel scikit-fda dtaidistance pytorch shap
 # Finally, install development tools via pip:
-# pip install ruff pytest tox Sphinx bump2version watchdog coverage twine
+## pip install ruff pytest tox Sphinx bump2version watchdog twine
+# pip install "ortools<9.10" "k-means-constrained<0.9.0" pytest tox Sphinx bump2version watchdog twine
 # To install the package in editable mode, run:
 # pip install -e .
 # To run the tests, use:
@@ -65,7 +71,7 @@ dependencies = [
 # To watch for changes and run tests automatically, use:
 # watchdog -p "tests/" -r "pytest tests/"
 # To run the main CLI, use:
-# fmri-main [args]
+# fpca-main [args]
 # To view NIfTI files, use:
 # nifti-viewer [args]
 # To preprocess NIfTI files, use:
@@ -75,19 +81,18 @@ dependencies = [
 # End of conda instructions
 
 [project.scripts]
-fmri-main = "fmri.cli.fmri_main:main"
-nifti-viewer = "fmri.cli.nifti_viewer:main"
-preprocess-nii-file = "fmri.cli.preprocess_nii_file:main"
-compare-pcs = "fmri.cli.compare_pcs:main"
-find-best-lags = "fmri.cli.find_best_lags:main"
+fpca-main = "fPCA.cli.fpca_main:main"
+preprocess-nii-file = "fPCA.cli.preprocess_nii_file:main"
+fmri-fpca-pipeline = "PCAGroupDiscrimination.cli.fmri_fpca_pipeline:main"
 
-[project.optional-dependencies]
-dev = [
-    "coverage", # for testing
-    "mypy", # for type-checking
-    "pytest", # for testing
-    "ruff"       # for linting
-]
+#
+#[project.optional-dependencies]
+#dev = [
+#    "coverage", # for testing
+#    "mypy", # for type-checking
+#    "pytest", # for testing
+#    "ruff"       # for linting
+#]
 
 [project.urls]
 bugs = "https://github.com/yanivassf-lab/fMRI/issues"

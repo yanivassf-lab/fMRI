@@ -1,0 +1,213 @@
+,sub_id,group,main_instrument,instrument_group,genres,has_classical,has_jazz,has_rock,has_pop,is_wind,is_rhythm,pca_tSNE,is_train_set
+0,sub-FNCL34,M,Violin,Strings,"Classical/Baroque/Romantic/Modern, Classic_Rock/Blues/Country, מוזיקת מחזמרים",1,0,1,0,0,0,9.293919563,1
+1,sub-FNCL43,NM,,NM,,,,,0,,,10.87209702,1
+2,sub-FNCL46,M,Guitar,Guitars,Classic_Rock/Blues/Country,0,0,1,0,0,1,0.505401611,1
+3,sub-FNCL47,NM,,NM,,,,,0,,,10.87209702,1
+4,sub-FNCL48,M,Bass_Guitar,Guitars,"Indie, Jazz, Disco/R&B/Funk, Heavy_Rock/Metal, Classic_Rock/Blues/Country",0,1,1,0,0,1,8.873100281,1
+5,sub-FNCL49,NM,,NM,,,,,0,,,10.87209702,1
+6,sub-FNCL50,NM,,NM,,,,,0,,,10.87209702,1
+7,sub-FNCL51,NM,,NM,,,,,0,,,10.87209702,1
+8,sub-FNCL52,NM,,NM,,,,,0,,,10.87209702,1
+9,sub-FNCL54,NM,,NM,,,,,0,,,10.87209702,1
+10,sub-FNCL60,NM,,NM,,,,,0,,,10.87209702,1
+11,sub-FTNC09,NM,,NM,,,,,0,,,10.87209702,1
+12,sub-FTNC11,NM,,NM,,,,,0,,,10.87209702,1
+13,sub-GYML33,NM,,NM,,,,,0,,,10.87209702,1
+14,sub-GYML38,NM,,NM,,,,,0,,,10.87209702,1
+15,sub-GYML41,M,Guitar,Guitars,"Indie, Jazz, Disco/R&B/Funk, Rap/Hip-Hop, Reggae/Ska, Classic_Rock/Blues/Country",0,1,1,0,0,1,-12.28414917,1
+16,sub-MRTC18,NM,,NM,,,,,0,,,10.87209702,1
+17,sub-YA1217,M,Piano,Keyboards,"Classical/Baroque/Romantic/Modern, Contemporary_Classical, Pop",1,0,0,1,0,1,-0.038423052,1
+18,sub-YA1286,M,Drum_Set,Drums,"Jazz, Rap/Hip-Hop",0,1,0,0,0,1,9.745949745,1
+19,sub-YA1287,M,Bassoon,Wind,"Classical/Baroque/Romantic/Modern, Contemporary_Classical",1,0,0,0,1,0,-1.185727835,1
+20,sub-YA1288,M,French_Horn,Wind,"Jewish_Music/Chazanut/Hasidic_Music, Classical/Baroque/Romantic/Modern, Contemporary_Classical, שירים ישראלים של פעם",1,0,0,0,1,0,-0.310686231,1
+21,sub-YA1289,M,Flute,Wind,Classical/Baroque/Romantic/Modern,1,0,0,0,1,0,0.426790297,1
+22,sub-YA1290,M,Saxophone,Wind,"Indie, Jazz, Disco/R&B/Funk, Latin_American_Music, Classical/Baroque/Romantic/Modern, Contemporary_Classical, Pop, Reggae/Ska, Heavy_Rock/Metal",1,1,1,1,1,0,2.607834578,1
+23,sub-YA1291,M,French_Horn,Wind,"Classical/Baroque/Romantic/Modern, Contemporary_Classical",1,0,0,0,1,0,-8.156076431,1
+24,sub-YA1293,M,Trombone,Wind,Classical/Baroque/Romantic/Modern,1,0,0,0,1,0,8.516924858,1
+25,sub-YA1294,M,Piano,Keyboards,"Jazz, Classical/Baroque/Romantic/Modern, Pop, פסקולי מוזיקה",1,1,0,1,0,1,8.623161316,1
+26,sub-YA1295,M,Vocal,Vocal,"Ancient_Music/Medieval/Renaissance, Classical/Baroque/Romantic/Modern, Contemporary_Classical",1,0,0,0,0,0,1.390357375,1
+27,sub-YA1296,M,Saxophone,Wind,"Indie, Electronic/Techno/House, Jazz, Disco/R&B/Funk, Classical/Baroque/Romantic/Modern, Heavy_Rock/Metal, Classic_Rock/Blues/Country",1,1,1,0,1,0,6.449997902,1
+28,sub-YA1297,M,Tuba,Wind,"Classical/Baroque/Romantic/Modern, Contemporary_Classical",1,0,0,0,1,0,-11.40146828,1
+29,sub-YA1298,M,Drum_Set,Drums,"Disco/R&B/Funk, Mizrahi_music/Eastern_Arabic_Music, Pop, Rap/Hip-Hop, Reggae/Ska, Classic_Rock/Blues/Country",0,0,1,1,0,1,9.167699814,1
+30,sub-YA1299,M,Guitar,Guitars,"Indie, Electronic/Techno/House, Jazz, Pop, Rap/Hip-Hop, Heavy_Rock/Metal, Classic_Rock/Blues/Country",0,1,1,1,0,1,8.232525826,1
+31,sub-YA1300,M,Flute,Wind,"Classical/Baroque/Romantic/Modern, Contemporary_Classical",1,0,0,0,1,0,-3.436153412,1
+32,sub-YA1301,M,Bass_Guitar,Guitars,"Indie, Disco/R&B/Funk, Pop, Rap/Hip-Hop, Heavy_Rock/Metal, Classic_Rock/Blues/Country",0,0,1,1,0,1,0.759141684,1
+33,sub-YA1302,M,Other_Drums,Drums,Jazz,0,1,0,0,0,1,-0.291321516,1
+34,sub-YA1303,M,Viola,Strings,"Indie, Jazz, Classical/Baroque/Romantic/Modern, Contemporary_Classical, Pop, Classic_Rock/Blues/Country, מיוזיקל",1,1,1,1,0,0,-2.483292103,1
+35,sub-YA1304,M,Drum_Set,Drums,"Indie, Jazz, Pop, Classic_Rock/Blues/Country",0,1,1,1,0,1,2.221037865,1
+36,sub-YA1305,M,Violin,Strings,"Classical/Baroque/Romantic/Modern, Contemporary_Classical, Pop",1,0,0,1,0,0,1.494669199,1
+37,sub-YA1306,M,Guitar,Guitars,Indie,0,0,0,0,0,1,2.243986845,1
+38,sub-YA1307,M,Other_Drums,Drums,"Jazz, Disco/R&B/Funk, African_Music",0,1,0,0,0,1,-0.038423052,1
+39,sub-YA1308,M,Guitar,Guitars,"Indie, Jazz, Disco/R&B/Funk, Pop, Classic_Rock/Blues/Country",0,1,1,1,0,1,-1.228634596,1
+40,sub-YA1309,M,Drum_Set,Drums,"Indie, Jazz, Disco/R&B/Funk, Pop, Rap/Hip-Hop",0,1,0,1,0,1,2.823378325,1
+41,sub-YA1310,M,Harp,Strings,Classical/Baroque/Romantic/Modern,1,0,0,0,0,0,-0.477433681,1
+42,sub-YA1311,M,Piano,Keyboards,"Jazz, Pop, Rap/Hip-Hop, Classic_Rock/Blues/Country",0,1,1,1,0,1,2.06114006,1
+43,sub-YA1312,M,Clarinet,Wind,Classical/Baroque/Romantic/Modern,1,0,0,0,1,0,-9.096675873,1
+44,sub-YA1314,M,Guitar,Guitars,"Indie, Jazz, Disco/R&B/Funk, Rap/Hip-Hop, Reggae/Ska, Heavy_Rock/Metal, Classic_Rock/Blues/Country",0,1,1,0,0,1,-11.33991623,1
+45,sub-YA1315,M,Piano,Keyboards,"Indie, Jazz, Classical/Baroque/Romantic/Modern, Pop, Classic_Rock/Blues/Country",1,1,1,1,0,1,3.854225159,1
+46,sub-YA1316,M,Saxophone,Wind,"Jazz, Latin_American_Music, Classical/Baroque/Romantic/Modern, Pop, Classic_Rock/Blues/Country",1,1,1,1,1,0,-0.149319649,1
+47,sub-YA1318,M,Vocal,Vocal,Classical/Baroque/Romantic/Modern,1,0,0,0,0,0,8.07585144,1
+48,sub-YA1319,M,Piano,Keyboards,"Jazz, Disco/R&B/Funk, Heavy_Rock/Metal, Classic_Rock/Blues/Country",0,1,1,0,0,1,2.293924332,1
+49,sub-YA1320,M,Guitar,Guitars,"Jazz, Classical/Baroque/Romantic/Modern, Classic_Rock/Blues/Country",1,1,1,0,0,1,8.301271439,1
+50,sub-YA1321,M,Piano,Keyboards,"Indie, Electronic/Techno/House, Jazz, Disco/R&B/Funk, African_Music, Jewish_Music/Chazanut/Hasidic_Music, Latin_American_Music, Mizrahi_music/Eastern_Arabic_Music, Ancient_Music/Medieval/Renaissance, Classical/Baroque/Romantic/Modern, Contemporary_Classical, Pop, Rap/Hip-Hop, Reggae/Ska, Heavy_Rock/Metal, Classic_Rock/Blues/Country",1,1,1,1,0,1,-3.342461109,1
+51,sub-YA1322,M,Trumpet,Wind,"Classical/Baroque/Romantic/Modern, Contemporary_Classical",1,0,0,0,1,0,7.503177643,1
+52,sub-YA1323,M,Piano,Keyboards,"Jazz, Disco/R&B/Funk, Christian_Religious_Music, Pop",0,1,0,1,0,1,1.878099799,1
+53,sub-YA1324,M,Bass_Guitar,Guitars,"Indie, Jazz, Disco/R&B/Funk, African_Music, Christian_Religious_Music, Jewish_Music/Chazanut/Hasidic_Music, Latin_American_Music, Mizrahi_music/Eastern_Arabic_Music, Ancient_Music/Medieval/Renaissance, Classical/Baroque/Romantic/Modern, Pop, Heavy_Rock/Metal, Classic_Rock/Blues/Country",1,1,1,1,0,1,7.670009613,1
+54,sub-YA1325,M,Bass_Guitar,Guitars,"Indie, Disco/R&B/Funk, Pop, Classic_Rock/Blues/Country",0,0,1,1,0,1,0.015870571,1
+55,sub-YA1327,M,French_Horn,Wind,"Classical/Baroque/Romantic/Modern, Contemporary_Classical, Pop",1,0,0,1,1,0,-3.596610308,1
+56,sub-YA1329,M,Drum_Set,Drums,"Indie, Jazz, Pop, Heavy_Rock/Metal, Classic_Rock/Blues/Country",0,1,1,1,0,1,7.949308395,1
+57,sub-YA1331,M,Guitar,Guitars,"Mizrahi_music/Eastern_Arabic_Music, Pop, Rap/Hip-Hop, Classic_Rock/Blues/Country",0,0,1,1,0,1,-0.797704935,1
+58,sub-YA1332,M,Piano,Keyboards,"Indie, Jazz, Pop, Classic_Rock/Blues/Country",0,1,1,1,0,1,-8.328072548,1
+59,sub-YA1334,M,Vocal,Vocal,"Christian_Religious_Music, Latin_American_Music, Classical/Baroque/Romantic/Modern, Contemporary_Classical",1,0,0,0,0,0,-1.960069418,1
+60,sub-YA1335,M,Tuba,Wind,"Indie, Jazz, Disco/R&B/Funk, African_Music",0,1,0,0,1,0,-0.038423052,1
+61,sub-YA1336,M,Guitar,Guitars,"Rap/Hip-Hop, Classic_Rock/Blues/Country",0,0,1,0,0,1,-0.620339751,1
+62,sub-YA1339,M,Piano,Keyboards,"Jazz, Disco/R&B/Funk",0,1,0,0,0,1,2.013391256,1
+63,sub-YA1340,M,Piano,Keyboards,"Jazz, Classical/Baroque/Romantic/Modern, Classic_Rock/Blues/Country",1,1,1,0,0,1,-2.030239344,1
+64,sub-YA1341,M,Contrabass,Strings,"Christian_Religious_Music, Jewish_Music/Chazanut/Hasidic_Music, Classical/Baroque/Romantic/Modern, Contemporary_Classical, Pop, שירים עבריים",1,0,0,1,0,0,3.928068638,1
+65,sub-YA1343,M,Piano,Keyboards,"Indie, Electronic/Techno/House, Jazz, Disco/R&B/Funk, Pop, Classic_Rock/Blues/Country",0,1,1,1,0,1,-0.553691626,1
+66,sub-YA1344,M,Guitar,Guitars,"Jazz, Heavy_Rock/Metal, Classic_Rock/Blues/Country",0,1,1,0,0,1,-9.882769585,1
+67,sub-YA1345,M,Guitar,Guitars,,,,,0,,,0.968920088,1
+68,sub-YA1346,M,Drum_Set,Drums,"Indie, Jazz, Disco/R&B/Funk, African_Music, Jewish_Music/Chazanut/Hasidic_Music, Pop, Classic_Rock/Blues/Country, רוק אלטרנטיבי, גראנג׳, רחוב, מחזות זמר",0,1,1,1,0,1,1.69265306,1
+69,sub-YA1347,M,Vocal,Vocal,"Christian_Religious_Music, Ancient_Music/Medieval/Renaissance, Classical/Baroque/Romantic/Modern",1,0,0,0,0,0,4.214147568,1
+70,sub-YA1348,M,Piano,Keyboards,"Pop, טאיקו",0,0,0,1,0,1,6.788796902,1
+71,sub-YA1349,M,Piano,Keyboards,"Indie, Jazz, Pop",0,1,0,1,0,1,0.142992973,1
+72,sub-YA1351,M,Piano,Keyboards,"Jazz, Classical/Baroque/Romantic/Modern, Heavy_Rock/Metal, Classic_Rock/Blues/Country",1,1,1,0,0,1,8.918151855,1
+73,sub-YA1356,M,Guitar,Guitars,"Indie, Heavy_Rock/Metal, Classic_Rock/Blues/Country",0,0,1,0,0,1,0.811035097,1
+74,sub-YA1357,M,Piano,Keyboards,Classical/Baroque/Romantic/Modern,1,0,0,0,0,1,6.488593102,1
+75,sub-YA1358,M,Trumpet,Wind,Jazz,0,1,0,0,1,0,0.211220503,1
+76,sub-YA1359,M,Guitar,Guitars,Indie,0,0,0,0,0,1,4.309024334,1
+77,sub-YA1361,M,Piano,Keyboards,"Christian_Religious_Music, Ancient_Music/Medieval/Renaissance, Classical/Baroque/Romantic/Modern, Contemporary_Classical, Pop",1,0,0,1,0,1,-0.038423052,1
+78,sub-YA1362,M,Flute,Wind,,,,,0,,,0.968920088,1
+79,sub-YA1363,M,Piano,Keyboards,Indie,0,0,0,0,0,1,-3.639665127,1
+80,sub-YA1364,M,Piano,Keyboards,"Christian_Religious_Music, Classical/Baroque/Romantic/Modern, Contemporary_Classical",1,0,0,0,0,1,-1.465615511,1
+81,sub-YA1366,M,Flute,Wind,"Ancient_Music/Medieval/Renaissance, Classical/Baroque/Romantic/Modern, Contemporary_Classical",1,0,0,0,1,0,0.058754444,1
+82,sub-YA1367,M,Bass_Guitar,Guitars,"Indie, Jazz, Pop, Rap/Hip-Hop, Heavy_Rock/Metal, Classic_Rock/Blues/Country",0,1,1,1,0,1,-0.038423052,1
+83,sub-YA1369,M,Piano,Keyboards,"Jazz, Disco/R&B/Funk, Ancient_Music/Medieval/Renaissance, Classical/Baroque/Romantic/Modern, Contemporary_Classical, Reggae/Ska, Heavy_Rock/Metal, Classic_Rock/Blues/Country",1,1,1,0,0,1,6.23765707,1
+84,sub-YA1370,M,Saxophone,Wind,"Jazz, Disco/R&B/Funk, Christian_Religious_Music, Ancient_Music/Medieval/Renaissance, Classical/Baroque/Romantic/Modern, Contemporary_Classical, Pop",1,1,0,1,1,0,4.319070816,1
+85,sub-YA1373,M,Drum_Set,Drums,"Jazz, Pop, Classic_Rock/Blues/Country",0,1,1,1,0,1,-0.038423052,1
+86,sub-YA1376,M,Piano,Keyboards,"Indie, Electronic/Techno/House, Jazz, Disco/R&B/Funk, African_Music, Mizrahi_music/Eastern_Arabic_Music, Classical/Baroque/Romantic/Modern, Contemporary_Classical, Pop, Rap/Hip-Hop, Heavy_Rock/Metal, Classic_Rock/Blues/Country",1,1,1,1,0,1,-0.800420403,1
+87,sub-YA1378,M,Violin,Strings,מוזיקה כריתית פרסית וטורקית,0,0,0,0,0,0,-3.15480876,1
+88,sub-YA1380,M,Bassoon,Wind,Classical/Baroque/Romantic/Modern,1,0,0,0,1,0,-11.53337765,1
+89,sub-YA1381,M,Guitar,Guitars,"Indie, Electronic/Techno/House, Jazz, Disco/R&B/Funk, African_Music, Latin_American_Music, Classical/Baroque/Romantic/Modern, Contemporary_Classical, Pop, Heavy_Rock/Metal, Classic_Rock/Blues/Country",1,1,1,1,0,1,2.395215988,1
+90,sub-YA1383,M,Guitar,Guitars,"Indie, Jazz, Disco/R&B/Funk, Mizrahi_music/Eastern_Arabic_Music, Contemporary_Classical, Pop, Heavy_Rock/Metal, Classic_Rock/Blues/Country",1,1,1,1,0,1,3.731026888,1
+91,sub-YA1387,M,Drum_Set,Drums,"Indie, Heavy_Rock/Metal, מוסיקת מדיטצייה ומוסיקה לילדים",0,0,1,0,0,1,-9.077641487,1
+92,sub-YA1388,M,Guitar,Guitars,"Indie, Disco/R&B/Funk, Pop, Rap/Hip-Hop",0,0,0,1,0,1,-0.501139164,1
+93,sub-YA1389,M,Piano,Keyboards,,,,,0,,,3.484535217,1
+94,sub-YA1390,M,Piano,Keyboards,"Jazz, Classical/Baroque/Romantic/Modern, Pop, Classic_Rock/Blues/Country",1,1,1,1,0,1,6.937368393,1
+95,sub-YA1391,M,Oboe,Wind,"Indie, Classical/Baroque/Romantic/Modern",1,0,0,0,1,0,-3.190748215,1
+96,sub-YA1393,M,Guitar,Guitars,"Indie, Electronic/Techno/House, Pop",0,0,0,1,0,1,-0.038423052,1
+97,sub-YA1394,NM,,NM,,,,,0,,,10.87209702,1
+98,sub-YA1396,NM,,NM,,,,,0,,,10.87209702,1
+99,sub-YA1397,NM,,NM,,,,,0,,,10.87209702,1
+100,sub-YA1402,NM,,NM,,,,,0,,,10.87209702,1
+101,sub-YA1403,M,Guitar,Guitars,"Jazz, Mizrahi_music/Eastern_Arabic_Music, Pop",0,1,0,1,0,1,-1.246360898,1
+102,sub-YA1404,NM,,NM,,,,,0,,,10.87209702,1
+103,sub-YA1405,M,Vocal,Vocal,,,,,0,,,0.968920088,1
+104,sub-YA1408,M,Drum_Set,Drums,"Jazz, Disco/R&B/Funk, Heavy_Rock/Metal, Classic_Rock/Blues/Country",0,1,1,0,0,1,9.560379982,1
+105,sub-YA1410,NM,,NM,,,,,0,,,10.87209702,1
+106,sub-FNCL34,M,Violin,Strings,"Classical/Baroque/Romantic/Modern, Classic_Rock/Blues/Country, מוזיקת מחזמרים",1,0,1,0,0,0,9.293919563,0
+107,sub-FNCL43,NM,,NM,,,,,0,,,10.87209702,0
+108,sub-FNCL46,M,Guitar,Guitars,Classic_Rock/Blues/Country,0,0,1,0,0,1,0.505401611,0
+109,sub-FNCL47,NM,,NM,,,,,0,,,10.87209702,0
+110,sub-FNCL48,M,Bass_Guitar,Guitars,"Indie, Jazz, Disco/R&B/Funk, Heavy_Rock/Metal, Classic_Rock/Blues/Country",0,1,1,0,0,1,8.873100281,0
+111,sub-FNCL49,NM,,NM,,,,,0,,,10.87209702,0
+112,sub-FNCL50,NM,,NM,,,,,0,,,10.87209702,0
+113,sub-FNCL51,NM,,NM,,,,,0,,,10.87209702,0
+114,sub-FNCL52,NM,,NM,,,,,0,,,10.87209702,0
+115,sub-FNCL54,NM,,NM,,,,,0,,,10.87209702,0
+116,sub-FNCL60,NM,,NM,,,,,0,,,10.87209702,0
+117,sub-FTNC09,NM,,NM,,,,,0,,,10.87209702,0
+118,sub-FTNC11,NM,,NM,,,,,0,,,10.87209702,0
+119,sub-GYML33,NM,,NM,,,,,0,,,10.87209702,0
+120,sub-GYML38,NM,,NM,,,,,0,,,10.87209702,0
+121,sub-GYML41,M,Guitar,Guitars,"Indie, Jazz, Disco/R&B/Funk, Rap/Hip-Hop, Reggae/Ska, Classic_Rock/Blues/Country",0,1,1,0,0,1,-12.28414917,0
+122,sub-MRTC18,NM,,NM,,,,,0,,,10.87209702,0
+123,sub-YA1217,M,Piano,Keyboards,"Classical/Baroque/Romantic/Modern, Contemporary_Classical, Pop",1,0,0,1,0,1,-0.038423052,0
+124,sub-YA1286,M,Drum_Set,Drums,"Jazz, Rap/Hip-Hop",0,1,0,0,0,1,9.745949745,0
+125,sub-YA1287,M,Bassoon,Wind,"Classical/Baroque/Romantic/Modern, Contemporary_Classical",1,0,0,0,1,0,-1.185727835,0
+126,sub-YA1288,M,French_Horn,Wind,"Jewish_Music/Chazanut/Hasidic_Music, Classical/Baroque/Romantic/Modern, Contemporary_Classical, שירים ישראלים של פעם",1,0,0,0,1,0,-0.310686231,0
+127,sub-YA1289,M,Flute,Wind,Classical/Baroque/Romantic/Modern,1,0,0,0,1,0,0.426790297,0
+128,sub-YA1290,M,Saxophone,Wind,"Indie, Jazz, Disco/R&B/Funk, Latin_American_Music, Classical/Baroque/Romantic/Modern, Contemporary_Classical, Pop, Reggae/Ska, Heavy_Rock/Metal",1,1,1,1,1,0,2.607834578,0
+129,sub-YA1291,M,French_Horn,Wind,"Classical/Baroque/Romantic/Modern, Contemporary_Classical",1,0,0,0,1,0,-8.156076431,0
+130,sub-YA1293,M,Trombone,Wind,Classical/Baroque/Romantic/Modern,1,0,0,0,1,0,8.516924858,0
+131,sub-YA1294,M,Piano,Keyboards,"Jazz, Classical/Baroque/Romantic/Modern, Pop, פסקולי מוזיקה",1,1,0,1,0,1,8.623161316,0
+132,sub-YA1295,M,Vocal,Vocal,"Ancient_Music/Medieval/Renaissance, Classical/Baroque/Romantic/Modern, Contemporary_Classical",1,0,0,0,0,0,1.390357375,0
+133,sub-YA1296,M,Saxophone,Wind,"Indie, Electronic/Techno/House, Jazz, Disco/R&B/Funk, Classical/Baroque/Romantic/Modern, Heavy_Rock/Metal, Classic_Rock/Blues/Country",1,1,1,0,1,0,6.449997902,0
+134,sub-YA1297,M,Tuba,Wind,"Classical/Baroque/Romantic/Modern, Contemporary_Classical",1,0,0,0,1,0,-11.40146828,0
+135,sub-YA1298,M,Drum_Set,Drums,"Disco/R&B/Funk, Mizrahi_music/Eastern_Arabic_Music, Pop, Rap/Hip-Hop, Reggae/Ska, Classic_Rock/Blues/Country",0,0,1,1,0,1,9.167699814,0
+136,sub-YA1299,M,Guitar,Guitars,"Indie, Electronic/Techno/House, Jazz, Pop, Rap/Hip-Hop, Heavy_Rock/Metal, Classic_Rock/Blues/Country",0,1,1,1,0,1,8.232525826,0
+137,sub-YA1300,M,Flute,Wind,"Classical/Baroque/Romantic/Modern, Contemporary_Classical",1,0,0,0,1,0,-3.436153412,0
+138,sub-YA1301,M,Bass_Guitar,Guitars,"Indie, Disco/R&B/Funk, Pop, Rap/Hip-Hop, Heavy_Rock/Metal, Classic_Rock/Blues/Country",0,0,1,1,0,1,0.759141684,0
+139,sub-YA1302,M,Other_Drums,Drums,Jazz,0,1,0,0,0,1,-0.291321516,0
+140,sub-YA1303,M,Viola,Strings,"Indie, Jazz, Classical/Baroque/Romantic/Modern, Contemporary_Classical, Pop, Classic_Rock/Blues/Country, מיוזיקל",1,1,1,1,0,0,-2.483292103,0
+141,sub-YA1304,M,Drum_Set,Drums,"Indie, Jazz, Pop, Classic_Rock/Blues/Country",0,1,1,1,0,1,2.221037865,0
+142,sub-YA1305,M,Violin,Strings,"Classical/Baroque/Romantic/Modern, Contemporary_Classical, Pop",1,0,0,1,0,0,1.494669199,0
+143,sub-YA1306,M,Guitar,Guitars,Indie,0,0,0,0,0,1,2.243986845,0
+144,sub-YA1307,M,Other_Drums,Drums,"Jazz, Disco/R&B/Funk, African_Music",0,1,0,0,0,1,-0.038423052,0
+145,sub-YA1308,M,Guitar,Guitars,"Indie, Jazz, Disco/R&B/Funk, Pop, Classic_Rock/Blues/Country",0,1,1,1,0,1,-1.228634596,0
+146,sub-YA1309,M,Drum_Set,Drums,"Indie, Jazz, Disco/R&B/Funk, Pop, Rap/Hip-Hop",0,1,0,1,0,1,2.823378325,0
+147,sub-YA1310,M,Harp,Strings,Classical/Baroque/Romantic/Modern,1,0,0,0,0,0,-0.477433681,0
+148,sub-YA1311,M,Piano,Keyboards,"Jazz, Pop, Rap/Hip-Hop, Classic_Rock/Blues/Country",0,1,1,1,0,1,2.06114006,0
+149,sub-YA1312,M,Clarinet,Wind,Classical/Baroque/Romantic/Modern,1,0,0,0,1,0,-9.096675873,0
+150,sub-YA1314,M,Guitar,Guitars,"Indie, Jazz, Disco/R&B/Funk, Rap/Hip-Hop, Reggae/Ska, Heavy_Rock/Metal, Classic_Rock/Blues/Country",0,1,1,0,0,1,-11.33991623,0
+151,sub-YA1315,M,Piano,Keyboards,"Indie, Jazz, Classical/Baroque/Romantic/Modern, Pop, Classic_Rock/Blues/Country",1,1,1,1,0,1,3.854225159,0
+152,sub-YA1316,M,Saxophone,Wind,"Jazz, Latin_American_Music, Classical/Baroque/Romantic/Modern, Pop, Classic_Rock/Blues/Country",1,1,1,1,1,0,-0.149319649,0
+153,sub-YA1318,M,Vocal,Vocal,Classical/Baroque/Romantic/Modern,1,0,0,0,0,0,8.07585144,0
+154,sub-YA1319,M,Piano,Keyboards,"Jazz, Disco/R&B/Funk, Heavy_Rock/Metal, Classic_Rock/Blues/Country",0,1,1,0,0,1,2.293924332,0
+155,sub-YA1320,M,Guitar,Guitars,"Jazz, Classical/Baroque/Romantic/Modern, Classic_Rock/Blues/Country",1,1,1,0,0,1,8.301271439,0
+156,sub-YA1321,M,Piano,Keyboards,"Indie, Electronic/Techno/House, Jazz, Disco/R&B/Funk, African_Music, Jewish_Music/Chazanut/Hasidic_Music, Latin_American_Music, Mizrahi_music/Eastern_Arabic_Music, Ancient_Music/Medieval/Renaissance, Classical/Baroque/Romantic/Modern, Contemporary_Classical, Pop, Rap/Hip-Hop, Reggae/Ska, Heavy_Rock/Metal, Classic_Rock/Blues/Country",1,1,1,1,0,1,-3.342461109,0
+157,sub-YA1322,M,Trumpet,Wind,"Classical/Baroque/Romantic/Modern, Contemporary_Classical",1,0,0,0,1,0,7.503177643,0
+158,sub-YA1323,M,Piano,Keyboards,"Jazz, Disco/R&B/Funk, Christian_Religious_Music, Pop",0,1,0,1,0,1,1.878099799,0
+159,sub-YA1324,M,Bass_Guitar,Guitars,"Indie, Jazz, Disco/R&B/Funk, African_Music, Christian_Religious_Music, Jewish_Music/Chazanut/Hasidic_Music, Latin_American_Music, Mizrahi_music/Eastern_Arabic_Music, Ancient_Music/Medieval/Renaissance, Classical/Baroque/Romantic/Modern, Pop, Heavy_Rock/Metal, Classic_Rock/Blues/Country",1,1,1,1,0,1,7.670009613,0
+160,sub-YA1325,M,Bass_Guitar,Guitars,"Indie, Disco/R&B/Funk, Pop, Classic_Rock/Blues/Country",0,0,1,1,0,1,0.015870571,0
+161,sub-YA1327,M,French_Horn,Wind,"Classical/Baroque/Romantic/Modern, Contemporary_Classical, Pop",1,0,0,1,1,0,-3.596610308,0
+162,sub-YA1329,M,Drum_Set,Drums,"Indie, Jazz, Pop, Heavy_Rock/Metal, Classic_Rock/Blues/Country",0,1,1,1,0,1,7.949308395,0
+163,sub-YA1331,M,Guitar,Guitars,"Mizrahi_music/Eastern_Arabic_Music, Pop, Rap/Hip-Hop, Classic_Rock/Blues/Country",0,0,1,1,0,1,-0.797704935,0
+164,sub-YA1332,M,Piano,Keyboards,"Indie, Jazz, Pop, Classic_Rock/Blues/Country",0,1,1,1,0,1,-8.328072548,0
+165,sub-YA1334,M,Vocal,Vocal,"Christian_Religious_Music, Latin_American_Music, Classical/Baroque/Romantic/Modern, Contemporary_Classical",1,0,0,0,0,0,-1.960069418,0
+166,sub-YA1335,M,Tuba,Wind,"Indie, Jazz, Disco/R&B/Funk, African_Music",0,1,0,0,1,0,-0.038423052,0
+167,sub-YA1336,M,Guitar,Guitars,"Rap/Hip-Hop, Classic_Rock/Blues/Country",0,0,1,0,0,1,-0.620339751,0
+168,sub-YA1339,M,Piano,Keyboards,"Jazz, Disco/R&B/Funk",0,1,0,0,0,1,2.013391256,0
+169,sub-YA1340,M,Piano,Keyboards,"Jazz, Classical/Baroque/Romantic/Modern, Classic_Rock/Blues/Country",1,1,1,0,0,1,-2.030239344,0
+170,sub-YA1341,M,Contrabass,Strings,"Christian_Religious_Music, Jewish_Music/Chazanut/Hasidic_Music, Classical/Baroque/Romantic/Modern, Contemporary_Classical, Pop, שירים עבריים",1,0,0,1,0,0,3.928068638,0
+171,sub-YA1343,M,Piano,Keyboards,"Indie, Electronic/Techno/House, Jazz, Disco/R&B/Funk, Pop, Classic_Rock/Blues/Country",0,1,1,1,0,1,-0.553691626,0
+172,sub-YA1344,M,Guitar,Guitars,"Jazz, Heavy_Rock/Metal, Classic_Rock/Blues/Country",0,1,1,0,0,1,-9.882769585,0
+173,sub-YA1345,M,Guitar,Guitars,,,,,0,,,0.968920088,0
+174,sub-YA1346,M,Drum_Set,Drums,"Indie, Jazz, Disco/R&B/Funk, African_Music, Jewish_Music/Chazanut/Hasidic_Music, Pop, Classic_Rock/Blues/Country, רוק אלטרנטיבי, גראנג׳, רחוב, מחזות זמר",0,1,1,1,0,1,1.69265306,0
+175,sub-YA1347,M,Vocal,Vocal,"Christian_Religious_Music, Ancient_Music/Medieval/Renaissance, Classical/Baroque/Romantic/Modern",1,0,0,0,0,0,4.214147568,0
+176,sub-YA1348,M,Piano,Keyboards,"Pop, טאיקו",0,0,0,1,0,1,6.788796902,0
+177,sub-YA1349,M,Piano,Keyboards,"Indie, Jazz, Pop",0,1,0,1,0,1,0.142992973,0
+178,sub-YA1351,M,Piano,Keyboards,"Jazz, Classical/Baroque/Romantic/Modern, Heavy_Rock/Metal, Classic_Rock/Blues/Country",1,1,1,0,0,1,8.918151855,0
+179,sub-YA1356,M,Guitar,Guitars,"Indie, Heavy_Rock/Metal, Classic_Rock/Blues/Country",0,0,1,0,0,1,0.811035097,0
+180,sub-YA1357,M,Piano,Keyboards,Classical/Baroque/Romantic/Modern,1,0,0,0,0,1,6.488593102,0
+181,sub-YA1358,M,Trumpet,Wind,Jazz,0,1,0,0,1,0,0.211220503,0
+182,sub-YA1359,M,Guitar,Guitars,Indie,0,0,0,0,0,1,4.309024334,0
+183,sub-YA1361,M,Piano,Keyboards,"Christian_Religious_Music, Ancient_Music/Medieval/Renaissance, Classical/Baroque/Romantic/Modern, Contemporary_Classical, Pop",1,0,0,1,0,1,-0.038423052,0
+184,sub-YA1362,M,Flute,Wind,,,,,0,,,0.968920088,0
+185,sub-YA1363,M,Piano,Keyboards,Indie,0,0,0,0,0,1,-3.639665127,0
+186,sub-YA1364,M,Piano,Keyboards,"Christian_Religious_Music, Classical/Baroque/Romantic/Modern, Contemporary_Classical",1,0,0,0,0,1,-1.465615511,0
+187,sub-YA1366,M,Flute,Wind,"Ancient_Music/Medieval/Renaissance, Classical/Baroque/Romantic/Modern, Contemporary_Classical",1,0,0,0,1,0,0.058754444,0
+188,sub-YA1367,M,Bass_Guitar,Guitars,"Indie, Jazz, Pop, Rap/Hip-Hop, Heavy_Rock/Metal, Classic_Rock/Blues/Country",0,1,1,1,0,1,-0.038423052,0
+189,sub-YA1369,M,Piano,Keyboards,"Jazz, Disco/R&B/Funk, Ancient_Music/Medieval/Renaissance, Classical/Baroque/Romantic/Modern, Contemporary_Classical, Reggae/Ska, Heavy_Rock/Metal, Classic_Rock/Blues/Country",1,1,1,0,0,1,6.23765707,0
+190,sub-YA1370,M,Saxophone,Wind,"Jazz, Disco/R&B/Funk, Christian_Religious_Music, Ancient_Music/Medieval/Renaissance, Classical/Baroque/Romantic/Modern, Contemporary_Classical, Pop",1,1,0,1,1,0,4.319070816,0
+191,sub-YA1373,M,Drum_Set,Drums,"Jazz, Pop, Classic_Rock/Blues/Country",0,1,1,1,0,1,-0.038423052,0
+192,sub-YA1376,M,Piano,Keyboards,"Indie, Electronic/Techno/House, Jazz, Disco/R&B/Funk, African_Music, Mizrahi_music/Eastern_Arabic_Music, Classical/Baroque/Romantic/Modern, Contemporary_Classical, Pop, Rap/Hip-Hop, Heavy_Rock/Metal, Classic_Rock/Blues/Country",1,1,1,1,0,1,-0.800420403,0
+193,sub-YA1378,M,Violin,Strings,מוזיקה כריתית פרסית וטורקית,0,0,0,0,0,0,-3.15480876,0
+194,sub-YA1380,M,Bassoon,Wind,Classical/Baroque/Romantic/Modern,1,0,0,0,1,0,-11.53337765,0
+195,sub-YA1381,M,Guitar,Guitars,"Indie, Electronic/Techno/House, Jazz, Disco/R&B/Funk, African_Music, Latin_American_Music, Classical/Baroque/Romantic/Modern, Contemporary_Classical, Pop, Heavy_Rock/Metal, Classic_Rock/Blues/Country",1,1,1,1,0,1,2.395215988,0
+196,sub-YA1383,M,Guitar,Guitars,"Indie, Jazz, Disco/R&B/Funk, Mizrahi_music/Eastern_Arabic_Music, Contemporary_Classical, Pop, Heavy_Rock/Metal, Classic_Rock/Blues/Country",1,1,1,1,0,1,3.731026888,0
+197,sub-YA1387,M,Drum_Set,Drums,"Indie, Heavy_Rock/Metal, מוסיקת מדיטצייה ומוסיקה לילדים",0,0,1,0,0,1,-9.077641487,0
+198,sub-YA1388,M,Guitar,Guitars,"Indie, Disco/R&B/Funk, Pop, Rap/Hip-Hop",0,0,0,1,0,1,-0.501139164,0
+199,sub-YA1389,M,Piano,Keyboards,,,,,0,,,3.484535217,0
+200,sub-YA1390,M,Piano,Keyboards,"Jazz, Classical/Baroque/Romantic/Modern, Pop, Classic_Rock/Blues/Country",1,1,1,1,0,1,6.937368393,0
+201,sub-YA1391,M,Oboe,Wind,"Indie, Classical/Baroque/Romantic/Modern",1,0,0,0,1,0,-3.190748215,0
+202,sub-YA1393,M,Guitar,Guitars,"Indie, Electronic/Techno/House, Pop",0,0,0,1,0,1,-0.038423052,0
+203,sub-YA1394,NM,,NM,,,,,0,,,10.87209702,0
+204,sub-YA1396,NM,,NM,,,,,0,,,10.87209702,0
+205,sub-YA1397,NM,,NM,,,,,0,,,10.87209702,0
+206,sub-YA1402,NM,,NM,,,,,0,,,10.87209702,0
+207,sub-YA1403,M,Guitar,Guitars,"Jazz, Mizrahi_music/Eastern_Arabic_Music, Pop",0,1,0,1,0,1,-1.246360898,0
+208,sub-YA1404,NM,,NM,,,,,0,,,10.87209702,0
+209,sub-YA1405,M,Vocal,Vocal,,,,,0,,,0.968920088,0
+210,sub-YA1408,M,Drum_Set,Drums,"Jazz, Disco/R&B/Funk, Heavy_Rock/Metal, Classic_Rock/Blues/Country",0,1,1,0,0,1,9.560379982,0
+211,sub-YA1410,NM,,NM,,,,,0,,,10.87209702,0

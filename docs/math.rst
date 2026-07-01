@@ -125,7 +125,7 @@ where the Gram matrix :math:`U \in \mathbb{R}^{K \times K}` is defined as:
 
    .. math::
 
-      \text{scores}_i = \tilde{c}_i\, U\, \phi.
+      \text{scores}_i = \tilde{c}_i^\top\, U\, \phi.
 
    - The computed score indicates the contribution or importance of that voxel for the corresponding principal component.
    - Using the spatial information from the original brain mask, these voxel scores are then mapped back to a volume of the brain. This produces an importance map, saved as a file with the brain’s dimensions, where each voxel’s value indicates its contribution to the fPCA component.
