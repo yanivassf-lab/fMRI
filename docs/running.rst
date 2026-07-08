@@ -21,19 +21,22 @@ Synopsis
              [--num-pca-comp <INT>] \
              [--batch-size <INT>] \
              [--TR <FLOAT>] \
-             [--smooth-size <INT>] \
              [--lambda-min <FLOAT>] \
              [--lambda-max <FLOAT>] \
              [--derivatives-num-p <INT>] \
              [--derivatives-num-u <INT>] \
-             [--processed <BOOL>] \
              [--no-penalty <BOOL>] \
              [--calc-penalty-bspline-accurately <BOOL>] \
              [--calc-penalty-skfda <BOOL>] \
              [--n-skip-vols-start <int>] \
              [--n-skip-vols-end <int>] \
+             [--processed <BOOL>] \
+             [--smooth-size <INT>] \
              [--highpass <FLOAT>] \
              [--lowpass <FLOAT>] \
+             [--use-nilearn-filter <BOOL>] \
+             [--n-compcor-nilearn-filter <INT>] \
+             [--smoothing-fwhm-nilearn-filter <INT>] \
              [--low-mem <BOOL>] \
              [--n-jobs <INT>]
 
@@ -71,9 +74,6 @@ Arguments
 \-\-TR `<FLOAT>`
   Repetition time (TR) in seconds. If not specified, the TR will be inferred from the NIfTI header (default: 0.75).
 
-\-\-smooth-size `<INT>`
-  Box size of smoothing kernel. Relevant only if --processed is not set (default: 5).
-
 \-\-lambda-min `<FLOAT>`
   Minimum value of lambda in log10 scale (i.e., 10^-6) (default: -6).
 
@@ -85,9 +85,6 @@ Arguments
 
 \-\-derivatives-num-u `<INT>`
   Number of derivatives in calculation of penalty matrix U (default: 0)
-
-\-\-processed `<optional>`
-  If specified, the input data is assumed to be post-processed (e.g., smoothing, filtering), and no additional post-processing will be applied. If not specified the pipeline will apply basic post-processing steps (default: not set).
 
 \-\-no-penalty `<BOOL>`
   If specified, no penalty will be used (default: not set).
@@ -104,11 +101,26 @@ Arguments
 \-\-n-skip-vols-end `<ING>`
   Number of initial fMRI volumes to discard from the end of the signal (default: 0).
 
+\-\-processed `<optional>`
+  If specified, the input data is assumed to be post-processed (e.g., smoothing, filtering), and no additional post-processing will be applied. If not specified the pipeline will apply basic post-processing steps (default: not set).
+
+\-\-smooth-size `<INT>`
+  Box size of smoothing kernel. Relevant only if --processed is not set (default: 5).
+
 \-\-highpass `<FLOAT>`
   High-pass filter cutoff frequency in Hz. Filters out slow drifts below this frequency (default: 0.01).
 
 \-\-lowpass `<FLOAT>`
   Low-pass filter cutoff frequency in Hz. Filters out high-frequency noise above this frequency (default: 0.08).
+
+\-\-use-nilearn-filter `<BOOL>`
+  If set, nilearn's NiftiMasker using confound files will be used for filtering instead of the default method (default: not set).
+
+\-\-n-compcor-nilearn-filter `<INT>`
+  Number of CompCor components to regress out during nilearn filtering (default: 5).
+
+\-\-smoothing-fwhm-nilearn-filter `<INT>`
+  Full-width at half-maximum (FWHM) of the Gaussian smoothing kernel in mm applied during nilearn filtering (default: 6).
 
 \-\-low-mem `<BOOL>`
   If set, only NPZ/TXT/NIfTI files are written (no PNG plots). (default: not set).

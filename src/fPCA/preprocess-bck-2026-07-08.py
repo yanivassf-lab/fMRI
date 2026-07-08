@@ -7,16 +7,12 @@ from numpy import ndarray, dtype, float64
 from scipy.ndimage import uniform_filter
 from scipy.signal import butter, filtfilt
 
-from nilearn.interfaces.fmriprep import load_confounds
-from nilearn import maskers
-
 logger = logging.getLogger("fmri_logger")
 
 
 class LoadData:
     def __init__(self, nii_file: str, mask_file: str, TR: float = None, smooth_size: int = 5, highpass: float = 0.01,
-                 lowpass: float = 0.08, use_nilearn: bool = False, n_compcor: int = 5,
-                 nilearn_smoothing_fwhm: float = 6.0):
+                 lowpass: float = 0.08, ):
         """
         Args:
             nii_file (str): Path to the 4D fMRI NIfTI file.
@@ -25,9 +21,6 @@ class LoadData:
             smooth_size (int): Box size for smoothing kernel.
             highpass (float): High-pass filter cutoff frequency in Hz. Filters out slow drifts below this frequency.
             lowpass (float): Low-pass filter cutoff frequency in Hz. Filters out high-frequency noise above this frequency.
-            use_nilearn (bool): Whether to use nilearn's masker for data preprocessing.
-            n_compcor (int): Number of components to use for compcor.
-            nilearn_smoothing_fwhm (float): FWHM for smoothing in Nilearn.
         """
         self.nii_file = nii_file
         self.mask_file = mask_file
@@ -35,10 +28,6 @@ class LoadData:
         self.smooth_size = smooth_size
         self.highpass = highpass
         self.lowpass = lowpass
-        self.use_nilearn = use_nilearn
-        self.n_compcor = n_compcor
-        # Explicit parameter for Nilearn smoothing in millimeters (FWHM)
-        self.nilearn_smoothing_fwhm = nilearn_smoothing_fwhm
         self.filtered_file = None
         self.filtered_nii_rdata = None
 
@@ -75,14 +64,8 @@ class LoadData:
 
         if not processed:
             logger.info("Applying preprocessing steps: spatial smoothing and temporal filtering...")
-            # Determine which filtering pipeline to use
-            if self.use_nilearn:
-                logger.info("Using Nilearn for confound regression and filtering.")
-                data_flat = self.filter_fMRI_nilearn()
-            else:
-                logger.info("Using scipy spatial smoothing and temporal filtering.")
-                data_flat = self.filter_fMRI(data, st, xlocs, ylocs, zlocs)
             # Apply smoothing and temporal filtering
+            data_flat = self.filter_fMRI(data, st, xlocs, ylocs, zlocs)
             if save_filtered_file:
                 logger.info("Reconstructing the 4D file for saving...")
                 # Initialize a zeros array with the same shape as the original 4D data
@@ -99,41 +82,6 @@ class LoadData:
             data_flat = data[xlocs, ylocs, zlocs, :]
 
         return data_flat, mask, nii_mask.affine # [voxels, times]
-
-    def filter_fMRI_nilearn(self):
-        """
-        Apply confound regression, smoothing, and temporal filtering using Nilearn.
-        Uses fMRIPrep cosine regressors for high-pass filtering.
-
-        Returns:
-            ndarray: Temporally filtered 2D fMRI data for masked voxels (shape: [voxels, time]).
-        """
-        # Load confounds: "high_pass" strategy fetches cosine regressors for drift removal
-        confounds_df, _ = load_confounds(
-            self.nii_file,
-            strategy=("motion", "high_pass", "compcor"),
-            motion="full",
-            compcor="anat_combined",
-            n_compcor=self.n_compcor
-        )
-
-        # Initialize NiftiMasker. high_pass is None to avoid double filtering,
-        # while low_pass is retained to match the legacy code's upper frequency cutoff.
-        masker = maskers.NiftiMasker(
-            mask_img=self.mask_file,
-            smoothing_fwhm=self.nilearn_smoothing_fwhm,
-            standardize='zscore_sample',
-            detrend=False,
-            low_pass=self.lowpass,
-            high_pass=self.highpass,
-            t_r=self.TR
-        )
-
-        # Fit and transform the data, regressing out the provided confounds
-        time_series = masker.fit_transform(self.nii_file, confounds=confounds_df)
-
-        # Transpose the matrix to match the legacy output shape: [voxels, times]
-        return time_series.T
 
     def load_nifti_data(self, filename: str):
         """

@@ -49,7 +49,9 @@ def run_single_subject(args):
             calc_penalty_bspline_accurately=args.calc_penalty_bspline_accurately,
             calc_penalty_skfda=args.calc_penalty_skfda,
             n_skip_vols_start=args.n_skip_vols_start, n_skip_vols_end=args.n_skip_vols_end,
-            highpass=args.highpass, lowpass=args.lowpass, low_mem=args.low_mem
+            highpass=args.highpass, lowpass=args.lowpass, low_mem=args.low_mem,
+            use_nilearn_filter=args.use_nilearn_filter, n_compcor_nilearn_filter=args.n_compcor_nilearn_filter,
+            smoothing_fwhm_nilearn_filter=args.smoothing_fwhm_nilearn_filter
         )
 
         fmri_instance.log_data(sys.argv)
@@ -120,6 +122,11 @@ def process_subject_subprocess(idx, total_subjects, nii_file, mask_file, subj_ou
     if args.calc_penalty_skfda: cmd.append("--calc-penalty-skfda")
     if args.low_mem: cmd.append("--low-mem")
 
+    # Propagate Nilearn filter arguments
+    if args.use_nilearn_filter: cmd.append("--use-nilearn-filter")
+    cmd.extend(["--n-compcor-nilearn-filter", str(args.n_compcor_nilearn_filter)])
+    cmd.extend(["--smoothing-fwhm-nilearn-filter", str(args.smoothing_fwhm_nilearn_filter)])
+
     # Run the OS command and capture its output
     result = subprocess.run(cmd, capture_output=True, text=True)
 
@@ -170,6 +177,9 @@ def main():
     parser.add_argument("--n-skip-vols-end", type=int, default=0, help="Vols to discard from end.")
     parser.add_argument("--highpass", type=float, default=0.01, help="High-pass filter cutoff.")
     parser.add_argument("--lowpass", type=float, default=0.08, help="Low-pass filter cutoff.")
+    parser.add_argument("--use-nilearn-filter", action='store_true', help="Use Nilearn for filtering.")
+    parser.add_argument("--n-compcor-nilearn-filter", type=int, default=5, help="Number of compcor components for Nilearn filtering.")
+    parser.add_argument("--smoothing-fwhm-nilearn-filter", type=float, default=6.0, help="FWHM for smoothing in Nilearn filtering.")
     parser.add_argument("--low-mem", action='store_true', help="If set, only NPZ/TXT/NIfTI files are written (no PNG plots).")
     parser.add_argument("--n-jobs", type=int, default=1,
                         help="Number of parallel processes to run. Use -1 for all cores.")
@@ -184,21 +194,33 @@ def main():
 
     args = parser.parse_args()
 
-    setup_logger(output_folder=args.output_folder, file_name="fmri_group_log.txt", loger_name="fmri_logger",
-                 log_level=logging.INFO)
-    logger = logging.getLogger("fPCA_logger")
-
-    # If the hidden flag is present, become a Worker and execute the heavy lifting
+    # Route subprocess directly to the worker function, bypassing manager setup
     if args.internal_single_run:
         run_single_subject(args)
         return
 
-    # --------------------------------------------------------------------------
-    # Manager Flow: Spawn background tasks
-    # --------------------------------------------------------------------------
+    # Manager execution flow
+    print(f"Running in mode(s): {args.mode}")
+    print(f"Output folder: {args.output_folder}")
+
     if not args.output_folder:
         raise ValueError("Error: --output-folder is required for the main run.")
 
+    # Validate output folder existence for the main process
+    if os.path.exists(
+        args.output_folder) and "train-pca-group" not in args.mode and "test-pca-project" not in args.mode:
+        raise FileExistsError(f"Output folder '{args.output_folder}' already exists. Please delete it before running.")
+    else:
+        os.makedirs(args.output_folder, exist_ok=True)
+
+    # Initialize the main manager logger
+    setup_logger(output_folder=args.output_folder, file_name="fmri_group_log.txt", loger_name="fmri_logger",
+                 log_level=logging.INFO)
+    logger = logging.getLogger("fPCA_logger")
+
+    # --------------------------------------------------------------------------
+    # Manager Flow: Spawn background tasks
+    # --------------------------------------------------------------------------
     nii_files = args.nii_files
     mask_files = args.mask_files
     if len(mask_files) == 1:
@@ -206,10 +228,6 @@ def main():
     elif len(mask_files) != len(nii_files):
         raise ValueError(f"Error: Provided {len(nii_files)} nii files but {len(mask_files)} mask files.")
 
-    if os.path.exists(args.output_folder) and "train-pca-group" not in args.mode and "test-pca-project" not in args.mode:
-        raise FileExistsError(f"Output folder '{args.output_folder}' already exists. Please delete it before running.")
-    else:
-        os.makedirs(args.output_folder, exist_ok=True)
 
 
     total_subjects = len(nii_files)
@@ -302,7 +320,9 @@ def main():
                 calc_penalty_bspline_accurately=args.calc_penalty_bspline_accurately,
                 calc_penalty_skfda=args.calc_penalty_skfda,
                 n_skip_vols_start=args.n_skip_vols_start, n_skip_vols_end=args.n_skip_vols_end,
-                highpass=args.highpass, lowpass=args.lowpass, low_mem=args.low_mem
+                highpass=args.highpass, lowpass=args.lowpass, low_mem=args.low_mem,
+                use_nilearn_filter=args.use_nilearn_filter, n_compcor_nilearn_filter=args.n_compcor_nilearn_filter,
+                smoothing_fwhm_nilearn_filter=args.smoothing_fwhm_nilearn_filter
             )
 
             # Load the global matrices (F and U) created dynamically by the first subprocess

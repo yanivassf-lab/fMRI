@@ -180,7 +180,10 @@ def _process_subject_raw(args):
             TR=load_params.get('TR', 0.75),
             smooth_size=load_params.get('smooth_size', None),
             highpass=load_params.get('highpass', None),
-            lowpass=load_params.get('lowpass', None)
+            lowpass=load_params.get('lowpass', None),
+            use_nilearn=load_params.get('use_nilearn', False),
+            n_compcor_nilearn_filter=load_params.get('n_compcor_nilearn_filter', 5),
+            smoothing_fwhm_nilearn_filter=load_params.get('smoothing_fwhm_nilearn_filter', 6.0)
         )
 
         # Load filtered data; fmri_data_all shape is (n_voxels, n_timepoints)
@@ -335,7 +338,7 @@ def _process_subject_pc(args):
             - raw_data (dict): Dict mapping {subject_id: {movement(1 or 2): subject_folder_path}}.
             - group_dirs (dict): Dict mapping {movement(1 or 2): group_output_directory_path}.
             - min_len (dict): Dict mapping {movement: min_temporal_length} to align time series.
-            - atlas_img (nibabel.Nifti1Image): Loaded atlas image.
+            - atlas_img(nibabel.Nifti1Image): Loaded atlas image.
             - atlas_labels (list): List of ROI label names.
             - is_test (bool): Is the step of prediction on the test samples
 

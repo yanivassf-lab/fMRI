@@ -24,6 +24,9 @@ def main():
                         help="High-pass filter cutoff frequency in Hz. Filters out slow drifts below this frequency.")
     parser.add_argument("--lowpass", type=float, default=0.08,
                         help="Low-pass filter cutoff frequency in Hz. Filters out high-frequency noise above this frequency.")
+    parser.add_argument("--use-nilearn-filter", action='store_true', help="Use Nilearn for filtering.")
+    parser.add_argument("--n-compcor-nilearn-filter", type=int, default=5, help="Number of compcor components for Nilearn filtering.")
+    parser.add_argument("--smoothing-fwhm-nilearn-filter", type=float, default=6.0, help="FWHM for smoothing in Nilearn filtering.")
     args = parser.parse_args()
 
     if not os.path.exists(args.output_folder):
@@ -38,6 +41,9 @@ def main():
         smooth_size=args.smooth_size,
         highpass=args.highpass,
         lowpass=args.lowpass,
+        use_nilearn=args.use_nilearn_filter,
+        n_compcor_nilearn_filter=args.n_compcor_nilearn_filter,
+        smoothing_fwhm_nilearn_filter=args.smoothing_fwhm_nilearn_filter
     )
     _, _, _ = data.load_data(processed=False, save_filtered_file=True)
 

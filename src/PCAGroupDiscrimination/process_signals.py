@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import pandas as pd
 from sklearn.preprocessing import normalize
 
 from .build_signals_from_files import build_subject_data, scan_input_folder, \
@@ -177,6 +178,9 @@ class ProcessSignals:
                 'smooth_size': self.args.smooth_size,
                 'highpass': self.args.highpass,
                 'lowpass': self.args.lowpass,
+                'use_nilearn_filter': self.args.use_nilearn_filter,
+                'n_compcor_nilearn_filter': self.args.n_compcor_nilearn_filter,
+                'smoothing_fwhm_nilearn_filter': self.args.smoothing_fwhm_nilearn_filter,
                 'processed': self.args.processed,
                 'n_skip_vols_start': self.args.n_skip_vols_start,
                 'n_skip_vols_end': self.args.n_skip_vols_start
@@ -243,6 +247,11 @@ class ProcessSignals:
                 self.logger
             )
 
+            # 1. Define and create the new output directory
+            parent_folder = os.path.dirname(self.args.output_dir)
+            prestep_dir = os.path.join(parent_folder, "0_extracted_pcs")
+            os.makedirs(prestep_dir, exist_ok=True)
+
             subjects = list(data_dict.keys())
             if not subjects:
                 raise RuntimeError("No subjects loaded by build_subject_data")
@@ -252,11 +261,31 @@ class ProcessSignals:
             ids = []
             for sub in subjects:
                 pcs = data_dict[sub]
+                clean_sub_id = f"sub-{sub}" if not str(sub).startswith("sub-") else str(sub)
                 if len(pcs) <= self.args.target_pc_index:
                     continue
-                vec = pcs[self.args.target_pc_index].flatten(order='F')
+                clean_sub_id = f"sub-{sub}" if not str(sub).startswith("sub-") else str(sub)
+                target_pc_data = pcs[self.args.target_pc_index]
+                # Ensure subject ID has the correct 'sub-' prefix
+                # ====================================================================
+                # Save ONLY the target PC to CSV (Without flatten, regions as columns, timepoints as rows)
+                # ====================================================================
+                if target_pc_data.shape[1] == len(atlas_labels):
+                    df = pd.DataFrame(target_pc_data, columns=atlas_labels)
+                elif target_pc_data.shape[0] == len(atlas_labels):
+                    df = pd.DataFrame(target_pc_data.T, columns=atlas_labels)
+                else:
+                    df = pd.DataFrame(target_pc_data)
+
+                file_name = f"{clean_sub_id}_pc-{self.args.target_pc_index}.csv"
+                out_path = os.path.join(prestep_dir, file_name)
+                df.to_csv(out_path, index=False)
+                # ====================================================================
+                # Build the feature matrix exactly as it was before
+                # ====================================================================
+                vec = target_pc_data.flatten(order='F')
                 X.append(vec)
-                ids.append(f"sub-{sub}" if not str(sub).startswith("sub-") else str(sub))
+                ids.append(clean_sub_id)
 
         X_features = np.array(X)
         if self.args.extra_features_set == 1:

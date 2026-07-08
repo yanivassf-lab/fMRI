@@ -65,7 +65,9 @@ class FunctionalMRI:
                  derivatives_num_p: int, derivatives_num_u: int, processed: bool, bad_margin_size: int,
                  no_penalty: bool = False, calc_penalty_bspline_accurately: bool = False,
                  calc_penalty_skfda: bool = False, n_skip_vols_start: int = 0, n_skip_vols_end: int = 0,
-                 highpass: float = 0.01, lowpass: float = 0.08, low_mem:bool = False) -> None:
+                 highpass: float = 0.01, lowpass: float = 0.08, low_mem:bool = False,
+                 use_nilearn_filter: bool = False, n_compcor_nilearn_filter: int = 5,
+                 smoothing_fwhm_nilearn_filter: float = 6.0) -> None:
         """
         Initialize the fMRI processing pipeline.
 
@@ -98,6 +100,9 @@ class FunctionalMRI:
             highpass (float): High-pass filter cutoff frequency in Hz. Filters out slow drifts below this frequency.
             lowpass (float): Low-pass filter cutoff frequency in Hz. Filters out high-frequency noise above this frequency.
             low_mem (bool): if True, only output text files without saving any images.
+            use_nilearn_filter (bool): if True, use Nilearn for filtering.
+            n_compcor_nilearn_filter (int): number of compcor components for Nilearn filtering.
+            smoothing_fwhm_nilearn_filter (float): FWHM for smoothing in Nilearn filtering.
         """
         # Store all parameters
         self.nii_file = nii_file
@@ -122,10 +127,13 @@ class FunctionalMRI:
         self.highpass = highpass
         self.lowpass = lowpass
         self.low_mem = low_mem
+        self.use_nilearn_filter = use_nilearn_filter
+        self.n_compcor_nilearn_filter = n_compcor_nilearn_filter
+        self.smoothing_fwhm_nilearn_filter = smoothing_fwhm_nilearn_filter
 
         # Load fMRI data
         logger.info("Load data...")
-        data = LoadData(nii_file, mask_file, TR=TR, smooth_size=smooth_size, highpass=self.highpass, lowpass=self.lowpass)
+        data = LoadData(nii_file, mask_file, TR=TR, smooth_size=smooth_size, highpass=self.highpass, lowpass=self.lowpass, use_nilearn=self.use_nilearn_filter, n_compcor=self.n_compcor_nilearn_filter, nilearn_smoothing_fwhm=self.smoothing_fwhm_nilearn_filter)
         fmri_data_all, self.mask, self.nii_affine = data.load_data(processed=processed, save_filtered_file=False)
 
         self.fmri_data = fmri_data_all[:, n_skip_vols_start:fmri_data_all.shape[1] - n_skip_vols_end]
