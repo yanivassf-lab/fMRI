@@ -124,6 +124,8 @@ class LoadData:
             smoothing_fwhm=self.nilearn_smoothing_fwhm,
             standardize='zscore_sample',
             detrend=False,
+            # low_pass=None,
+            # high_pass=None,
             low_pass=self.lowpass,
             high_pass=self.highpass,
             t_r=self.TR

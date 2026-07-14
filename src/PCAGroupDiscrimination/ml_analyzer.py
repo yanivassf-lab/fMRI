@@ -36,11 +36,8 @@ import warnings
 warnings.filterwarnings("ignore", message=".*sklearn.utils.parallel.delayed.*")
 warnings.filterwarnings("ignore", category=UserWarning, module="sklearn.utils.parallel")
 
-
-
-from .fmri_fpca_pipeline import setup_logger
 from .nn_wrapper import DeepSklearnWrapper
-from .utils import now_str, savefig
+from .utils import now_str, savefig, setup_logger
 
 class MLAnalyzer:
     def __init__(self, args):

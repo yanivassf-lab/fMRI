@@ -118,8 +118,9 @@ def build_parser():
     p.add_argument("--n-permutations", type=int, default=200,
                    help="Number of label permutations for ML permutation test")
     p.add_argument("--extra-features-set", type=int, default=1, choices=[0, 1, 2],
-                   help="Temporal feature extraction: 0=None, 1=Fixed 3-window split, "
+                   help="Feature extraction for ML: 0=no features - flattened signal only, 1=features for each roi along the time: mean (on --n-windows-per-exp windows), abs-mean, std, "
                         "2=Event-driven music transitions.")
+    p.add_argument("--n-windows-per-exp", type=int, default=6, help="number of windows to split each experiment for feature mean calculation (if extra-features-set=1).")
     p.add_argument("--mov1-transition-trs", nargs='+', default=[40, 201, 433, 481, 570],
                    help="Transition times in movement 1")
     p.add_argument("--mov2-transition-trs", nargs='+', default=[114, 304, 313, 450],

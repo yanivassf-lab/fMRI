@@ -12,7 +12,7 @@ from scipy.stats import spearmanr
 from scipy.spatial.distance import pdist, squareform
 from scipy.cluster.hierarchy import linkage, fcluster
 
-from .build_signals_from_files import setup_logger
+from .utils import setup_logger
 
 class SignalAligner:
     def __init__(self, args):
@@ -149,17 +149,50 @@ class SignalAligner:
                         cbar_kws={'label': 'Signal Amplitude', 'shrink': 0.5})
 
             n_regions = len(atlas_labels)
-            n_timepoints = X_contrast.shape[1] // n_regions
-            time_step = 10
+            n_feature_blocks = X_contrast.shape[1] // n_regions
 
             x_ticks = []
             x_labels = []
 
-            for t in range(0, n_timepoints, time_step):
-                start_idx = t * n_regions
-                ax.axvline(start_idx, color='white', linewidth=0.8, alpha=0.6, linestyle='--')
-                x_ticks.append(start_idx + (n_regions / 2))
-                x_labels.append(f"TR {t}")
+            if hasattr(self.args, 'extra_features_set') and self.args.extra_features_set == 1:
+                # Get the number of windows used during feature extraction
+                n_wins = getattr(self.args, 'n_windows', 6)
+
+                # Define names in the exact order they were extracted in extract_sequence_features1
+                feature_names = ["Std", "Abs Mean"] + [f"Win {i + 1}" for i in range(n_wins)]
+                n_blocks_per_exp = len(feature_names)
+
+                # Assume 2 experiments if exp1_end_tp was used, otherwise 1
+                n_experiments = X_contrast.shape[1] // (n_blocks_per_exp * n_regions)
+
+                for exp in range(n_experiments):
+                    for b in range(n_blocks_per_exp):
+                        block_idx = exp * n_blocks_per_exp + b
+                        start_idx = block_idx * n_regions
+
+                        # Draw solid line for experiment start, dashed for feature split
+                        line_style = '-' if b == 0 else '--'
+                        line_alpha = 0.9 if b == 0 else 0.4
+                        ax.axvline(start_idx, color='white', linewidth=1.5 if b == 0 else 0.8,
+                                   alpha=line_alpha, linestyle=line_style)
+
+                        x_ticks.append(start_idx + (n_regions / 2))
+                        x_labels.append(f"Mov{exp + 1} {feature_names[b]}")
+
+            elif hasattr(self.args, 'extra_features_set') and self.args.extra_features_set == 2:
+                for b in range(n_feature_blocks):
+                    start_idx = b * n_regions
+                    ax.axvline(start_idx, color='white', linewidth=0.8, alpha=0.4, linestyle='--')
+                    x_ticks.append(start_idx + (n_regions / 2))
+                    x_labels.append(f"Feat {b+1}")
+
+            else:
+                time_step = max(1, n_feature_blocks // 20)
+                for t in range(0, n_feature_blocks, time_step):
+                    start_idx = t * n_regions
+                    ax.axvline(start_idx, color='white', linewidth=0.8, alpha=0.6, linestyle='--')
+                    x_ticks.append(start_idx + (n_regions / 2))
+                    x_labels.append(f"TR {t}")
 
             ax.set_xticks(x_ticks)
             ax.set_xticklabels(x_labels, rotation=45, ha='right', fontsize=12)

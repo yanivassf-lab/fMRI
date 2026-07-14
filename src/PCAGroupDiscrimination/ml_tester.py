@@ -46,8 +46,7 @@ from datetime import datetime
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, roc_auc_score, confusion_matrix, \
     classification_report
 
-from .fmri_fpca_pipeline import setup_logger
-from .utils import now_str, savefig
+from .utils import now_str, savefig, setup_logger
 
 # Crucial import: Required for joblib to successfully unpickle the custom NN model.
 # Using noqa to prevent IDE warnings about unused imports.

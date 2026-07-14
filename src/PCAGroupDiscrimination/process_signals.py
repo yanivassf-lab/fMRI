@@ -11,11 +11,12 @@ class ProcessSignals:
         self.args = args
         self.logger = logger
 
-    def extract_sequence_features1(self, X_raw, n_regions, exp1_end_tp=None, n_windows_per_exp=3,
-                                   include_connectivity=False):
+    def extract_sequence_features1(self, X_raw, n_regions, exp1_end_tp=None, n_windows=6):
         """
-        Extracts features from a concatenated fMRI sequence matrix, correctly handling
-        the time x regions structure and the boundary between two experiments.
+        Extracts comprehensive features for ML classification.
+        Calculates global magnitude (std, abs mean) over the entire movement,
+        and splits the movement into local time windows for the standard mean
+        to preserve temporal directionality without washing it out to zero.
         """
         # Convert input to a NumPy array if it is a list
         X_raw = np.array(X_raw)
@@ -27,8 +28,7 @@ class ProcessSignals:
         all_features = []
 
         for i in range(n_subjects):
-            # Reshape: since the data is ordered by all regions per timepoint,
-            # reshaping to (timepoints, regions) reconstructs the original matrix perfectly.
+            # Reshape to (timepoints, regions) to reconstruct the original matrix
             subj_data = X_raw[i].reshape((n_total_timepoints, n_regions))
 
             # Split the data into separate experiments if a cutoff point is provided
@@ -47,46 +47,150 @@ class ProcessSignals:
             for exp_data in exp_blocks:
                 n_exp_timepoints = exp_data.shape[0]
 
-                # Skip empty blocks (just in case exp1_end_tp is misconfigured)
+                # Skip empty blocks
                 if n_exp_timepoints == 0:
                     continue
 
-                # 1. Global Statistics per region within this experiment
-                subj_features.extend(np.mean(exp_data, axis=0))
+                # 1. Global Magnitude Features (Entire Movement)
+                # Standard deviation captures the variance peaks
                 subj_features.extend(np.std(exp_data, axis=0))
-                subj_features.extend(np.max(exp_data, axis=0))
-                subj_features.extend(np.min(exp_data, axis=0))
+                # Mean of absolute values captures the sustained energy
+                subj_features.extend(np.mean(np.abs(exp_data), axis=0))
 
-                # 2. Windowed Statistics
-                # Divide the current experiment into n_windows_per_exp
-                window_size = n_exp_timepoints // n_windows_per_exp
-                for w in range(n_windows_per_exp):
-                    start_idx = w * window_size
-                    # Ensure the last window captures any remaining timepoints
-                    end_idx = start_idx + window_size if w < (n_windows_per_exp - 1) else n_exp_timepoints
+                # 2. Local Directional Features (Windowed Mean)
+                # Split the movement into n_windows to prevent full cancellation
+                windows = np.array_split(exp_data, n_windows, axis=0)
 
-                    window_data = exp_data[start_idx:end_idx, :]
+                for window_data in windows:
+                    # Calculate the standard mean for this specific time window
+                    # This preserves the +/- sign for this segment of the wave
                     subj_features.extend(np.mean(window_data, axis=0))
-
-                # 3. Temporal Dynamics (Derivatives)
-                # Calculated safely within the experiment, avoiding the cross-experiment boundary
-                diff_data = np.diff(exp_data, axis=0)
-                subj_features.extend(np.std(diff_data, axis=0))
-                # 4. Functional Connectivity
-                if include_connectivity:
-                    # Transpose so regions are rows and timepoints are columns
-                    corr_matrix = np.corrcoef(exp_data.T)
-
-                    # Fix zero-variance regions: Replace NaNs and Infs with 0.0
-                    corr_matrix = np.nan_to_num(corr_matrix, nan=0.0, posinf=0.0, neginf=0.0)
-
-                    # Take only the upper triangle to avoid redundant features
-                    upper_tri_indices = np.triu_indices_from(corr_matrix, k=1)
-                    subj_features.extend(corr_matrix[upper_tri_indices])
 
             all_features.append(subj_features)
 
         return np.array(all_features)
+    # def extract_sequence_features1(self, X_raw, n_regions, exp1_end_tp=None):
+    #     """
+    #     Extracts mean and standard deviation features from a concatenated fMRI sequence matrix,
+    #     handling the time x regions structure and the boundary between two experiments.
+    #     """
+    #     # Convert input to a NumPy array if it is a list
+    #     X_raw = np.array(X_raw)
+    #
+    #     # Calculate the total number of subjects and total timepoints
+    #     n_subjects = X_raw.shape[0]
+    #     n_total_timepoints = X_raw.shape[1] // n_regions
+    #
+    #     all_features = []
+    #
+    #     for i in range(n_subjects):
+    #         # Reshape to (timepoints, regions) to reconstruct the original matrix
+    #         subj_data = X_raw[i].reshape((n_total_timepoints, n_regions))
+    #
+    #         # Split the data into separate experiments if a cutoff point is provided
+    #         if exp1_end_tp is not None:
+    #             exp_blocks = [
+    #                 subj_data[:exp1_end_tp, :],  # Experiment 1
+    #                 subj_data[exp1_end_tp:, :]  # Experiment 2
+    #             ]
+    #         else:
+    #             # Treat as a single continuous experiment
+    #             exp_blocks = [subj_data]
+    #
+    #         subj_features = []
+    #
+    #         # Extract features for each experiment block independently
+    #         for exp_data in exp_blocks:
+    #             n_exp_timepoints = exp_data.shape[0]
+    #
+    #             # Skip empty blocks
+    #             if n_exp_timepoints == 0:
+    #                 continue
+    #
+    #             # Global Statistics: Mean and STD per region across time
+    #             subj_features.extend(np.mean(exp_data, axis=0))
+    #             subj_features.extend(np.std(exp_data, axis=0))
+    #
+    #         all_features.append(subj_features)
+    #
+    #     return np.array(all_features)
+    #
+    # def extract_sequence_features1(self, X_raw, n_regions, exp1_end_tp=None, n_windows_per_exp=3,
+    #                                include_connectivity=False):
+    #     """
+    #     Extracts features from a concatenated fMRI sequence matrix, correctly handling
+    #     the time x regions structure and the boundary between two experiments.
+    #     """
+    #     # Convert input to a NumPy array if it is a list
+    #     X_raw = np.array(X_raw)
+    #
+    #     # Calculate the total number of subjects and total timepoints
+    #     n_subjects = X_raw.shape[0]
+    #     n_total_timepoints = X_raw.shape[1] // n_regions
+    #
+    #     all_features = []
+    #
+    #     for i in range(n_subjects):
+    #         # Reshape: since the data is ordered by all regions per timepoint,
+    #         # reshaping to (timepoints, regions) reconstructs the original matrix perfectly.
+    #         subj_data = X_raw[i].reshape((n_total_timepoints, n_regions))
+    #
+    #         # Split the data into separate experiments if a cutoff point is provided
+    #         if exp1_end_tp is not None:
+    #             exp_blocks = [
+    #                 subj_data[:exp1_end_tp, :],  # Experiment 1
+    #                 subj_data[exp1_end_tp:, :]  # Experiment 2
+    #             ]
+    #         else:
+    #             # Treat as a single continuous experiment
+    #             exp_blocks = [subj_data]
+    #
+    #         subj_features = []
+    #
+    #         # Extract features for each experiment block independently
+    #         for exp_data in exp_blocks:
+    #             n_exp_timepoints = exp_data.shape[0]
+    #
+    #             # Skip empty blocks (just in case exp1_end_tp is misconfigured)
+    #             if n_exp_timepoints == 0:
+    #                 continue
+    #
+    #             # 1. Global Statistics per region within this experiment
+    #             subj_features.extend(np.mean(exp_data, axis=0))
+    #             subj_features.extend(np.std(exp_data, axis=0))
+    #             subj_features.extend(np.max(exp_data, axis=0))
+    #             subj_features.extend(np.min(exp_data, axis=0))
+    #
+    #             # 2. Windowed Statistics
+    #             # Divide the current experiment into n_windows_per_exp
+    #             window_size = n_exp_timepoints // n_windows_per_exp
+    #             for w in range(n_windows_per_exp):
+    #                 start_idx = w * window_size
+    #                 # Ensure the last window captures any remaining timepoints
+    #                 end_idx = start_idx + window_size if w < (n_windows_per_exp - 1) else n_exp_timepoints
+    #
+    #                 window_data = exp_data[start_idx:end_idx, :]
+    #                 subj_features.extend(np.mean(window_data, axis=0))
+    #
+    #             # 3. Temporal Dynamics (Derivatives)
+    #             # Calculated safely within the experiment, avoiding the cross-experiment boundary
+    #             diff_data = np.diff(exp_data, axis=0)
+    #             subj_features.extend(np.std(diff_data, axis=0))
+    #             # 4. Functional Connectivity
+    #             if include_connectivity:
+    #                 # Transpose so regions are rows and timepoints are columns
+    #                 corr_matrix = np.corrcoef(exp_data.T)
+    #
+    #                 # Fix zero-variance regions: Replace NaNs and Infs with 0.0
+    #                 corr_matrix = np.nan_to_num(corr_matrix, nan=0.0, posinf=0.0, neginf=0.0)
+    #
+    #                 # Take only the upper triangle to avoid redundant features
+    #                 upper_tri_indices = np.triu_indices_from(corr_matrix, k=1)
+    #                 subj_features.extend(corr_matrix[upper_tri_indices])
+    #
+    #         all_features.append(subj_features)
+    #
+    #     return np.array(all_features)
 
     def extract_sequence_features2(self, X_raw, n_regions, exp1_end_tp=None, include_connectivity=False):
         """
@@ -261,7 +365,6 @@ class ProcessSignals:
             ids = []
             for sub in subjects:
                 pcs = data_dict[sub]
-                clean_sub_id = f"sub-{sub}" if not str(sub).startswith("sub-") else str(sub)
                 if len(pcs) <= self.args.target_pc_index:
                     continue
                 clean_sub_id = f"sub-{sub}" if not str(sub).startswith("sub-") else str(sub)
@@ -293,6 +396,7 @@ class ProcessSignals:
                 X_raw=X,
                 n_regions=len(atlas_labels),
                 exp1_end_tp=mov1_times,
+                n_windows=self.args.n_windows_per_exp,
             )
         elif self.args.extra_features_set == 2:
             X_features = self.extract_sequence_features2(

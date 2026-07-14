@@ -182,8 +182,8 @@ def _process_subject_raw(args):
             highpass=load_params.get('highpass', None),
             lowpass=load_params.get('lowpass', None),
             use_nilearn=load_params.get('use_nilearn', False),
-            n_compcor_nilearn_filter=load_params.get('n_compcor_nilearn_filter', 5),
-            smoothing_fwhm_nilearn_filter=load_params.get('smoothing_fwhm_nilearn_filter', 6.0)
+            n_compcor=load_params.get('n_compcor_nilearn_filter', 5),
+            nilearn_smoothing_fwhm=load_params.get('smoothing_fwhm_nilearn_filter', 6.0)
         )
 
         # Load filtered data; fmri_data_all shape is (n_voxels, n_timepoints)

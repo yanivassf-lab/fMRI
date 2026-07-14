@@ -446,7 +446,8 @@ Parameters
 
 * ``--target-pc-index <INT>`` — which PC to analyze (``0`` … ``n_pcs-1``). Run separately for each PC.
 * ``--n-pcs`` — number of PCs available in the input (default: ``7``).
-* ``--extra-features-set`` — feature extraction mode: ``0`` = flattened signal only; ``1`` = fixed 3-window split; ``2`` = event-driven music transitions (default: ``1``).
+* ``--extra-features-set`` — feature extraction mode for ML:  ``0`` = no features - flattened signal only; ``1`` = features for each roi along the time: mean (on --n-windows-per-exp windows), abs-mean, std; ``2`` = event-driven music transitions (default: ``1``).
+* ``--n-windows-per-exp`` — number of windows to split each experiment for feature mean calculation (if extra-features-set=1) (default: ``6``).
 * ``--n-permutations`` — permutations for the ML significance test (default: ``200``).
 * ``--test-pairs-file`` — JSON file listing class pairs to evaluate in ``ml-test`` mode.
 * ``--ml-models`` — models to train (default: ``LR SVM NN DTree RandForest``).
@@ -621,7 +622,7 @@ Runs signal alignment plots and RSA (representational similarity analysis) betwe
    * - File
      - Description
    * - ``flattened_alignment_<column>_pc-<k>.png``
-     - Heatmap of recovered signals sorted by metadata column (e.g. ``group``, ``instrument_group``).
+     - Heatmap of features sorted by metadata column (e.g. ``group``, ``instrument_group``).
    * - ``rsa_analysis_<column>_pc-<k>_<timestamp>.png``
      - RSA distance matrix and clustering for a metadata grouping.
    * - ``rsa_metrics_summary_pc-<k>_<timestamp>.csv``
@@ -634,6 +635,19 @@ Runs signal alignment plots and RSA (representational similarity analysis) betwe
    :figwidth: 80%
    :alt: RSA analysis heatmap
    :figclass: align-center
+
+.. figure:: _static/rsa_analysis_instrument_group_pc-1.png
+   :align: center
+   :figwidth: 80%
+   :alt: RSA analysis heatmap
+   :figclass: align-center
+
+.. figure:: _static/flattened_alignment_instrument_group_pc-1.png
+   :align: center
+   :figwidth: 80%
+   :alt: Flattened alignment heatmap of features sorted by instrument group
+   :figclass: align-center
+
 
 
 B. Mode: ``ml``

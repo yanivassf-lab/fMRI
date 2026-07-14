@@ -56,7 +56,7 @@ for SET_NUM in $FEATURES_SETS; do
 
     # Conditionally append the raw data arguments if the path is provided
     if [ -n "$RAW_DATA_PATH" ]; then
-        BASE_CMD_ARGS+=("--use-raw-data" "--raw-data-path" "$RAW_DATA_PATH")
+        BASE_CMD_ARGS+=("--use-raw-data" "--raw-data-path" "$RAW_DATA_PATH" "--output-dir" "$OUTDIR/full_pipeline_set${SET_NUM}-raw")
     fi
 
     # Execute the pipeline based on the requested mode
