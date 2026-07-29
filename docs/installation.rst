@@ -4,16 +4,6 @@
 Installation
 ============
 
-Stable release (pip)
---------------------
-
-To install fPCA from PyPI with pip:
-
-.. code-block:: console
-
-    $ pip install Neuro-fPCA-fMRI
-
-This installs the latest stable release and the CLI entry points (``fpca-main``, ``preprocess-nii-file``, ``nifti-viewer``, ``compare-pcs``).
 
 Windows (recommended: conda/mamba)
 ----------------------------------
@@ -42,13 +32,15 @@ On Windows we recommend using a conda environment (via Miniconda or Mambaforge) 
 
 .. code-block:: console
 
-    mamba install -c conda-forge numpy scipy mkl mkl-service pandas matplotlib seaborn scikit-learn scikit-learn-extra imbalanced-learn plotly joblib nilearn nibabel scikit-fda dtaidistance pytorch shap
+    mamba install -c conda-forge numpy scipy mkl mkl-service pandas matplotlib seaborn scikit-learn scikit-learn-extra imbalanced-learn plotly dash joblib nilearn nibabel scikit-fda dtaidistance pytorch shap
 
 4) Install the Neuro-fPCA-fMRI package (PyPI) into the same environment
 
 .. code-block:: console
 
     pip install Neuro-fPCA-fMRI
+
+This installs the latest stable release and the CLI entry points (``fpca-main``, ``preprocess-nii-file``, ``fmri-fpca-pipeline``, ``explore-roi``).
 
 From sources
 ------------
@@ -69,7 +61,7 @@ Install in editable mode (development):
     $ conda install -c conda-forge mamba
     $ mamba create -n fpca-env -c conda-forge python=3.11
     $ mamba activate fpca-env
-    $ mamba install -c conda-forge numpy scipy mkl mkl-service pandas matplotlib seaborn scikit-learn scikit-learn-extra imbalanced-learn plotly joblib nilearn nibabel scikit-fda dtaidistance pytorch shap
+    $ mamba install -c conda-forge numpy scipy mkl mkl-service pandas matplotlib seaborn scikit-learn scikit-learn-extra imbalanced-learn plotly dash joblib nilearn nibabel scikit-fda dtaidistance pytorch shap
     $ pip install -e .
 
 Verify installation

@@ -10,6 +10,7 @@ Welcome to fMRI's documentation!
    installation
    running
    group_pipeline
+   roi_explorer_guide
 
 
 

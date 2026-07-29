@@ -70,7 +70,13 @@ class PipelineApp:
     def create_stat(self):
         base_dir = os.path.join(self.args.output_dir, f'2_ml_{self.args.pc_str}')
         align_dir = os.path.join(self.args.output_dir, f'1_align_signals')
-        stat = Statistics(base_dir, align_dir, self.args.pc_str)
+        stat = Statistics(
+            base_dir,
+            align_dir,
+            self.args.pc_str,
+            extra_features_set=self.args.extra_features_set,
+            n_windows_per_exp=self.args.n_windows_per_exp,
+        )
         stat.create_summary_files()
 
     def run(self):

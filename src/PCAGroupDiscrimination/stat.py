@@ -8,13 +8,24 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import pearsonr
 
+from .roi_importance import summarize_roi_importance
+
 
 class Statistics():
-    def __init__(self, base_directory, align_dir, pc_num=None):
+    def __init__(
+        self,
+        base_directory,
+        align_dir,
+        pc_num=None,
+        extra_features_set=1,
+        n_windows_per_exp=6,
+    ):
         self.base_directory = base_directory
         self.align_dir = align_dir
         self.output_directory = os.path.join(self.base_directory, "global_summary")
         self.pc_num = pc_num
+        self.extra_features_set = extra_features_set
+        self.n_windows_per_exp = n_windows_per_exp
 
     def parse_report_file(self, filepath):
         """
@@ -294,13 +305,39 @@ class Statistics():
         self.generate_visualizations(df_results)
         print(f"Visualization saved in the '{self.output_directory}' folder.")
 
+        print("Extracting ROI importance from saved ML models...")
+        roi_df = summarize_roi_importance(
+            base_directory=self.base_directory,
+            output_directory=self.output_directory,
+            pc_str=self.pc_num,
+            extra_features_set=self.extra_features_set,
+            n_windows_per_exp=self.n_windows_per_exp,
+        )
+        if roi_df is not None and not roi_df.empty:
+            top_per_model = (
+                roi_df[roi_df["rank"] <= 5]
+                .groupby("ml_model")["roi_label"]
+                .apply(lambda s: ", ".join(s.head(3).unique()))
+            )
+            print("Top ROIs by model (rank ≤ 5):")
+            for model, labels in top_per_model.items():
+                print(f"  {model}: {labels}")
 
-def main(base_dir, align_dir, pc_str):
-    stat = Statistics(base_dir, align_dir, pc_str)
+
+def main(base_dir, align_dir, pc_str, extra_features_set=1, n_windows_per_exp=6):
+    stat = Statistics(
+        base_dir,
+        align_dir,
+        pc_str,
+        extra_features_set=extra_features_set,
+        n_windows_per_exp=n_windows_per_exp,
+    )
     stat.create_summary_files()
 
 if __name__ == '__main__':
     base_dir = sys.argv[1]
     align_dir = sys.argv[2]
     pc_str = sys.argv[3]
-    main(base_dir, align_dir, pc_str)
+    extra_set = int(sys.argv[4]) if len(sys.argv) > 4 else 1
+    n_windows = int(sys.argv[5]) if len(sys.argv) > 5 else 6
+    main(base_dir, align_dir, pc_str, extra_set, n_windows)
