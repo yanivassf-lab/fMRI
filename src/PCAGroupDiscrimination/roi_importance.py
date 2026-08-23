@@ -440,6 +440,16 @@ class ROIImportanceAnalyzer:
         self.atlas_labels = atlas_labels or _fetch_atlas_labels()
         self.n_regions = len(self.atlas_labels)
 
+        # Movement timing (attempt to auto-load from existing processed data cache)
+        self.mov1_times = None
+        self.mov2_times = None
+        try:
+            self._try_load_mov_times()
+        except Exception:
+            # non-fatal: if load fails we continue without movement timing
+            self.mov1_times = None
+            self.mov2_times = None
+
     def _latest_model_path(self, pair_dir, model):
         if self.pc_str:
             pattern = os.path.join(
@@ -467,6 +477,7 @@ class ROIImportanceAnalyzer:
         if model_path is None:
             return None
 
+        rows_by_exp = {}
         try:
             import joblib
 
@@ -482,9 +493,92 @@ class ROIImportanceAnalyzer:
                 extra_features_set=self.extra_features_set,
                 n_windows_per_exp=self.n_windows_per_exp,
             )
+
+            # Overall aggregation (concatenated movements or single-experiment features)
             roi_scores = layout.aggregate_to_roi(
                 full_imp, selected_mask=selected_mask, method="mean_abs"
             )
+
+            # If multiple experiments (movements) exist in layout (feature set 1), compute per-experiment ROI scores
+            if getattr(layout, "n_experiments", 1) > 1:
+                meta = getattr(layout, "_feature_meta", None)
+                if meta is not None:
+                    meta_exp = np.array([m.get("experiment", 0) for m in meta])
+                    for exp in range(int(layout.n_experiments)):
+                        exp_mask = meta_exp == exp
+                        if selected_mask is not None:
+                            sel = np.asarray(selected_mask, dtype=bool).ravel() & exp_mask
+                        else:
+                            sel = exp_mask
+                        try:
+                            exp_scores = layout.aggregate_to_roi(full_imp, selected_mask=sel, method="mean_abs")
+                        except Exception:
+                            exp_scores = np.zeros(layout.n_regions, dtype=float)
+
+                        exp_rows = []
+                        order_exp = np.argsort(exp_scores)[::-1]
+                        for rank, roi_idx in enumerate(order_exp, start=1):
+                            exp_rows.append(
+                                {
+                                    "pair": pair_name,
+                                    "group_0": group_0,
+                                    "group_1": group_1,
+                                    "ml_model": model,
+                                    "roi_index": int(roi_idx),
+                                    "roi_label": self.atlas_labels[roi_idx],
+                                    "importance": float(exp_scores[roi_idx]),
+                                    "rank": rank,
+                                    "feature_set": self.extra_features_set,
+                                    "importance_method": importance_method_description(model),
+                                    "model_path": model_path,
+                                    "movement": int(exp) + 1,
+                                }
+                            )
+                        rows_by_exp[int(exp) + 1] = exp_rows
+
+            # If feature set 0 (flattened ROI x time) and movement timing was auto-loaded, split by timepoints
+            elif layout.extra_features_set == FeatureLayout.FEATURE_SET0 and self.mov1_times:
+                meta = getattr(layout, "_feature_meta", None)
+                if meta is not None:
+                    meta_time = np.array([m.get("timepoint", 0) for m in meta])
+                    try:
+                        mov1_tp = int(self.mov1_times)
+                    except Exception:
+                        mov1_tp = None
+
+                    if mov1_tp is not None:
+                        # movement 1: timepoint < mov1_tp ; movement 2: timepoint >= mov1_tp
+                        for mov_idx, condition in ((1, meta_time < mov1_tp), (2, meta_time >= mov1_tp)):
+                            if selected_mask is not None:
+                                sel = np.asarray(selected_mask, dtype=bool).ravel() & condition
+                            else:
+                                sel = condition
+                            try:
+                                exp_scores = layout.aggregate_to_roi(full_imp, selected_mask=sel, method="mean_abs")
+                            except Exception:
+                                exp_scores = np.zeros(layout.n_regions, dtype=float)
+
+                            exp_rows = []
+                            order_exp = np.argsort(exp_scores)[::-1]
+                            for rank, roi_idx in enumerate(order_exp, start=1):
+                                exp_rows.append(
+                                    {
+                                        "pair": pair_name,
+                                        "group_0": group_0,
+                                        "group_1": group_1,
+                                        "ml_model": model,
+                                        "roi_index": int(roi_idx),
+                                        "roi_label": self.atlas_labels[roi_idx],
+                                        "importance": float(exp_scores[roi_idx]),
+                                        "rank": rank,
+                                        "feature_set": self.extra_features_set,
+                                        "importance_method": importance_method_description(model),
+                                        "model_path": model_path,
+                                        "movement": int(mov_idx),
+                                    }
+                                )
+                            rows_by_exp[mov_idx] = exp_rows
+
         except Exception as exc:
             # warnings.warn(f"ROI importance failed for {pair_name} / {model}: {exc}")
             # return None
@@ -509,17 +603,103 @@ class ROIImportanceAnalyzer:
                     "model_path": model_path,
                 }
             )
-        return rows
+        # Return combined rows and any per-experiment rows (if computed)
+        return rows, rows_by_exp
+
+    def _try_load_mov_times(self):
+        """Attempt to auto-load movement timing (mov1_times, mov2_times) from existing cache files.
+
+        Looks for common cache filenames and any .joblib/.pkl under base_directory. If a cache file
+        contains a tuple/list with mov1/mov2 at indices 2 and 3 (as produced by build_signals_from_files),
+        those values are used.
+        """
+        try:
+            import joblib
+        except Exception:
+            return
+
+        candidates = []
+        # common explicit names
+        candidates.append(os.path.join(self.base_directory, "processed_raw_data_cache.joblib"))
+        candidates.append(os.path.join(self.base_directory, "processed_raw_data_cache.pkl"))
+        candidates.append(os.path.join(self.base_directory, "global_summary", "processed_raw_data_cache.joblib"))
+        candidates.append(os.path.join(self.base_directory, "global_summary", "processed_raw_data_cache.pkl"))
+
+        # recursive search for any .joblib or .pkl under base_directory (may be many files)
+        for ext in ("*.joblib", "*.pkl"):
+            candidates.extend(glob.glob(os.path.join(self.base_directory, "**", ext), recursive=True))
+
+        seen = set()
+        for c in candidates:
+            if not c or c in seen:
+                continue
+            seen.add(c)
+            if not os.path.exists(c):
+                continue
+            try:
+                payload = joblib.load(c)
+            except Exception:
+                continue
+            # tuple/list convention: (data_dict/..., atlas_labels, mov1_times, mov2_times)
+            if isinstance(payload, (list, tuple)) and len(payload) >= 4:
+                try:
+                    m1 = payload[2]
+                    m2 = payload[3]
+                    if (isinstance(m1, (int, float)) or (isinstance(m1, (list, tuple)) and len(m1) > 0)):
+                        # if scalar or list, pick scalar
+                        if isinstance(m1, (list, tuple)):
+                            m1_val = int(m1[0])
+                        else:
+                            m1_val = int(m1)
+                        try:
+                            m2_val = int(m2) if not isinstance(m2, (list, tuple)) else int(m2[0])
+                        except Exception:
+                            m2_val = None
+                        self.mov1_times = m1_val
+                        self.mov2_times = m2_val
+                        return
+                except Exception:
+                    pass
+            # dict convention: look for keys
+            if isinstance(payload, dict):
+                for key in ("mov1_times", "mov1_timepoints", "mov1_tp", "mov1_length"):
+                    if key in payload:
+                        try:
+                            self.mov1_times = int(payload[key])
+                        except Exception:
+                            pass
+                for key in ("mov2_times", "mov2_timepoints", "mov2_tp", "mov2_length"):
+                    if key in payload:
+                        try:
+                            self.mov2_times = int(payload[key])
+                        except Exception:
+                            pass
+                if self.mov1_times is not None:
+                    return
 
     def run(self):
         pair_dirs = sorted(glob.glob(os.path.join(self.base_directory, "ml_*_vs_*")))
         all_rows = []
+        # collect per-movement rows if produced by analyze_pair_model
+        per_movement_rows = {}
 
         for pair_dir in pair_dirs:
             for model in self.MODELS:
-                rows = self.analyze_pair_model(pair_dir, model)
+                result = self.analyze_pair_model(pair_dir, model)
+                if not result:
+                    continue
+                # result is (rows, rows_by_exp)
+                if isinstance(result, tuple):
+                    rows, rows_by_exp = result
+                else:
+                    rows, rows_by_exp = result, {}
+
                 if rows:
                     all_rows.extend(rows)
+
+                if rows_by_exp:
+                    for mov, rlist in rows_by_exp.items():
+                        per_movement_rows.setdefault(mov, []).extend(rlist)
 
         if not all_rows:
             print("ROI importance: no saved models found or all extractions failed.")
@@ -537,6 +717,30 @@ class ROIImportanceAnalyzer:
 
         summary_path = os.path.join(self.output_directory, "roi_importance_summary.txt")
         self._write_text_summary(df, top_df, summary_path)
+
+        # If per-movement rows were computed, write per-movement files mirroring the combined outputs
+        if per_movement_rows:
+            for mov, rows in per_movement_rows.items():
+                mov_df = pd.DataFrame(rows)
+                mov_csv = os.path.join(self.output_directory, f"roi_importance_mov{mov}_all.csv")
+                mov_df.to_csv(mov_csv, index=False)
+
+                mov_top_df = mov_df[mov_df["rank"] <= self.top_n].copy()
+                mov_top_csv = os.path.join(self.output_directory, f"roi_importance_mov{mov}_top{self.top_n}.csv")
+                mov_top_df.to_csv(mov_top_csv, index=False)
+
+                mov_summary = os.path.join(self.output_directory, f"roi_importance_mov{mov}_summary.txt")
+                # reuse the same _write_text_summary logic by passing mov-specific dfs
+                try:
+                    self._write_text_summary(mov_df, mov_top_df, mov_summary)
+                except Exception:
+                    # Fallback: simple text file
+                    with open(mov_summary, "w", encoding="utf-8") as f:
+                        f.write(f"Movement {mov} ROI importance summary\n")
+
+                print(f"ROI importance (movement {mov}) saved to: {mov_csv}")
+                print(f"Top-{self.top_n} ROI summary (movement {mov}) saved to: {mov_top_csv}")
+                print(f"ROI importance text summary (movement {mov}) saved to: {mov_summary}")
 
         print(f"ROI importance saved to: {csv_path}")
         print(f"Top-{self.top_n} ROI summary saved to: {top_csv}")

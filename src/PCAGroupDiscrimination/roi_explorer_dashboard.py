@@ -13,6 +13,7 @@ from typing import Optional
 import dash
 from dash import dcc, html, Input, Output, State, dash_table
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import plotly.express as px
 
 
@@ -38,6 +39,25 @@ class ROIExplorerDashboard:
 
         # Load data with robust handling for pandas/numpy compatibility issues
         self.df = self._load_csv(csv_path)
+
+        # Check for per-movement ROI importance files in the same directory (roi_importance_mov1_all.csv / roi_importance_mov2_all.csv)
+        self.mov_dfs = {}
+        try:
+            csv_dir = Path(csv_path).resolve().parent
+            for mov in (1, 2):
+                mov_path = csv_dir / f"roi_importance_mov{mov}_all.csv"
+                if mov_path.exists():
+                    try:
+                        df_mov = pd.read_csv(mov_path)
+                        # Ensure a movement column exists for easier handling
+                        if "movement" not in df_mov.columns:
+                            df_mov["movement"] = mov
+                        self.mov_dfs[mov] = df_mov
+                    except Exception:
+                        # ignore loading errors and continue
+                        pass
+        except Exception:
+            self.mov_dfs = {}
 
         # ==========================================
         # ADDED: Global Importance Normalization
@@ -171,6 +191,23 @@ class ROIExplorerDashboard:
                             ],
                             style={"flex": 1},
                         ),
+                        # View mode: concatenated vs per-movement separate
+                        html.Div(
+                            [
+                                html.Label("View Mode:", style={"fontWeight": "bold"}),
+                                dcc.RadioItems(
+                                    id="view-mode",
+                                    options=[
+                                        {"label": "Concatenated (mov1+mov2)", "value": "concatenated"},
+                                        {"label": "Separate per movement (mov1, mov2)", "value": "separate"},
+                                        {"label": "All views (mov1, mov2, concatenated)", "value": "all"},
+                                    ],
+                                    value="concatenated",
+                                    labelStyle={"display": "block"},
+                                ),
+                            ],
+                            style={"width": "240px", "marginLeft": 20},
+                        ),
                     ],
                     style={
                         "display": "flex",
@@ -263,7 +300,7 @@ class ROIExplorerDashboard:
                                 ),
                             ],
                             style={"display": "flex", "flexWrap": "wrap", "gap": "20px"},
-                            # flexWrap מונע פלישה ודחיקה למטה במסכים צרים
+                            # flexWrap prevents overflow and vertical push on narrow screens
                         ),
                     ],
                     style={
@@ -345,9 +382,10 @@ class ROIExplorerDashboard:
                 Input("pairs-dropdown", "value"),
                 Input("algorithms-dropdown", "value"),
                 Input("top-n-slider", "value"),
+                Input("view-mode", "value"),
             ],
         )
-        def update_dashboard(selected_pairs, selected_algorithms, top_n):
+        def update_dashboard(selected_pairs, selected_algorithms, top_n, view_mode):
             """Update all dashboard elements based on selections."""
             if not selected_pairs or not selected_algorithms:
                 return (
@@ -373,8 +411,165 @@ class ROIExplorerDashboard:
             ].copy()
 
             if filtered_df.empty:
-                return []
+                return (
+                    html.Div("No matching records for selected pairs/algorithms."),
+                    go.Figure(),
+                    go.Figure(),
+                    go.Figure(),
+                    go.Figure(),
+                    go.Figure(),
+                    go.Figure(),
+                    [],
+                )
 
+            # If user requested separate per-movement view or the 'all' view and movement-specific files were found, build stacked figures
+            if view_mode in ("separate", "all") and self.mov_dfs:
+                mov_keys = sorted(self.mov_dfs.keys())
+
+                mov_summaries = []
+                # build movement summaries first (mov1, mov2) if available
+                for mov in mov_keys:
+                    mov_df = self.mov_dfs[mov]
+                    mov_filtered = mov_df[(mov_df["pair"].isin(selected_pairs)) & (mov_df["ml_model"].isin(selected_algorithms))]
+                    mov_top = mov_filtered[mov_filtered["rank"] <= top_n]
+                    mov_summaries.append((f"Movement {mov}", mov_filtered, mov_top))
+
+                # if user requested 'all', append the concatenated (original) dataset as the third entry
+                if view_mode == "all":
+                    top_rois_df = filtered_df[filtered_df["rank"] <= top_n]
+                    mov_summaries.append(("Concatenated", filtered_df, top_rois_df))
+
+                # Summary text
+                summary_children = [html.H4("Per-movement / combined Summary")]
+                for name, mov_filtered, mov_top in mov_summaries:
+                    analyses_count = len(mov_filtered.groupby(["pair", "ml_model"])) if not mov_filtered.empty else 0
+                    unique_rois = mov_top["roi_index"].nunique() if not mov_top.empty else 0
+                    summary_children.append(html.Div(f"{name}: {analyses_count} analyses, {unique_rois} unique ROIs in top-{top_n}"))
+
+                # Helper to build stacked figs for an arbitrary list of (name, df, top_df)
+                def _build_stacked_bar(summaries, title_base, bar_builder):
+                    rows = len(summaries)
+                    fig = make_subplots(rows=rows, cols=1, shared_xaxes=False, vertical_spacing=0.08, subplot_titles=[s[0] + " - " + title_base for s in summaries])
+                    for i, (_, mov_filtered, mov_top) in enumerate(summaries, start=1):
+                        trace = bar_builder(mov_filtered, mov_top)
+                        if trace is None:
+                            continue
+                        # trace may be a list of traces
+                        if isinstance(trace, list):
+                            for t in trace:
+                                fig.add_trace(t, row=i, col=1)
+                        else:
+                            fig.add_trace(trace, row=i, col=1)
+                        fig.update_xaxes(tickangle=-45, row=i, col=1)
+                    # smaller height when showing three panels together
+                    height = 380 * rows
+                    fig.update_layout(title_text=f"{title_base} (per view)", height=height, showlegend=False)
+                    return fig
+
+                # Builders for each chart type
+                def _top_builder(mov_filtered, mov_top):
+                    roi_importance = (
+                        mov_top.groupby(["roi_label", "roi_index"])["importance"].mean().reset_index().sort_values("importance", ascending=False)
+                    )
+                    if roi_importance.empty:
+                        return None
+                    return go.Bar(x=roi_importance["roi_label"][:20], y=roi_importance["importance"][:20], text=roi_importance["roi_index"][:20], textposition="outside", marker=dict(color=roi_importance["importance"][:20], colorscale="Viridis"), hovertemplate="<b>%{x}</b><br>Avg Importance: %{y:.4f}<extra></extra>")
+
+                def _freq_builder(mov_filtered, mov_top):
+                    roi_freq = (mov_top.groupby(["roi_label", "roi_index"]).size().reset_index(name="frequency").sort_values("frequency", ascending=False).head(20))
+                    if roi_freq.empty:
+                        return None
+                    return go.Bar(x=roi_freq["roi_label"], y=roi_freq["frequency"], text=roi_freq["roi_index"], textposition="outside", marker=dict(color=roi_freq["frequency"], colorscale="Blues"), hovertemplate="<b>%{x}</b><br>Appearances: %{y}<extra></extra>")
+
+                def _algo_builder(mov_filtered, mov_top):
+                    algo_summary = (mov_top.groupby("ml_model")["importance"].agg(["mean", "std", "count"]).reset_index().sort_values("mean", ascending=False))
+                    if algo_summary.empty:
+                        return None
+                    return go.Bar(x=algo_summary["ml_model"], y=algo_summary["mean"], error_y=dict(type="data", array=algo_summary["std"]), text=algo_summary["count"], texttemplate="n=%{text}", textposition="outside", marker=dict(color=algo_summary["mean"], colorscale="Plasma"))
+
+                def _pair_builder(mov_filtered, mov_top):
+                    pair_summary = (mov_top.groupby("pair")["importance"].agg(["mean", "std", "count"]).reset_index().sort_values("mean", ascending=False))
+                    if pair_summary.empty:
+                        return None
+                    return go.Bar(x=pair_summary["pair"], y=pair_summary["mean"], error_y=dict(type="data", array=pair_summary["std"]), text=pair_summary["count"], texttemplate="n=%{text}", textposition="outside", marker=dict(color=pair_summary["mean"], colorscale="Magma"))
+
+                # Build figures
+                top_fig = _build_stacked_bar(mov_summaries, "Top ROIs by Average Importance", _top_builder)
+                freq_fig = _build_stacked_bar(mov_summaries, "ROI Frequency in Top-N", _freq_builder)
+                algo_fig = _build_stacked_bar(mov_summaries, "Algorithm Comparison", _algo_builder)
+                pair_fig = _build_stacked_bar(mov_summaries, "Pair Comparison", _pair_builder)
+
+                # Global pair consensus and ROI summary per view
+                gp_summaries = mov_summaries
+                def _gp_builder(mov_filtered, mov_top):
+                    cons = mov_top.groupby(["pair", "roi_label"]).size().reset_index(name="freq")
+                    high_cons = cons[cons["freq"] >= 4].groupby("pair").size().reset_index(name="high_consensus_count")
+                    all_pairs_df = pd.DataFrame({"pair": self.pairs})
+                    summary_df = pd.merge(all_pairs_df, high_cons, on="pair", how="left").fillna(0)
+                    summary_df = summary_df.sort_values(by="high_consensus_count", ascending=True)
+                    if summary_df.empty:
+                        return None
+                    return go.Bar(y=summary_df["pair"], x=summary_df["high_consensus_count"], orientation="h", marker=dict(color=summary_df["high_consensus_count"], colorscale="Tealgrn"), hovertemplate="<b>%{y}</b><br>High Consensus ROIs (>=4 models): %{x}<extra></extra>")
+
+                def _gr_builder(mov_filtered, mov_top):
+                    roi_summary = (mov_top.groupby(["roi_label", "roi_index"]).size().reset_index(name="global_frequency").sort_values("global_frequency", ascending=False).head(15))
+                    if roi_summary.empty:
+                        return None
+                    return go.Bar(x=roi_summary["roi_label"], y=roi_summary["global_frequency"], text=roi_summary["roi_index"], textposition="outside", marker=dict(color=roi_summary["global_frequency"], colorscale="Sunset"), hovertemplate="<b>%{x}</b><br>Global Frequency: %{y}<extra></extra>")
+
+                global_pair_fig = _build_stacked_bar(gp_summaries, "Pair Consensus Ranking", _gp_builder)
+                global_roi_fig = _build_stacked_bar(gp_summaries, "Top Global Influential ROIs", _gr_builder)
+
+                # Detailed table: concatenate movement data for selected filters
+                table_df = pd.concat([m[1] for m in mov_summaries], ignore_index=True)
+                display_df = table_df[["pair", "ml_model", "roi_label", "roi_index", "importance", "rank", ]].sort_values(["pair", "ml_model", "rank"])
+                # if movement column exists include it
+                if "movement" in table_df.columns:
+                    display_df["movement"] = table_df["movement"]
+                    display_df = display_df[["movement"] + [c for c in display_df.columns if c != "movement"]]
+                display_df["importance"] = display_df["importance"].round(6)
+                table_data = display_df.to_dict("records")
+
+                return (
+                    summary_children,
+                    top_fig,
+                    freq_fig,
+                    algo_fig,
+                    pair_fig,
+                    global_pair_fig,
+                    global_roi_fig,
+                    table_data,
+                )
+                    if not summary_df.empty:
+                        global_pair_fig.add_trace(go.Bar(y=summary_df["pair"], x=summary_df["high_consensus_count"], orientation="h", marker=dict(color=summary_df["high_consensus_count"], colorscale="Tealgrn"), hovertemplate="<b>%{y}</b><br>High Consensus ROIs (>=4 models): %{x}<extra></extra>"), row=i, col=1)
+
+                    # roi summary for movement
+                    roi_summary = (mov_top.groupby(["roi_label", "roi_index"]).size().reset_index(name="global_frequency").sort_values("global_frequency", ascending=False).head(15))
+                    if not roi_summary.empty:
+                        global_roi_fig.add_trace(go.Bar(x=roi_summary["roi_label"], y=roi_summary["global_frequency"], text=roi_summary["roi_index"], textposition="outside", marker=dict(color=roi_summary["global_frequency"], colorscale="Sunset"), hovertemplate="<b>%{x}</b><br>Global Frequency: %{y}<extra></extra>"), row=i, col=1)
+                        global_roi_fig.update_xaxes(tickangle=-45, row=i, col=1)
+
+                global_pair_fig.update_layout(title_text="Pair Consensus Ranking (per movement)", height=650 * len(mov_keys), margin=dict(l=150))
+                global_roi_fig.update_layout(title_text="Top Global Influential ROIs (per movement)", height=450 * len(mov_keys))
+
+                # Detailed table: concatenate movement data for selected filters
+                table_df = pd.concat([m[1] for m in mov_summaries], ignore_index=True)
+                display_df = table_df[["pair", "ml_model", "roi_label", "roi_index", "importance", "rank", "movement"]].sort_values(["movement", "pair", "ml_model", "rank"])
+                display_df["importance"] = display_df["importance"].round(6)
+                table_data = display_df.to_dict("records")
+
+                return (
+                    summary_children,
+                    top_fig,
+                    freq_fig,
+                    algo_fig,
+                    pair_fig,
+                    global_pair_fig,
+                    global_roi_fig,
+                    table_data,
+                )
+
+            # Default concatenated view (existing behavior)
             # Get top N ROIs
             top_rois_df = filtered_df[filtered_df["rank"] <= top_n].copy()
 
@@ -400,7 +595,7 @@ class ROIExplorerDashboard:
             # Use filtered_df (which contains ALL ranks for the selected pairs and algorithms),
             # specifically ignoring top_rois_df so the table shows the entire dataset.
             display_df = filtered_df[["pair", "ml_model", "roi_label", "roi_index", "importance", "rank"]].sort_values(
-                ["pair", "ml_model", "rank"])
+                ["pair", "ml_model", "rank"]) 
 
             # Format the importance column for cleaner display in the table
             display_df["importance"] = display_df["importance"].round(6)
@@ -586,10 +781,10 @@ class ROIExplorerDashboard:
         high_consensus = consensus_df[consensus_df["freq"] >= 4].groupby("pair").size().reset_index(
             name="high_consensus_count")
 
-        # שימוש בכל הזוגות במערכת מבלי לפספס אף אחד
+        # Include all pairs in the system so none are missed
         all_pairs_df = pd.DataFrame({"pair": self.pairs})
         summary_df = pd.merge(all_pairs_df, high_consensus, on="pair", how="left").fillna(0)
-        # מיון מהגבוה לנמוך כדי שהזוגות המובילים (כמו NM vs mus) יופיעו למעלה
+        # Sort from high to low so leading pairs (e.g., NM vs mus) appear at the top
         summary_df = summary_df.sort_values(by="high_consensus_count", ascending=True)
 
         fig = go.Figure(
@@ -610,8 +805,8 @@ class ROIExplorerDashboard:
             title="Pair Consensus Ranking (Robust Signals vs. Noise)",
             xaxis_title="Number of High-Consensus ROIs (Agreement across >=4 models)",
             yaxis_title="Instrument Pair",
-            height=750,  # גובה מותאם אישית המכיל את כל 22 הזוגות ללא גלישה או חיתוך
-            margin=dict(l=150),  # מרווח שמאלי שמונע חיתוך של שמות הזוגות הארוכים
+            height=750,  # custom height to contain all pairs without scrolling or clipping
+            margin=dict(l=150),  # left margin to prevent clipping of long pair names
             yaxis=dict(tickfont=dict(size=11)),
         )
         return fig

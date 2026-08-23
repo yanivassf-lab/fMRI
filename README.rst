@@ -13,9 +13,8 @@ Neuro-fPCA-fMRI
 
 Full Documentation
 ------------------
-
-* Github Repository: https://github.com/yanivassf-lab/fMRI
 * Documentation: https://fmri.readthedocs.io
+* Github Repository: https://github.com/yanivassf-lab/fMRI
 * PyPI Package: https://pypi.org/project/Neuro-fPCA-fMRI
 
 Overview
@@ -101,5 +100,4 @@ License
 Author
 ------
 
-*Refael Kohen* <refael.kohen@gmail.com>,
-Yaniv Assaf Lab, Tel Aviv University.
+*Refael Kohen* <refael.kohen@gmail.com> (Yaniv Assaf Lab, Tel Aviv University).

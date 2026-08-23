@@ -33,6 +33,8 @@ Dashboard Controls
 * **Select Algorithms:** Filter by ML models (LR, SVM, DTree, RandForest, NN).
 * **Top N ROIs:** Sets the threshold for how many top-ranking ROIs are included in the calculations. Each ML model ranks the brain regions by importance. If you set the slider to 10, the dataset is filtered to include only the top 10 ROIs for each pair and algorithm. All graphs and summary statistics are calculated using *only* this filtered subset.
 
+* **View Mode (new):** A control has been added with three options: (1) Concatenated (mov1+mov2), (2) Separate per movement (mov1 and mov2), and (3) All views — displays mov1, mov2 and the concatenated view together. Selecting the third option shows the three views stacked for each chart.
+
 
 
 Visualizations & Interpretation

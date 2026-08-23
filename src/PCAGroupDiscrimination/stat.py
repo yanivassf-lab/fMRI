@@ -246,13 +246,13 @@ class Statistics():
 
         ax1 = sns.heatmap(bacc_pivot, annot=True, cmap="YlGnBu", fmt=".3f", vmin=0.4, vmax=1.0)
         ax1.set_yticklabels(y_labels_bacc, rotation=0, fontsize=10)
-        ax1.set_xticklabels(x_labels_bacc, rotation=0, fontsize=11)  # הקטנת פונט מעט כדי להכיל 3 שורות
+        ax1.set_xticklabels(x_labels_bacc, rotation=0, fontsize=11)  # slightly reduced font size to fit three lines
 
         plt.title("Balanced Accuracy by Pair and Model", fontsize=18, pad=20)
         plt.ylabel("Instrument Pair (with RSA Metrics)", fontsize=14, labelpad=15)
         plt.xlabel("ML Model", fontsize=14, labelpad=15)
 
-        plt.subplots_adjust(left=0.35, bottom=0.18, top=0.95)  # הגדלת המרווח התחתון עבור הציון החדש
+        plt.subplots_adjust(left=0.35, bottom=0.18, top=0.95)  # increase bottom margin to accommodate the new score
         plt.savefig(os.path.join(self.output_directory, "summary_balanced_accuracy.png"), dpi=300, bbox_inches='tight')
         plt.close()
 
