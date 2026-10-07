@@ -61,7 +61,7 @@ Install in editable mode (development):
     $ conda install -c conda-forge mamba
     $ mamba create -n fpca-env -c conda-forge python=3.11
     $ mamba activate fpca-env
-    $ mamba install -c conda-forge numpy scipy mkl mkl-service pandas matplotlib seaborn scikit-learn scikit-learn-extra imbalanced-learn plotly dash joblib nilearn nibabel scikit-fda dtaidistance pytorch shap
+    $ mamba install -c conda-forge numpy scipy mkl mkl-service pandas matplotlib seaborn scikit-learn scikit-learn-extra imbalanced-learn plotly dash joblib nilearn umap-learn nibabel scikit-fda dtaidistance pytorch shap
     $ pip install -e .
 
 Verify installation

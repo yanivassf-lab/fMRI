@@ -486,9 +486,9 @@ The outer product of regional weights (from the NIfTI, resampled to the Schaefer
 Helper script for running the pipeline
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-- Save the following content as ``run_fpca.sh`` and make it executable (``chmod +x run_fpca.sh``)
+- Save the following content as ``run_pipeline.sh`` and make it executable (``chmod +x run_pipeline.sh``)
 
-run_fpca.sh file content:
+run_pipeline.sh file content:
 
 .. code-block:: bash
 

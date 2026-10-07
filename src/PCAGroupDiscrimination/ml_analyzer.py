@@ -318,7 +318,7 @@ class MLAnalyzer:
         minority_class_size = np.min(np.bincount(y))
 
         # Only use bagging if the minority class is large enough to survive random bootstrapping
-        is_bagging = (len(data) >= 20) and (minority_class_size >= 7)
+        is_bagging = (len(data) >= 20) and (minority_class_size >= 12)
 
         if is_bagging:
             # Wrap the pipeline in Bagging FIRST
