@@ -112,7 +112,8 @@ class LoadData:
         confounds_df, _ = load_confounds(
             self.nii_file,
             strategy=("motion", "high_pass", "compcor"),
-            motion="full",
+            # motion="full",
+            motion="basic",
             compcor="anat_combined",
             n_compcor=self.n_compcor
         )
@@ -124,10 +125,10 @@ class LoadData:
             smoothing_fwhm=self.nilearn_smoothing_fwhm,
             standardize='zscore_sample',
             detrend=False,
-            # low_pass=None,
-            # high_pass=None,
-            low_pass=self.lowpass,
-            high_pass=self.highpass,
+            low_pass=None,
+            high_pass=None,
+            # low_pass=self.lowpass,
+            # high_pass=self.highpass,
             t_r=self.TR
         )
 
