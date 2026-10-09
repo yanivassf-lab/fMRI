@@ -15,6 +15,7 @@ Synopsis
              --nii-file <PATH_TO_4D_NIFTI> \
              --mask-file <PATH_TO_3D_MASK_NIFTI> \
              --output-folder <OUTPUT_DIR> \
+             [--force <BOOL>] \
              [--degree <INT>] \
              [--n-basis <INT>] \
              [--threshold <FLOAT>] \
@@ -55,6 +56,9 @@ Arguments
 
 \-\-output-folder `<DIR>`
   Directory where all output maps and plots will be saved (required).
+
+\-\-force `<BOOL>`
+  If set, existing output files will be overwritten (default: not set).
 
 \-\-degree `<INT>`
   Degree of the B-spline basis (default: 3).

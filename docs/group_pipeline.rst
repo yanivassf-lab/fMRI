@@ -87,6 +87,7 @@ Runs independent functional PCA on each subject. For every subject this mode:
 The key artifact for later group analysis is ``eigvecs_eigval_F.npz``, which stores the per-voxel B-spline **coefficient matrix** (``C``), along with the subject-specific eigenvectors, eigenvalues, basis matrix ``F``, and time vector.
 
 When ``--low-mem`` is set, only NPZ/TXT/NIfTI files are written (no PNG plots).
+Since you run this mode on both training and test subjects into the same output folder, use the ``--force`` flag to enable run even if the output folder already exists.
 
 The full description of the other parameters can be found in :doc:`running`.
 
@@ -177,7 +178,8 @@ run_fpca.sh file content:
             --output-folder "$OUTPUT_DIR_MOV1" \
             --calc-penalty-skfda \
             --n-jobs 5 \
-            --low-mem
+            --low-mem \
+            --force
     else
         echo "Warning: No files found for Movement 1. Skipping..."
     fi
@@ -198,7 +200,8 @@ run_fpca.sh file content:
             --output-folder "$OUTPUT_DIR_MOV2" \
             --n-jobs 5 \
             --calc-penalty-skfda \
-            --low-mem
+            --low-mem \
+            --force
     else
         echo "Warning: No files found for Movement 2. Skipping..."
     fi

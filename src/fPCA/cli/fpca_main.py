@@ -154,6 +154,7 @@ def main():
             "'test-pca-project' - Project unseen test subjects onto the pre-calculated global PCA space (requires train-pca-group output)."
         )
     )
+    parser.add_argument("--force", action='store_true', help="If set, existing output files will be overwritten (default: not set).")
     # Public arguments
     parser.add_argument("--nii-files", type=str, nargs="+", required=True, help="Paths to the 4D fMRI NIfTI files.")
     parser.add_argument("--mask-files", type=str, nargs="+", required=True, help="Paths to the 3D mask NIfTI files.")
@@ -208,7 +209,7 @@ def main():
 
     # Validate output folder existence for the main process
     if os.path.exists(
-        args.output_folder) and "train-pca-group" not in args.mode and "test-pca-project" not in args.mode:
+        args.output_folder) and "train-pca-group" not in args.mode and "test-pca-project" not in args.mode and not args.force:
         raise FileExistsError(f"Output folder '{args.output_folder}' already exists. Please delete it before running.")
     else:
         os.makedirs(args.output_folder, exist_ok=True)

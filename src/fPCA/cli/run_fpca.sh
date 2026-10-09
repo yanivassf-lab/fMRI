@@ -63,7 +63,8 @@ if [ ${#NII_FILES_MOV1[@]} -gt 0 ]; then
         --calc-penalty-skfda \
         --n-jobs 5 \
         --use-nilearn-filter \
-        --low-mem
+        --low-mem \
+        --force
 else
     echo "Warning: No files found for Movement 1. Skipping..."
 fi
@@ -85,7 +86,8 @@ if [ ${#NII_FILES_MOV2[@]} -gt 0 ]; then
         --n-jobs 5 \
         --calc-penalty-skfda \
         --use-nilearn-filter \
-        --low-mem
+        --low-mem \
+        --force
 else
     echo "Warning: No files found for Movement 2. Skipping..."
 fi
