@@ -274,7 +274,45 @@ class ProcessSignals:
 
         return np.array(all_features)
 
+    def extract_loadings_all_pcs(self, data_dict, subjects, n_regions, mov1_times):
+        """
+        Features = ROI loadings of ALL PCs for both movements.
+        Each cached matrix is rank one, M = outer(w, t), with t shared by all
+        subjects. We recover t (up to a common scale/sign) from the first
+        subject, then w_s = M_s t / (t.t) for every subject, so the loadings
+        are on a common scale and sign across subjects.
+        Output per subject: n_pcs * 2 * n_regions values.
+        """
+        n_pcs = len(data_dict[subjects[0]])
+        ref = data_dict[subjects[0]]
+        t_ref = []
+        for pc in range(n_pcs):
+            M = np.asarray(ref[pc])
+            segs = []
+            for a, b in [(0, mov1_times), (mov1_times, M.shape[1])]:
+                # top right singular vector of the rank-one block = temporal profile
+                _, _, vt = np.linalg.svd(M[:, a:b], full_matrices=False)
+                segs.append(vt[0])
+            t_ref.append(segs)
+        X = []
+        for sub in subjects:
+            feats = []
+            for pc in range(n_pcs):
+                M = np.asarray(data_dict[sub][pc])
+                for (a, b), t in zip([(0, mov1_times), (mov1_times, M.shape[1])], t_ref[pc]):
+                    block = M[:, a:b]
+                    w = block @ t / (t @ t)
+                    resid = np.linalg.norm(block - np.outer(w, t)) / (np.linalg.norm(block) + 1e-12)
+                    if resid > 1e-4:
+                        self.logger.warning(f"{sub} pc{pc}: rank-one residual {resid:.2e}")
+                    feats.append(w)
+            X.append(np.concatenate(feats))
+        return np.array(X)
+
     def read_signals(self):
+        if self.args.use_raw_data and self.args.extra_features_set == 3:
+            raise ValueError("extra-features-set 3 (all-PC loadings) requires PC data, not raw data")
+
         if self.args.use_raw_data:
             # 1. Package all the LoadData and cropping parameters
             load_params = {
@@ -287,7 +325,7 @@ class ProcessSignals:
                 'smoothing_fwhm_nilearn_filter': self.args.smoothing_fwhm_nilearn_filter,
                 'processed': self.args.processed,
                 'n_skip_vols_start': self.args.n_skip_vols_start,
-                'n_skip_vols_end': self.args.n_skip_vols_start
+                'n_skip_vols_end': self.args.n_skip_vols_end
             }
 
             # 2. Dynamically scan the drive to pair NIfTI files with their specific masks
@@ -359,6 +397,19 @@ class ProcessSignals:
             subjects = list(data_dict.keys())
             if not subjects:
                 raise RuntimeError("No subjects loaded by build_subject_data")
+
+            # ====================================================================
+            # Feature set 3: ROI loadings of all PCs (no sequence reconstruction).
+            # Handled here, before the per-PC loop, which is not needed for it.
+            # ====================================================================
+            if self.args.extra_features_set == 3:
+                ids = [f"sub-{s}" if not str(s).startswith("sub-") else str(s) for s in subjects]
+                X_features = self.extract_loadings_all_pcs(
+                    data_dict, subjects, len(atlas_labels), mov1_times)
+                self.logger.info(f"Loadings feature matrix (all PCs): {X_features.shape}")
+                if self.args.row_normalize_ml:
+                    X_features = normalize(X_features, norm="l2", axis=1)
+                return X_features, ids, atlas_labels
 
             # Extract the target PC 0 vector for each subject and build the feature matrix
             X = []

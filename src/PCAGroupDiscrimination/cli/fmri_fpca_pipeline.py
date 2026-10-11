@@ -123,9 +123,10 @@ def build_parser():
     p.add_argument("--row-normalize-ml", action="store_true", help="Normalize the examples")
     p.add_argument("--n-permutations", type=int, default=200,
                    help="Number of label permutations for ML permutation test")
-    p.add_argument("--extra-features-set", type=int, default=1, choices=[0, 1, 2],
+    p.add_argument("--extra-features-set", type=int, default=1, choices=[0, 1, 2, 3],
                    help="Feature extraction for ML: 0=no features - flattened signal only, 1=features for each roi along the time: mean (on --n-windows-per-exp windows), abs-mean, std, "
-                        "2=Event-driven music transitions.")
+                        "2=Event-driven music transitions, "
+                        "3=ROI loadings of all PCs, both movements (no sequence reconstruction).")
     p.add_argument("--n-windows-per-exp", type=int, default=6, help="number of windows to split each experiment for feature mean calculation (if extra-features-set=1).")
     p.add_argument("--mov1-transition-trs", nargs='+', default=[40, 201, 433, 481, 570],
                    help="Transition times in movement 1")
@@ -185,7 +186,7 @@ def main():
     if args.use_raw_data and not args.raw_data_path:
         parser.error("--raw-data-path is required when --use-raw-data is set.")
     args.target_pc_index = 'raw' if args.use_raw_data else args.target_pc_index
-    args.pc_str = 'raw' if args.use_raw_data else f"pc-{args.target_pc_index}"
+    args.pc_str = 'raw' if args.use_raw_data else ('all-pcs' if args.extra_features_set == 3 else f"pc-{args.target_pc_index}")
     args.cache_file_pardir = args.input_dir if not args.cache_file_pardir else args.cache_file_pardir
     app = PipelineApp(args)
     app.run()
