@@ -438,6 +438,12 @@ class Statistics():
         if not perm_ok:
             df["perm_q"] = np.nan   # p-values from a handful of permutations carry no information
 
+        # analytic p per (pair, model) row and its FDR over all rows of the run
+        sd_rows_all = np.array([self._null_sd_bacc(a, b) for a, b in zip(df["n_class_0"], df["n_class_1"])])
+        with np.errstate(invalid="ignore", divide="ignore"):
+            df["analytic_p"] = norm.sf((df["balanced_accuracy"].values - 0.5) / sd_rows_all)
+        df["analytic_q"] = self._bh_fdr(df["analytic_p"].values)
+
         g = df.groupby("pair")
         rows = []
         for pair, sub in g:
@@ -476,10 +482,11 @@ class Statistics():
         df = df.merge(P, left_on="pair", right_index=True, how="left")
 
         # p-value of the CV-selected model: permutation-based when usable, else analytic
-        if perm_ok:
-            df["best_model_p"] = df["perm_p_best_model"]
-        else:
-            df["best_model_p"] = norm.sf((df["cv_max_models"] - 0.5) / df["row_null_sd_single"])
+        best_rows = df.loc[df.groupby("pair")["balanced_accuracy"].idxmax()]
+        src_p, src_q = ("perm_p", "perm_q") if perm_ok else ("analytic_p", "analytic_q")
+        best_p = best_rows.set_index("pair")[src_p]; best_q = best_rows.set_index("pair")[src_q]
+        df["best_model_p"] = df["pair"].map(best_p)
+        df["best_model_q"] = df["pair"].map(best_q)
         df["best_model_p_source"] = "permutation" if perm_ok else "analytic"
 
         # ---- count tests (CV)
@@ -551,8 +558,10 @@ class Statistics():
                           "all p-values below are analytic, from the null SD of a balanced accuracy for the class sizes, "
                           "0.25*sqrt(1/n0 + 1/n1).")
         lines = ["=== Significance summary ===", "", perm_note, "",
-                 "Per (pair, model): permutation p-value from the training report, with BH-FDR over all",
-                 "rows of this run (column perm_q in all_pairs_summary.csv; empty when permutations were not used).", "",
+                 "Per (pair, model): analytic p-value (analytic_p) and, when usable, the permutation p-value",
+                 "(perm_p) of the training report, each with BH-FDR over all rows of this run (analytic_q, perm_q).",
+                 "The p and q printed after 'best' are those of the CV-selected model; its q accounts for all",
+                 "rows of the run, which is the correction needed when the best of several models is reported.", "",
                  "Per pair, mean over models (columns row_mean_z/p/q): the models of a pair are fitted on",
                  "the same subjects, so their scores are correlated. The reported p is CONSERVATIVE",
                  "(null SD of a single model, i.e. perfect correlation); row_mean_p_indep is the",
@@ -583,7 +592,7 @@ class Statistics():
                     f"p {r['row_mean_p']:.3g} (q {r['row_mean_q']:.3g}; analytic {r['row_mean_p_analytic']:.3g}; indep {r['row_mean_p_indep']:.3g})"
                     f"  models>0.5 {int(r['n_models_above_chance'])}/{int(r['row_n_models'])}"
                     f"  ensemble {r['ensemble_bacc']:.3f} p {r['ensemble_p']:.3g}"
-                    f"  best {r['cv_best_model']} ({r['cv_max_models']:.3f}, p {r['best_model_p']:.3g} {r['best_model_p_source']})")
+                    f"  best {r['cv_best_model']} ({r['cv_max_models']:.3f}, p {r['best_model_p']:.3g}, q {r['best_model_q']:.3g} {r['best_model_p_source']})")
             if "test_sel_p" in r and pd.notna(r.get("test_sel_p", np.nan)):
                 line += (f"  | test of best {r['test_of_best_cv_model']:.3f} p {r['test_sel_p']:.3g} (q {r['test_sel_q']:.3g})"
                          f"  test mean {r['test_mean_models']:.3f} p {r['test_row_mean_p']:.3g}")
@@ -599,7 +608,7 @@ class Statistics():
         all_pairs_summary.csv, in the compact form used for reporting.
         """
         cols = ["pair", "n_train_0", "n_train_1", "n_test_0", "n_test_1",
-                "cv_mean_models", "cv_max_models", "cv_best_model", "perm_p_best_model", "best_model_p", "best_model_p_source",
+                "cv_mean_models", "cv_max_models", "cv_best_model", "perm_p_best_model", "best_model_p", "best_model_q", "best_model_p_source",
                 "row_mean_z", "row_mean_p", "row_mean_q", "row_mean_p_analytic", "row_mean_p_indep",
                 "n_models_above_chance", "n_models_above_1sd", "ensemble_bacc", "ensemble_p", "ensemble_q",
                 "subjects_correct_by_all_models", "n_subjects_cv",
@@ -736,8 +745,8 @@ class Statistics():
         df_results, significance = self.add_significance_columns(df_results)
 
         # Reorder columns for readability
-        cols = ["pair", "ml_model", "balanced_accuracy", "perm_p", "perm_q", "perm_mean", "perm_std", "test_bacc",
-                "cv_mean_models", "cv_max_models", "cv_best_model", "perm_p_best_model", "best_model_p", "best_model_p_source",
+        cols = ["pair", "ml_model", "balanced_accuracy", "analytic_p", "analytic_q", "perm_p", "perm_q", "perm_mean", "perm_std", "test_bacc",
+                "cv_mean_models", "cv_max_models", "cv_best_model", "perm_p_best_model", "best_model_p", "best_model_q", "best_model_p_source",
                 "row_mean_z", "row_mean_p", "row_mean_q", "row_mean_p_analytic", "row_mean_p_indep",
                 "n_models_above_chance", "n_models_above_1sd", "ensemble_bacc", "ensemble_p", "ensemble_q",
                 "subjects_correct_by_all_models", "n_subjects_cv", "n_permutations", "row_n_models",
