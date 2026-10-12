@@ -67,15 +67,22 @@ class PipelineApp:
                 ml_tester.test(X, ids, model, zero_class, one_class)
         return
 
-    def create_stat(self):
+    def create_stat(self, with_test=False):
+        """
+        mode 'stat':      summary of the training (CV) reports -> 2_ml_<pc>/global_summary
+        mode 'stat-test': the same summary plus the test-set columns, read from
+                          3_ml_test_<pc> -> 3_ml_test_<pc>/global_summary
+        """
         base_dir = os.path.join(self.args.output_dir, f'2_ml_{self.args.pc_str}')
         align_dir = os.path.join(self.args.output_dir, f'1_align_signals')
+        test_dir = os.path.join(self.args.output_dir, f'3_ml_test_{self.args.pc_str}') if with_test else None
         stat = Statistics(
             base_dir,
             align_dir,
             self.args.pc_str,
             extra_features_set=self.args.extra_features_set,
             n_windows_per_exp=self.args.n_windows_per_exp,
+            test_directory=test_dir,
         )
         stat.create_summary_files()
 
@@ -95,6 +102,9 @@ class PipelineApp:
             param_exists = True
         if self.args.mode == "ml-test":
             self.run_ml_test(X, ids)
+            param_exists = True
+        if self.args.mode == "stat-test":
+            self.create_stat(with_test=True)
             param_exists = True
 
         if not param_exists:
@@ -116,7 +126,7 @@ def build_parser():
     p.add_argument("--test-pairs-file", type=str, default=None,
                    help="Path to JSON file containing specific pairs to evaluate in test mode.")
     p.add_argument("--mode", required=True, type=str,
-                   choices=["align-signals", "ml", "stat", "ml-test"])
+                   choices=["align-signals", "ml", "stat", "ml-test", "stat-test"])
     p.add_argument("--file-name-pattern", default=r"(.+)_ses-[A-Za-z0-9]+.*?movement(\d+)")
     p.add_argument("--n-pcs", type=int, default=7)
     p.add_argument("--target-pc-index", type=int, default=0)

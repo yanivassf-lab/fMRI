@@ -31,7 +31,8 @@ Recommended execution order:
    ├── fmri-fpca-pipeline  --mode align-signals
    ├── fmri-fpca-pipeline  --mode ml
    ├── fmri-fpca-pipeline  --mode stat
-   └── fmri-fpca-pipeline  --mode ml-test   (selected pairs only)
+   ├── fmri-fpca-pipeline  --mode ml-test   (selected pairs only)
+   └── fmri-fpca-pipeline  --mode stat-test (summary of training + test results)
 
 .. note::
 
@@ -416,6 +417,7 @@ Workflow
 2. **``ml``** — trains classifiers on extracted features from the training set. Saves the best model per (model, hyperparameters) combination.
 3. **``stat``** — merges ML balanced-accuracy scores with RSA metrics from step 1. Use this to identify pairs that are both ML-discriminable **and** consistent with whole-sequence alignment.
 4. **``ml-test``** — apply saved models to held-out test subjects for pairs selected from step 3. Configure pairs in ``test_pairs.json`` (see below).
+5. **``stat-test``** — the same summary as ``stat``, extended with the test-set results of step 4 (one confirmatory number per pair: the test score of the model selected by cross-validation).
 
 .. note::
 
@@ -443,13 +445,15 @@ Parameters
 * ``ml`` — train ML classifiers on the training set (``is_train_set == 1``).
 * ``stat`` — cross-reference ML results with RSA alignment metrics.
 * ``ml-test`` — evaluate saved models on the test set for pairs listed in ``--test-pairs-file``.
+* ``stat-test`` — ``stat`` plus the test-set columns; run after ``ml-test``. Output goes to ``3_ml_test_<pc>/global_summary/``.
 * ``all`` — run all of the above in sequence.
 
 **Key options**
 
 * ``--target-pc-index <INT>`` — which PC to analyze (``0`` … ``n_pcs-1``). Run separately for each PC.
 * ``--n-pcs`` — number of PCs available in the input (default: ``7``).
-* ``--extra-features-set`` — feature extraction mode for ML:  ``0`` = no features - flattened signal only; ``1`` = features for each roi along the time: mean (on --n-windows-per-exp windows), abs-mean, std; ``2`` = event-driven music transitions (default: ``1``).
+* ``--extra-features-set`` — feature extraction mode for ML:  ``0`` = no features - flattened signal only; ``1`` = features for each roi along the time: mean (on --n-windows-per-exp windows), abs-mean, std; ``2`` = event-driven music transitions; ``3`` = ROI loadings of **all** PCs for both movements (``n_pcs × 2 × 100`` features, no sequence reconstruction; ``--target-pc-index`` is ignored and outputs are named ``all-pcs``); ``4`` = encoding betas: every ROI time series is regressed on per-TR acoustic regressors of the music (``6 × 2 × 100`` features; requires ``--use-raw-data`` and ``--acoustic-features-dir``; outputs are named ``acoustic``) (default: ``1``).
+* ``--acoustic-features-dir`` — directory containing ``acoustic_mov1.csv`` and ``acoustic_mov2.csv`` produced by ``acoustic-features`` (see below). Used by feature set ``4`` only.
 * ``--n-windows-per-exp`` — number of windows to split each experiment for feature mean calculation (if extra-features-set=1) (default: ``6``).
 * ``--n-permutations`` — permutations for the ML significance test (default: ``200``).
 * ``--test-pairs-file`` — JSON file listing class pairs to evaluate in ``ml-test`` mode.
@@ -485,6 +489,27 @@ For each subject and PC, the pipeline combines:
 
 The outer product of regional weights (from the NIfTI, resampled to the Schaefer-100 atlas) and the temporal profile yields a Region × Time matrix per movement. Movement 1 and movement 2 matrices are concatenated along time to form the full signal used in alignment and ML.
 
+.. note::
+
+   Because the temporal profile is shared by all subjects, each reconstructed Region × Time matrix has rank one: all the subject-specific information of a PC is the vector of 100 regional weights (the *loadings*) per movement. Feature sets ``0``–``2`` are different encodings of this vector for a single PC. Feature set ``3`` uses the loadings of all PCs directly, and feature set ``4`` replaces the data-driven temporal profiles by stimulus-driven regressors computed from the music (see *Acoustic regressors* below).
+
+Acoustic regressors (feature set 4)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Feature set ``4`` needs one CSV of per-TR regressors per movement, produced from the stimulus audio by the ``acoustic-features`` script (``PCAGroupDiscrimination/cli/acoustic_features.py``, requires ``librosa``):
+
+.. code-block:: bash
+
+    python PCAGroupDiscrimination/cli/acoustic_features.py \
+        --audio-mov1 /path/to/movement1.wav --audio-mov2 /path/to/movement2.wav \
+        --tr 0.75 --n-trs-mov1 <mov1_times> --n-trs-mov2 <mov2_times> \
+        --n-skip-vols-start <same value as the pipeline> \
+        --out-dir /home/user/acoustic
+
+For each movement the script computes six time series, one value per TR — ``rms`` (loudness), ``centroid`` (spectral centroid), ``flatness`` (spectral flatness), ``onset`` (onset strength), ``pulse_clarity`` (local autocorrelation peak of the onset envelope) and ``key_clarity`` (peak correlation with the 24 Krumhansl–Kessler key profiles) — convolves them with a canonical double-gamma HRF, drops the skipped volumes, z-scores them, and writes ``acoustic_mov1.csv`` / ``acoustic_mov2.csv``. ``<mov1_times>`` / ``<mov2_times>`` are the numbers of TRs of the fMRI data per movement (see the pipeline log). If the music did not start with the first retained volume, pass the delay in seconds with ``--audio-offset``.
+
+In the pipeline, feature set ``4`` regresses the (filtered, z-scored) time series of every ROI on an intercept plus the six regressors, separately per movement, and uses the six coefficients per ROI and movement as features. It runs on the raw BOLD time series (``--use-raw-data --raw-data-path``), not on the recovered PC signals; the raw-data cache is kept separately for the training (``processed_raw_data_cache.joblib``) and the test (``processed_raw_data_cache_test.joblib``) runs.
+
 
 Helper script for running the pipeline
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -517,6 +542,7 @@ run_pipeline.sh file content:
             --hyperparameters-file) HYPERPARAMETERS_FILE="$2"; shift 2 ;;
             --test-pairs-file) TEST_PAIRS_FILE="$2"; shift 2 ;;
             --raw-data-path) RAW_DATA_PATH="$2"; shift 2 ;;
+            --acoustic-features-dir) ACOUSTIC_DIR="$2"; shift 2 ;;
             --n-permutations) N_PERMUTATIONS="$2"; shift 2 ;;
             --max-pc) MAX_PC="$2"; shift 2 ;;
             *) shift ;; # Ignore unknown parameters
@@ -554,6 +580,9 @@ run_pipeline.sh file content:
         if [ -n "$RAW_DATA_PATH" ]; then
             BASE_CMD_ARGS+=("--use-raw-data" "--raw-data-path" "$RAW_DATA_PATH")
         fi
+        if [ -n "$ACOUSTIC_DIR" ]; then
+            BASE_CMD_ARGS+=("--acoustic-features-dir" "$ACOUSTIC_DIR")
+        fi
 
         # Execute the pipeline based on the requested mode
         if [ "$MODE" == "align-signals" ]; then
@@ -564,7 +593,7 @@ run_pipeline.sh file content:
             # Wait for all background processes to finish before moving to the next feature set
             wait
 
-        elif [[ "$MODE" == "ml" || "$MODE" == "stat" || "$MODE" == "ml-test" ]]; then
+        elif [[ "$MODE" == "ml" || "$MODE" == "stat" || "$MODE" == "ml-test" || "$MODE" == "stat-test" ]]; then
             for i in $PC_INDEX; do
                 # Append the dynamic arguments on the fly and run synchronously
                 fmri-fpca-pipeline "${BASE_CMD_ARGS[@]}" "--mode" "$MODE" "--target-pc-index" "$i"
@@ -578,6 +607,10 @@ run_pipeline.sh file content:
 
     echo "All tasks completed successfully!"
 
+
+.. note::
+
+   For feature set ``3`` the PC index does not matter: pass ``--pc-index "0"`` (one run) and, in ``align-signals`` mode, ``--max-pc 0`` — otherwise the script starts ``MAX_PC + 1`` identical runs that write to the same folder. Feature set ``4`` is run with ``--raw-data-path`` (training data for ``align-signals``/``ml``, test data for ``ml-test``) and ``--acoustic-features-dir``; its outputs are named ``acoustic``.
 
 A. Mode: ``align-signals``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -757,7 +790,9 @@ Cross-references ML reports with RSA metrics from ``align-signals``. Produces a 
    * - File
      - Description
    * - ``all_pairs_summary.csv``
-     - All (pair, model) combinations with balanced accuracy, RSA distance, p/q values, and intra-group cohesion.
+     - All (pair, model) combinations with balanced accuracy, permutation p-value, RSA distance, p/q values, and intra-group cohesion. Per-pair columns (repeated on every row of the pair): ``cv_mean_models``, ``cv_max_models``, ``cv_best_model`` (the model selected by CV), ``perm_p_best_model``, ``n_train_0``/``n_train_1`` (class sizes read from the reports), ``rsa_rank`` (1 = most distant pair of the run) and ``rsa_consistent`` (``yes``: q < 0.05, ``weak``: p < 0.05, ``rank``: rank ≤ 5, ``no``).
+   * - ``pairs_overview.csv``
+     - One row per pair with the per-pair columns only, sorted by ``cv_mean_models``.
    * - ``summary_balanced_accuracy.png``
      - Heatmap of balanced accuracy; y-axis labels include RSA distance metrics per pair; x-axis shows correlation with RSA and top-3 overlap score.
    * - ``correlations_summary.txt``
@@ -781,6 +816,10 @@ Loads the best saved model for each specified pair and evaluates it on test subj
 
 # No comma after the last pair !!!
 
+.. note::
+
+   Each pair must be written in the order used by training, i.e. the order of the groups in ``--groups`` (default ``Guitars Vocal Wind Drums Strings Keyboards NM mus``): ``["Guitars", "Drums"]`` is trained, ``["Drums", "Guitars"]`` is not and is skipped (no model is found for it). Group names must match ``instrument_group`` in the metadata exactly (``Vocal``, not ``Vocals``).
+
 .. code-block:: json
 
    {
@@ -792,7 +831,7 @@ Loads the best saved model for each specified pair and evaluates it on test subj
            ["Guitars", "Wind"],
            ["NM", "mus"],
            ["Strings", "NM"],
-           ["Vocals", "NM"],
+           ["Vocal", "NM"],
            ["Wind", "Strings"]
        ]
    }
@@ -842,6 +881,43 @@ Loads the best saved model for each specified pair and evaluates it on test subj
 
 
 
+E. Mode: ``stat-test``
+~~~~~~~~~~~~~~~~~~~~~~
+
+Run after ``ml-test``. Produces the same files as ``stat``, extended with the test-set results, under ``<output-dir>/3_ml_test_pc-<k>/global_summary/``. The selection rule is unchanged: the model of each pair is chosen by cross-validation, and its test score (``test_of_best_cv_model``) is the confirmatory number; the test scores of the other models are descriptive only.
+
+.. code-block:: bash
+
+    ./run_pipeline.sh \
+      --mode "stat-test" \
+      --venv "/home/user/fpca-env" \
+      --input-dir "/home/user/output_pca" \
+      --output-dir "/home/user/output_pipeline" \
+      --features-sets "1" \
+      --pc-index "0 1" \
+      --metadata-file "status_fMRI_participants.csv"
+
+**Outputs** (under ``<output-dir>/3_ml_test_pc-<k>/global_summary/``):
+
+.. list-table::
+   :header-rows: 1
+   :widths: 40 60
+
+   * - File
+     - Description
+   * - ``all_pairs_summary.csv``
+     - As in ``stat``, plus ``test_bacc`` (test score of the row's model), ``test_mean_models``, ``test_max_models``, ``test_of_best_cv_model``, ``min_of_means`` (the smaller of the CV and test means over models) and ``n_test_0``/``n_test_1``. Sorted by ``min_of_means``.
+   * - ``pairs_overview.csv``
+     - One row per pair with the per-pair columns, sorted by ``min_of_means``.
+   * - ``summary_balanced_accuracy.png`` / ``summary_test_balanced_accuracy.png``
+     - Heatmaps of the CV and of the test balanced accuracies (with ``correlations_summary.txt`` / ``summary_test_balanced_accuracy_correlations.txt``).
+   * - ``roi_importance_selected_pairs.csv`` (``_mov1`` / ``_mov2``)
+     - The ROI importance tables computed by ``stat`` from the saved models (they do not depend on the test set and are not recomputed), filtered to the CV-selected model of the pairs with ``test_of_best_cv_model >= 0.60`` and ``perm_p_best_model <= 0.05``, and annotated with the pair's CV, test and permutation p. Not written when no pair qualifies.
+
+.. note::
+
+   Pairs without a ``test_report`` get empty test columns. The test subjects of a pair are the same for every feature set and PC, so agreement between the CV score and the test score is evidence of generalization only across subjects, not a replication on new ones.
+
 Metadata CSV requirements
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -863,4 +939,3 @@ The metadata file must include at minimum:
      - General group label (used in alignment plots).
    * - ``has_classical``, ``has_jazz``, ``has_rock``, ``has_pop``
      - Genre familiarity flags (used as optional alignment columns).
-

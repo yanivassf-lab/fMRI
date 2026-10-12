@@ -45,21 +45,36 @@ def infer_extra_features_set(base_directory):
 
 
 class FeatureLayout:
-    """Maps flat feature indices to ROI indices for feature sets 0 and 1."""
+    """
+    Maps flat feature indices to ROI indices for feature sets 0, 1, 3 and 4.
+
+    Set 0: Fortran-flattened ROI x time matrix (index = roi + t * n_regions).
+    Set 1: per movement, blocks [std, abs_mean, win_1 .. win_N] of n_regions each.
+    Set 3: per PC, [loadings mov1 (n_regions), loadings mov2 (n_regions)]
+           (ProcessSignals.extract_loadings_all_pcs).
+    Set 4: per movement, per acoustic regressor, n_regions betas
+           (ProcessSignals.extract_encoding_betas).
+    """
 
     FEATURE_SET0 = 0
     FEATURE_SET1 = 1
+    FEATURE_SET3 = 3
+    FEATURE_SET4 = 4
 
     BLOCK_NAMES_SET1 = ("std", "abs_mean")  # followed by win_1 … win_N
 
-    def __init__(self, n_regions, extra_features_set, n_features, n_windows_per_exp=6, n_experiments=2):
+    def __init__(self, n_regions, extra_features_set, n_features, n_windows_per_exp=6, n_experiments=2,
+                 n_blocks_per_exp=None):
         self.n_regions = int(n_regions)
         self.extra_features_set = int(extra_features_set)
         self.n_features = int(n_features)
         self.n_windows_per_exp = int(n_windows_per_exp)
         self.n_experiments = int(n_experiments)
+        # set 3: number of PCs; set 4: number of acoustic regressors
+        self.n_blocks_per_exp = int(n_blocks_per_exp) if n_blocks_per_exp is not None else None
 
-        if self.extra_features_set not in (self.FEATURE_SET0, self.FEATURE_SET1):
+        if self.extra_features_set not in (self.FEATURE_SET0, self.FEATURE_SET1,
+                                           self.FEATURE_SET3, self.FEATURE_SET4):
             raise ValueError(f"Unsupported extra_features_set={extra_features_set} (set 2 ignored).")
 
         self._roi_index = None
@@ -80,6 +95,23 @@ class FeatureLayout:
                 n_features=n_features,
                 n_windows_per_exp=n_windows_per_exp,
                 n_experiments=1,
+            )
+
+        # Sets 3 and 4: n_features = n_blocks * 2 movements * n_regions
+        # (set 3: n_blocks = number of PCs; set 4: n_blocks = number of acoustic regressors)
+        if extra_features_set in (cls.FEATURE_SET3, cls.FEATURE_SET4):
+            if n_features % (2 * n_regions) != 0:
+                raise ValueError(
+                    f"Set {extra_features_set}: n_features ({n_features}) must be divisible by "
+                    f"2 * n_regions ({2 * n_regions})."
+                )
+            return cls(
+                n_regions=n_regions,
+                extra_features_set=extra_features_set,
+                n_features=n_features,
+                n_windows_per_exp=n_windows_per_exp,
+                n_experiments=2,
+                n_blocks_per_exp=n_features // (2 * n_regions),
             )
 
         # Set 1: n_features = n_experiments * (2 + n_windows) * n_regions
@@ -133,6 +165,27 @@ class FeatureLayout:
                 timepoint = feat_idx // n_r
                 roi_index[feat_idx] = roi
                 meta.append({"feature_idx": feat_idx, "roi": roi, "timepoint": timepoint, "block": "signal"})
+
+        elif self.extra_features_set == self.FEATURE_SET3:
+            # order: for pc: [mov1 loadings (n_r), mov2 loadings (n_r)]
+            for feat_idx in range(self.n_features):
+                pc = feat_idx // (2 * n_r)
+                local = feat_idx % (2 * n_r)
+                exp = local // n_r
+                roi = local % n_r
+                roi_index[feat_idx] = roi
+                meta.append({"feature_idx": feat_idx, "roi": roi, "experiment": exp, "block": f"pc{pc}"})
+
+        elif self.extra_features_set == self.FEATURE_SET4:
+            # order: for movement: for regressor: n_r betas
+            k = self.n_blocks_per_exp
+            for feat_idx in range(self.n_features):
+                exp = feat_idx // (k * n_r)
+                local = feat_idx % (k * n_r)
+                reg = local // n_r
+                roi = local % n_r
+                roi_index[feat_idx] = roi
+                meta.append({"feature_idx": feat_idx, "roi": roi, "experiment": exp, "block": f"reg{reg}"})
 
         else:
             blocks_per_exp = 2 + self.n_windows_per_exp

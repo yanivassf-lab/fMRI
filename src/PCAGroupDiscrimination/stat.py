@@ -19,10 +19,20 @@ class Statistics():
         pc_num=None,
         extra_features_set=1,
         n_windows_per_exp=6,
+        test_directory=None,
     ):
+        """
+        base_directory: the 2_ml_<pc> folder (training reports, saved models).
+        test_directory: the 3_ml_test_<pc> folder (test reports). When given
+            (mode 'stat-test'), the summary is written under the test folder and
+            includes the test-set columns; otherwise (mode 'stat') it is written
+            under the training folder without them.
+        """
         self.base_directory = base_directory
         self.align_dir = align_dir
-        self.output_directory = os.path.join(self.base_directory, "global_summary")
+        self.test_directory = test_directory
+        root = test_directory if test_directory else base_directory
+        self.output_directory = os.path.join(root, "global_summary")
         self.pc_num = pc_num
         self.extra_features_set = extra_features_set
         self.n_windows_per_exp = n_windows_per_exp
@@ -36,11 +46,30 @@ class Statistics():
         data = {
             "ml_model": None,
             "balanced_accuracy": None,
-            "nm_prop_1": None
+            "nm_prop_1": None,
+            "perm_p": None,
+            "perm_mean": None,
+            "n_class_0": None,
+            "n_class_1": None,
         }
 
         with open(filepath, 'r', encoding='utf-8') as f:
             content = f.read()
+
+            # Permutation test (training reports only)
+            perm_match = re.search(r"Permutation p-value:\s+([0-9\.]+)", content)
+            if perm_match:
+                data["perm_p"] = float(perm_match.group(1))
+            perm_mean_match = re.search(r"Permutation mean:\s+([0-9\.]+)", content)
+            if perm_mean_match:
+                data["perm_mean"] = float(perm_mean_match.group(1))
+
+            # Class sizes: the value_counts block printed after "Number of ... samples"
+            # looks like "0    22" / "1     8" (class 0 = group_0, class 1 = group_1)
+            for cls in ("0", "1"):
+                cnt = re.search(rf"^\s*{cls}\s+(\d+)\s*$", content, flags=re.MULTILINE)
+                if cnt:
+                    data[f"n_class_{cls}"] = int(cnt.group(1))
 
             # Extract ML Model
             model_match = re.search(r"ML model:\s+(\w+)", content)
@@ -61,21 +90,25 @@ class Statistics():
 
         return data
 
-    def compile_results(self):
+    def compile_results(self, directory=None, folder_prefix="ml_", report_prefix="ml_report_"):
         """
         Walks through the directory structure, finds all relevant report files,
         and compiles them into a single pandas DataFrame.
+        Used for the training reports (2_ml_<pc>/ml_<A>_vs_<B>/ml_report_*.txt)
+        and, with other prefixes, for the test reports
+        (3_ml_test_<pc>/ml_test_<A>_vs_<B>/test_report_*.txt).
         """
         results = []
+        directory = directory or self.base_directory
 
         # Find all directories matching the pair pattern
-        pair_dirs = glob.glob(os.path.join(self.base_directory, "ml_*_vs_*"))
+        pair_dirs = glob.glob(os.path.join(directory, f"{folder_prefix}*_vs_*"))
 
         for pair_dir in pair_dirs:
             folder_name = os.path.basename(pair_dir)
 
             # Extract the groups from the folder name
-            match = re.match(r"ml_(.+?)_vs_(.+)", folder_name)
+            match = re.match(rf"{re.escape(folder_prefix)}(.+?)_vs_(.+)", folder_name)
             if not match:
                 continue
 
@@ -83,7 +116,7 @@ class Statistics():
             pair_name = f"{group_0} vs {group_1}"
 
             # Find all report txt files in this directory
-            report_files = glob.glob(os.path.join(pair_dir, "ml_report_*.txt"))
+            report_files = glob.glob(os.path.join(pair_dir, f"{report_prefix}*.txt"))
 
             for report_file in report_files:
                 file_data = self.parse_report_file(report_file)
@@ -183,7 +216,128 @@ class Statistics():
 
         return df_ml
 
-    def generate_visualizations(self, df):
+    def add_pair_level_columns(self, df, df_test=None):
+        """
+        Adds per-pair columns (repeated on every row of the pair):
+          cv_mean_models, cv_max_models, cv_best_model, perm_p_best_model,
+          n_train_0, n_train_1, rsa_rank (1 = largest distance among the pairs
+          of this run), rsa_consistent ('yes' q<0.05, 'weak' p<0.05, 'rank'
+          rank<=5, else 'no'),
+        and, when test results are given (mode 'stat-test'):
+          test_bacc (this row's model on the test set), test_mean_models,
+          test_max_models, test_of_best_cv_model, min_of_means, n_test_0, n_test_1.
+        The selection rule stays: the model is chosen by CV (cv_max_models);
+        the test score of that model is test_of_best_cv_model.
+        """
+        if df.empty:
+            return df
+
+        g = df.groupby("pair")
+        agg = pd.DataFrame({
+            "cv_mean_models": g["balanced_accuracy"].mean().round(4),
+            "cv_max_models": g["balanced_accuracy"].max().round(4),
+        })
+        best_idx = g["balanced_accuracy"].idxmax()
+        agg["cv_best_model"] = df.loc[best_idx, "ml_model"].values
+        agg["perm_p_best_model"] = df.loc[best_idx, "perm_p"].values
+        agg["n_train_0"] = g["n_class_0"].first()
+        agg["n_train_1"] = g["n_class_1"].first()
+
+        # RSA rank among the pairs of this run (1 = most distant)
+        dist = g["distance"].first()
+        agg["rsa_rank"] = dist.rank(ascending=False, method="min")
+
+        def consistency(pair):
+            row = df[df["pair"] == pair].iloc[0]
+            if pd.notna(row["rsa_q"]) and row["rsa_q"] < 0.05:
+                return "yes"
+            if pd.notna(row["rsa_p"]) and row["rsa_p"] < 0.05:
+                return "weak"
+            if pd.notna(agg.loc[pair, "rsa_rank"]) and agg.loc[pair, "rsa_rank"] <= 5:
+                return "rank"
+            return "no"
+        agg["rsa_consistent"] = [consistency(p) for p in agg.index]
+
+        if df_test is not None and not df_test.empty:
+            t = df_test.rename(columns={"balanced_accuracy": "test_bacc",
+                                        "n_class_0": "n_test_0", "n_class_1": "n_test_1"})
+            df = df.merge(t[["pair", "ml_model", "test_bacc", "n_test_0", "n_test_1"]],
+                          on=["pair", "ml_model"], how="left")
+            gt = df.groupby("pair")
+            agg["test_mean_models"] = gt["test_bacc"].mean().round(4)
+            agg["test_max_models"] = gt["test_bacc"].max().round(4)
+            # test score of the model selected by CV
+            best = df.loc[best_idx, ["pair", "ml_model"]]
+            agg["test_of_best_cv_model"] = [
+                df[(df["pair"] == p) & (df["ml_model"] == m)]["test_bacc"].iloc[0]
+                for p, m in zip(best["pair"], best["ml_model"])
+            ]
+            agg["min_of_means"] = agg[["cv_mean_models", "test_mean_models"]].min(axis=1)
+
+        return df.merge(agg, left_on="pair", right_index=True, how="left")
+
+    def write_roi_importance_for_selected_pairs(self, overview, min_test=0.60, max_perm_p=0.05):
+        """
+        stat-test only. The ROI importance tables were computed by mode 'stat'
+        from the saved models (they do not depend on the test set), so they are
+        not recomputed; here they are filtered to the pairs that passed the test:
+            test_of_best_cv_model >= min_test  and  perm_p_best_model <= max_perm_p,
+        keeping only the rows of the CV-selected model of each pair.
+        Written to roi_importance_selected_pairs.csv next to the summary (plus
+        the per-movement files when they exist).
+        """
+        src_dir = os.path.join(self.base_directory, "global_summary")
+        needed = {"test_of_best_cv_model", "perm_p_best_model", "cv_best_model"}
+        if not needed.issubset(overview.columns):
+            return
+        sel = overview[(overview["test_of_best_cv_model"] >= min_test)
+                       & (overview["perm_p_best_model"] <= max_perm_p)]
+        criteria = f"test_of_best_cv_model >= {min_test} and perm_p_best_model <= {max_perm_p}"
+        if sel.empty:
+            print(f"ROI importance: no pair satisfies {criteria}; nothing written.")
+            return
+        keep = set(zip(sel["pair"], sel["cv_best_model"]))
+
+        for src_name, out_name in [("roi_importance_all.csv", "roi_importance_selected_pairs.csv"),
+                                   ("roi_importance_mov1_all.csv", "roi_importance_selected_pairs_mov1.csv"),
+                                   ("roi_importance_mov2_all.csv", "roi_importance_selected_pairs_mov2.csv")]:
+            src = os.path.join(src_dir, src_name)
+            if not os.path.exists(src):
+                if src_name == "roi_importance_all.csv":
+                    print(f"ROI importance: {src} not found; run mode 'stat' first.")
+                continue
+            roi = pd.read_csv(src)
+            roi = roi[[(p, m) in keep for p, m in zip(roi["pair"], roi["ml_model"])]]
+            roi = roi.merge(sel[["pair", "cv_best_model", "balanced_accuracy" if "balanced_accuracy" in sel.columns else "cv_max_models",
+                                 "test_of_best_cv_model", "perm_p_best_model"]],
+                            on="pair", how="left")
+            roi = roi.sort_values(["pair", "rank"])
+            out = os.path.join(self.output_directory, out_name)
+            roi.to_csv(out, index=False)
+            print(f"ROI importance for {len(keep)} selected pair(s) ({criteria}) saved to: {out}")
+
+    def write_pairs_overview(self, df):
+        """
+        One row per pair, the per-pair columns only, sorted by min_of_means
+        (stat-test) or by cv_mean_models (stat). Same information as
+        all_pairs_summary.csv, in the compact form used for reporting.
+        """
+        cols = ["pair", "n_train_0", "n_train_1", "n_test_0", "n_test_1",
+                "cv_mean_models", "cv_max_models", "cv_best_model", "perm_p_best_model",
+                "test_mean_models", "test_max_models", "test_of_best_cv_model", "min_of_means",
+                "distance", "rsa_rank", "rsa_p", "rsa_q", "rsa_consistent"]
+        cols = [c for c in cols if c in df.columns]
+        overview = df.drop_duplicates("pair")[cols]
+        sort_col = "min_of_means" if "min_of_means" in overview.columns else "cv_mean_models"
+        overview = overview.sort_values(sort_col, ascending=False)
+        path = os.path.join(self.output_directory, "pairs_overview.csv")
+        overview.to_csv(path, index=False)
+        print(f"Per-pair overview saved to: {path}")
+        return overview
+
+    def generate_visualizations(self, df, value_col="balanced_accuracy",
+                                title="Balanced Accuracy by Pair and Model",
+                                filename="summary_balanced_accuracy.png"):
         if df.empty:
             print("No data found to visualize.")
             return
@@ -196,7 +350,7 @@ class Statistics():
         bacc_pivot = df.pivot_table(
             index="pair",
             columns="ml_model",
-            values="balanced_accuracy",
+            values=value_col,
             aggfunc="max"
         )
 
@@ -226,14 +380,14 @@ class Statistics():
         for col in bacc_pivot.columns:
             model_df = df[df['ml_model'] == col]
 
-            top_3_bacc_pairs = set(model_df.nlargest(3, 'balanced_accuracy')['pair'])
+            top_3_bacc_pairs = set(model_df.nlargest(3, value_col)['pair'])
 
             overlap_score = len(top_3_dist_pairs.intersection(top_3_bacc_pairs))
             top_3_scores[col] = overlap_score
 
-            valid_data = model_df[['balanced_accuracy', 'distance']].dropna()
+            valid_data = model_df[[value_col, 'distance']].dropna()
             if len(valid_data) > 1 and valid_data['distance'].nunique() > 1:
-                corr, _ = pearsonr(valid_data['distance'], valid_data['balanced_accuracy'])
+                corr, _ = pearsonr(valid_data['distance'], valid_data[value_col])
                 x_labels_bacc.append(f"{col}\nCorr: {corr:.3f}\nTop3 Match: {overlap_score}/3")
                 bacc_corrs[col] = corr
             else:
@@ -248,15 +402,16 @@ class Statistics():
         ax1.set_yticklabels(y_labels_bacc, rotation=0, fontsize=10)
         ax1.set_xticklabels(x_labels_bacc, rotation=0, fontsize=11)  # slightly reduced font size to fit three lines
 
-        plt.title("Balanced Accuracy by Pair and Model", fontsize=18, pad=20)
+        plt.title(title, fontsize=18, pad=20)
         plt.ylabel("Instrument Pair (with RSA Metrics)", fontsize=14, labelpad=15)
         plt.xlabel("ML Model", fontsize=14, labelpad=15)
 
         plt.subplots_adjust(left=0.35, bottom=0.18, top=0.95)  # increase bottom margin to accommodate the new score
-        plt.savefig(os.path.join(self.output_directory, "summary_balanced_accuracy.png"), dpi=300, bbox_inches='tight')
+        plt.savefig(os.path.join(self.output_directory, filename), dpi=300, bbox_inches='tight')
         plt.close()
 
-        txt_path = os.path.join(self.output_directory, "correlations_summary.txt")
+        txt_path = os.path.join(self.output_directory, filename.replace(".png", "_correlations.txt")
+                                if filename != "summary_balanced_accuracy.png" else "correlations_summary.txt")
         with open(txt_path, "w", encoding="utf-8") as f:
             f.write("=== ML Models Alignment with Furthest Pairs ===\n")
             for model in bacc_pivot.columns:
@@ -288,22 +443,49 @@ class Statistics():
 
         df_results = self.process_rsa_for_pairs(df_results, df_rsa)
 
+        # Test-set reports (mode 'stat-test' only)
+        df_test = None
+        if self.test_directory:
+            df_test = self.compile_results(self.test_directory, folder_prefix="ml_test_",
+                                           report_prefix="test_report_")
+            if df_test.empty:
+                print(f"Notice: no test reports found under {self.test_directory}; test columns will be empty.")
+                df_test = None
+
+        df_results = self.add_pair_level_columns(df_results, df_test)
+
         # Reorder columns for readability
-        cols = ["pair", "ml_model", "balanced_accuracy", "distance", "rsa_p", "rsa_q",
+        cols = ["pair", "ml_model", "balanced_accuracy", "perm_p", "perm_mean", "test_bacc",
+                "cv_mean_models", "cv_max_models", "cv_best_model", "perm_p_best_model",
+                "test_mean_models", "test_max_models", "test_of_best_cv_model", "min_of_means",
+                "n_train_0", "n_train_1", "n_test_0", "n_test_1",
+                "distance", "rsa_rank", "rsa_p", "rsa_q", "rsa_consistent",
                 "group_0_name", "group_1_name", "group_0_intra", "group_1_intra",
                 "nm_prop_1", "group_0", "group_1"]
         df_results = df_results[[c for c in cols if c in df_results.columns]]
 
-        df_results = df_results.sort_values(by="balanced_accuracy", ascending=False)
+        sort_col = "min_of_means" if "min_of_means" in df_results.columns else "cv_mean_models"
+        df_results = df_results.sort_values(by=[sort_col, "balanced_accuracy"], ascending=False)
 
         csv_path = os.path.join(self.output_directory, "all_pairs_summary.csv")
         os.makedirs(self.output_directory, exist_ok=True)
         df_results.to_csv(csv_path, index=False)
         print(f"Summary CSV saved to: {csv_path}")
+        overview = self.write_pairs_overview(df_results)
 
         print("Generating visualization...")
         self.generate_visualizations(df_results)
+        if df_test is not None:
+            self.generate_visualizations(df_results, value_col="test_bacc",
+                                         title="Test-Set Balanced Accuracy by Pair and Model",
+                                         filename="summary_test_balanced_accuracy.png")
         print(f"Visualization saved in the '{self.output_directory}' folder.")
+
+        if self.test_directory:
+            # ROI importance was already extracted by mode 'stat' from the saved
+            # models; here only filter it to the pairs that passed the test.
+            self.write_roi_importance_for_selected_pairs(overview)
+            return
 
         print("Extracting ROI importance from saved ML models...")
         roi_df = summarize_roi_importance(
@@ -324,13 +506,14 @@ class Statistics():
                 print(f"  {model}: {labels}")
 
 
-def main(base_dir, align_dir, pc_str, extra_features_set=1, n_windows_per_exp=6):
+def main(base_dir, align_dir, pc_str, extra_features_set=1, n_windows_per_exp=6, test_dir=None):
     stat = Statistics(
         base_dir,
         align_dir,
         pc_str,
         extra_features_set=extra_features_set,
         n_windows_per_exp=n_windows_per_exp,
+        test_directory=test_dir,
     )
     stat.create_summary_files()
 
