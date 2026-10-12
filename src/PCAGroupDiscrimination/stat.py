@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from scipy.stats import pearsonr
+from scipy.stats import pearsonr, norm
 
 from .roi_importance import summarize_roi_importance
 
@@ -49,6 +49,8 @@ class Statistics():
             "nm_prop_1": None,
             "perm_p": None,
             "perm_mean": None,
+            "perm_std": None,
+            "n_permutations": None,
             "n_class_0": None,
             "n_class_1": None,
         }
@@ -63,11 +65,17 @@ class Statistics():
             perm_mean_match = re.search(r"Permutation mean:\s+([0-9\.]+)", content)
             if perm_mean_match:
                 data["perm_mean"] = float(perm_mean_match.group(1))
+            perm_std_match = re.search(r"Permutation std:\s+([0-9\.]+)", content)
+            if perm_std_match:
+                data["perm_std"] = float(perm_std_match.group(1))
+            n_perm_match = re.search(r"Permutations:\s+(\d+)", content)
+            if n_perm_match:
+                data["n_permutations"] = int(n_perm_match.group(1))
 
             # Class sizes: the value_counts block printed after "Number of ... samples"
             # looks like "0    22" / "1     8" (class 0 = group_0, class 1 = group_1)
             for cls in ("0", "1"):
-                cnt = re.search(rf"^\s*{cls}\s+(\d+)\s*$", content, flags=re.MULTILINE)
+                cnt = re.search(rf"^\s*{cls}(?:\.0)?\s+(\d+)\s*$", content, flags=re.MULTILINE)
                 if cnt:
                     data[f"n_class_{cls}"] = int(cnt.group(1))
 
@@ -126,6 +134,7 @@ class Statistics():
                     file_data["pair"] = pair_name
                     file_data["group_0"] = group_0
                     file_data["group_1"] = group_1
+                    file_data["report_dir"] = pair_dir
                     results.append(file_data)
 
         return pd.DataFrame(results)
@@ -287,12 +296,13 @@ class Statistics():
         the per-movement files when they exist).
         """
         src_dir = os.path.join(self.base_directory, "global_summary")
-        needed = {"test_of_best_cv_model", "perm_p_best_model", "cv_best_model"}
+        needed = {"test_of_best_cv_model", "best_model_p", "cv_best_model"}
         if not needed.issubset(overview.columns):
             return
         sel = overview[(overview["test_of_best_cv_model"] >= min_test)
-                       & (overview["perm_p_best_model"] <= max_perm_p)]
-        criteria = f"test_of_best_cv_model >= {min_test} and perm_p_best_model <= {max_perm_p}"
+                       & (overview["best_model_p"] <= max_perm_p)]
+        source = overview["best_model_p_source"].iloc[0] if "best_model_p_source" in overview.columns else "permutation"
+        criteria = f"test_of_best_cv_model >= {min_test} and best_model_p ({source}) <= {max_perm_p}"
         if sel.empty:
             print(f"ROI importance: no pair satisfies {criteria}; nothing written.")
             return
@@ -308,13 +318,279 @@ class Statistics():
                 continue
             roi = pd.read_csv(src)
             roi = roi[[(p, m) in keep for p, m in zip(roi["pair"], roi["ml_model"])]]
-            roi = roi.merge(sel[["pair", "cv_best_model", "balanced_accuracy" if "balanced_accuracy" in sel.columns else "cv_max_models",
-                                 "test_of_best_cv_model", "perm_p_best_model"]],
+            roi = roi.merge(sel[["pair", "cv_best_model", "cv_max_models", "test_of_best_cv_model", "best_model_p"]],
                             on="pair", how="left")
             roi = roi.sort_values(["pair", "rank"])
             out = os.path.join(self.output_directory, out_name)
             roi.to_csv(out, index=False)
             print(f"ROI importance for {len(keep)} selected pair(s) ({criteria}) saved to: {out}")
+
+    # ------------------------------------------------------------------
+    # Significance
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _bh_fdr(pvals):
+        """Benjamini-Hochberg adjusted p-values (NaN-safe)."""
+        p = np.asarray(pvals, dtype=float)
+        q = np.full_like(p, np.nan)
+        ok = ~np.isnan(p)
+        if ok.sum() == 0:
+            return q
+        pv = p[ok]
+        n = len(pv)
+        order = np.argsort(pv)
+        ranked = pv[order] * n / (np.arange(n) + 1)
+        ranked = np.minimum.accumulate(ranked[::-1])[::-1]
+        out = np.empty(n)
+        out[order] = np.minimum(ranked, 1.0)
+        q[ok] = out
+        return q
+
+    @staticmethod
+    def _null_sd_bacc(n0, n1):
+        """SD of a balanced accuracy at chance level for class sizes n0, n1."""
+        try:
+            return 0.25 * np.sqrt(1.0 / float(n0) + 1.0 / float(n1))
+        except (TypeError, ZeroDivisionError, ValueError):
+            return np.nan
+
+    MIN_PERMUTATIONS_FOR_PERM_TEST = 100
+
+    def ensemble_from_cv_results(self, pair_dir):
+        """
+        Majority vote of the out-of-fold CV predictions of all models of a pair
+        (ml_cv_results_<model>_*.csv: sub_id, y_classical_tendency, cv_pred [, cv_prob]).
+        Returns (ensemble_bacc, n_models, n_subjects_all_models_correct, n_subjects)
+        or (nan, 0, nan, nan) when the files are missing. One subject counted
+        once per model (the latest file per model is used).
+        """
+        files = glob.glob(os.path.join(pair_dir, "ml_cv_results_*.csv"))
+        latest = {}
+        for f in files:
+            m = re.search(r"ml_cv_results_([A-Za-z]+)_", os.path.basename(f))
+            if m:
+                model = m.group(1)
+                if model not in latest or os.path.getmtime(f) > os.path.getmtime(latest[model]):
+                    latest[model] = f
+        preds = []
+        for model, f in latest.items():
+            try:
+                d = pd.read_csv(f)
+                col = "cv_prob" if "cv_prob" in d.columns and d["cv_prob"].notna().all() else "cv_pred"
+                preds.append(d.set_index("sub_id")[[col, "y_classical_tendency"]].rename(columns={col: model}))
+            except Exception:
+                continue
+        if not preds:
+            return np.nan, 0, np.nan, np.nan
+        joined = preds[0]
+        for d in preds[1:]:
+            joined = joined.join(d.drop(columns="y_classical_tendency"), how="inner")
+        models = [c for c in joined.columns if c != "y_classical_tendency"]
+        y = joined["y_classical_tendency"].astype(int).values
+        score = joined[models].astype(float).mean(axis=1).values          # mean prob (or mean of 0/1 votes)
+        vote = (score > 0.5).astype(int)
+        correct_all = (joined[models].astype(float).gt(0.5).astype(int).eq(y[:, None])).all(axis=1).sum()
+        tpr = (vote[y == 1] == 1).mean() if (y == 1).any() else np.nan
+        tnr = (vote[y == 0] == 0).mean() if (y == 0).any() else np.nan
+        return float(np.nanmean([tpr, tnr])), len(models), int(correct_all), int(len(y))
+
+    def add_significance_columns(self, df, threshold=0.60):
+        """
+        Adds significance columns and returns (df, summary dict).
+
+        Per (pair, model) row
+          perm_q           BH-FDR of the permutation p-value over all rows of the run.
+        Per pair (repeated on its rows)
+          row_mean_z/p/q   test of the MEAN balanced accuracy over the models of the
+                           pair against chance. The models of one pair are fitted on
+                           the same subjects, so their scores are correlated and the
+                           mean does not have the variance of an average of
+                           independent scores. We therefore use the CONSERVATIVE
+                           null SD of a single model (perfect correlation):
+                             z = (mean_models - null_mean) / null_sd_single,
+                           with null_mean and null_sd_single the averages of the
+                           permutation mean and std of the models (fallback: 0.5 and
+                           the analytic SD for the class sizes). p is one-sided.
+          row_mean_p_indep the optimistic p-value assuming independent models
+                           (SD / sqrt(M)); the truth lies between the two.
+          test_sel_z/p/q   (stat-test) test score of the CV-selected model vs chance,
+                           analytic null SD for the test class sizes, one-sided.
+          test_row_mean_p  (stat-test) same conservative test for the mean test
+                           score over the models.
+        Summary (count tests)
+          how many (pair, model) scores and how many pair means exceed `threshold`,
+          versus the number expected under the null; the p-value for the count
+          assumes independence between combinations and is therefore optimistic.
+        """
+        summary = {"threshold": threshold}
+        if df.empty:
+            return df, summary
+
+        # ---- per row: FDR over permutation p-values
+        df["perm_q"] = self._bh_fdr(df["perm_p"].values)
+
+        # ---- per pair: row-mean test (CV)
+        # permutation-based quantities are used only when enough permutations were run
+        n_perm = df["n_permutations"].dropna()
+        perm_ok = (not n_perm.empty) and (n_perm.min() >= self.MIN_PERMUTATIONS_FOR_PERM_TEST)
+        summary["n_permutations"] = int(n_perm.min()) if not n_perm.empty else None
+        summary["permutation_test_used"] = bool(perm_ok)
+        if not perm_ok:
+            df["perm_q"] = np.nan   # p-values from a handful of permutations carry no information
+
+        g = df.groupby("pair")
+        rows = []
+        for pair, sub in g:
+            M = int(sub["balanced_accuracy"].notna().sum())
+            mean_obs = sub["balanced_accuracy"].mean()
+            sd_an = self._null_sd_bacc(sub["n_class_0"].iloc[0], sub["n_class_1"].iloc[0])
+            z_an = (mean_obs - 0.5) / sd_an if pd.notna(sd_an) and sd_an > 0 else np.nan
+            if perm_ok and sub["perm_std"].notna().any():
+                null_mean = sub["perm_mean"].mean(); null_sd = sub["perm_std"].mean()
+                z = (mean_obs - null_mean) / null_sd if null_sd and null_sd > 0 else np.nan
+            else:
+                null_mean, null_sd, z = 0.5, sd_an, z_an
+            ens_bacc, ens_n, ens_all_correct, ens_n_subj = self.ensemble_from_cv_results(sub["report_dir"].iloc[0]) \
+                if "report_dir" in sub.columns else (np.nan, 0, np.nan, np.nan)
+            z_ens = (ens_bacc - 0.5) / sd_an if pd.notna(ens_bacc) and pd.notna(sd_an) and sd_an > 0 else np.nan
+            rows.append({
+                "pair": pair,
+                "row_n_models": M,
+                "row_null_mean": null_mean,
+                "row_null_sd_single": null_sd,
+                "row_mean_z": z,
+                "row_mean_p": norm.sf(z) if pd.notna(z) else np.nan,
+                "row_mean_p_analytic": norm.sf(z_an) if pd.notna(z_an) else np.nan,
+                "row_mean_p_indep": norm.sf(z * np.sqrt(M)) if pd.notna(z) and M > 0 else np.nan,
+                "n_models_above_chance": int((sub["balanced_accuracy"] > 0.5).sum()),
+                "n_models_above_1sd": int((sub["balanced_accuracy"] > 0.5 + sd_an).sum()) if pd.notna(sd_an) else np.nan,
+                "ensemble_bacc": ens_bacc,
+                "ensemble_p": norm.sf(z_ens) if pd.notna(z_ens) else np.nan,
+                "ensemble_n_models": ens_n,
+                "subjects_correct_by_all_models": ens_all_correct,
+                "n_subjects_cv": ens_n_subj,
+            })
+        P = pd.DataFrame(rows).set_index("pair")
+        P["row_mean_q"] = self._bh_fdr(P["row_mean_p"].values)
+        P["ensemble_q"] = self._bh_fdr(P["ensemble_p"].values)
+        df = df.merge(P, left_on="pair", right_index=True, how="left")
+
+        # p-value of the CV-selected model: permutation-based when usable, else analytic
+        if perm_ok:
+            df["best_model_p"] = df["perm_p_best_model"]
+        else:
+            df["best_model_p"] = norm.sf((df["cv_max_models"] - 0.5) / df["row_null_sd_single"])
+        df["best_model_p_source"] = "permutation" if perm_ok else "analytic"
+
+        # ---- count tests (CV)
+        sd_rows = np.array([self._null_sd_bacc(a, b) for a, b in zip(df["n_class_0"], df["n_class_1"])])
+        summary.update(self._count_test(
+            scores=df["balanced_accuracy"].values,
+            null_means=df["perm_mean"].fillna(0.5).values if perm_ok else np.full(len(df), 0.5),
+            null_sds=df["perm_std"].fillna(pd.Series(sd_rows)).values if perm_ok else sd_rows,
+            threshold=threshold, prefix="cv_rows"))
+        summary.update(self._count_test(
+            scores=P.index.map(g["balanced_accuracy"].mean()).values,
+            null_means=P["row_null_mean"].values, null_sds=P["row_null_sd_single"].values,
+            threshold=threshold, prefix="cv_pair_means"))
+
+        # ---- test set (stat-test)
+        if "test_bacc" in df.columns:
+            rows = []
+            for pair, sub in df.groupby("pair"):
+                n0, n1 = sub["n_test_0"].iloc[0], sub["n_test_1"].iloc[0]
+                sd = self._null_sd_bacc(n0, n1)
+                sel = sub["test_of_best_cv_model"].iloc[0]
+                z_sel = (sel - 0.5) / sd if pd.notna(sel) and pd.notna(sd) and sd > 0 else np.nan
+                mean_t = sub["test_bacc"].mean()
+                z_row = (mean_t - 0.5) / sd if pd.notna(mean_t) and pd.notna(sd) and sd > 0 else np.nan
+                rows.append({"pair": pair, "test_null_sd": sd,
+                             "test_sel_z": z_sel, "test_sel_p": norm.sf(z_sel) if pd.notna(z_sel) else np.nan,
+                             "test_row_mean_z": z_row, "test_row_mean_p": norm.sf(z_row) if pd.notna(z_row) else np.nan})
+            T = pd.DataFrame(rows).set_index("pair")
+            T["test_sel_q"] = self._bh_fdr(T["test_sel_p"].values)
+            T["test_row_mean_q"] = self._bh_fdr(T["test_row_mean_p"].values)
+            df = df.merge(T, left_on="pair", right_index=True, how="left")
+            sds = np.array([self._null_sd_bacc(a, b) for a, b in zip(df["n_test_0"], df["n_test_1"])])
+            summary.update(self._count_test(scores=df["test_bacc"].values, null_means=np.full(len(df), 0.5),
+                                            null_sds=sds, threshold=threshold, prefix="test_rows"))
+            per_pair = df.drop_duplicates("pair")
+            summary.update(self._count_test(scores=per_pair["test_of_best_cv_model"].values,
+                                            null_means=np.full(len(per_pair), 0.5),
+                                            null_sds=per_pair["test_null_sd"].values,
+                                            threshold=threshold, prefix="test_selected"))
+        return df, summary
+
+    @staticmethod
+    def _count_test(scores, null_means, null_sds, threshold, prefix):
+        """
+        Observed number of scores >= threshold versus the number expected under
+        the null (normal approximation per score), with a Poisson-binomial
+        normal-approximation p-value that ASSUMES INDEPENDENCE between scores
+        (optimistic, since models of one pair share the subjects).
+        """
+        scores = np.asarray(scores, dtype=float); mu = np.asarray(null_means, dtype=float); sd = np.asarray(null_sds, dtype=float)
+        ok = ~np.isnan(scores) & ~np.isnan(mu) & ~np.isnan(sd) & (sd > 0)
+        if ok.sum() == 0:
+            return {}
+        p_each = norm.sf((threshold - mu[ok]) / sd[ok])
+        observed = int((scores[ok] >= threshold).sum())
+        expected = float(p_each.sum())
+        var = float((p_each * (1 - p_each)).sum())
+        p_count = norm.sf((observed - expected) / np.sqrt(var)) if var > 0 else np.nan
+        return {f"{prefix}_n": int(ok.sum()), f"{prefix}_observed_ge_thr": observed,
+                f"{prefix}_expected_ge_thr": expected, f"{prefix}_count_p_indep": p_count}
+
+    def write_significance_summary(self, df, summary):
+        """Writes significance_summary.txt next to the CSV files."""
+        thr = summary.get("threshold", 0.60)
+        path = os.path.join(self.output_directory, "significance_summary.txt")
+        n_perm = summary.get("n_permutations")
+        perm_note = (f"Permutation tests used ({n_perm} permutations)." if summary.get("permutation_test_used")
+                     else f"Permutation tests NOT used ({n_perm} permutations < {self.MIN_PERMUTATIONS_FOR_PERM_TEST}): "
+                          "all p-values below are analytic, from the null SD of a balanced accuracy for the class sizes, "
+                          "0.25*sqrt(1/n0 + 1/n1).")
+        lines = ["=== Significance summary ===", "", perm_note, "",
+                 "Per (pair, model): permutation p-value from the training report, with BH-FDR over all",
+                 "rows of this run (column perm_q in all_pairs_summary.csv; empty when permutations were not used).", "",
+                 "Per pair, mean over models (columns row_mean_z/p/q): the models of a pair are fitted on",
+                 "the same subjects, so their scores are correlated. The reported p is CONSERVATIVE",
+                 "(null SD of a single model, i.e. perfect correlation); row_mean_p_indep is the",
+                 "optimistic bound assuming independent models. The truth lies in between.", "",
+                 "Agreement between models: n_models_above_chance / n_models_above_1sd count the models of the pair",
+                 "above 0.5 / above 0.5 + one null SD; ensemble_bacc is the balanced accuracy of the majority vote",
+                 "of the models' out-of-fold predictions (one statistic for 'all models see the same difference'),",
+                 "with its analytic p and FDR q; subjects_correct_by_all_models counts subjects every model got right.",
+                 "Agreement shows the difference is in the data rather than in a model's randomness; it does not",
+                 "add evidence against sampling noise, because all models see the same subjects.", ""]
+
+        def block(prefix, label):
+            if f"{prefix}_n" not in summary:
+                return []
+            return [f"{label}: {summary[f'{prefix}_observed_ge_thr']} of {summary[f'{prefix}_n']} scores >= {thr:.2f}; "
+                    f"expected under the null {summary[f'{prefix}_expected_ge_thr']:.1f}; "
+                    f"p (independence assumed, optimistic) = {summary[f'{prefix}_count_p_indep']:.3g}"]
+
+        lines += ["--- Counts above the threshold ---"]
+        lines += block("cv_rows", "CV, all (pair, model) combinations")
+        lines += block("cv_pair_means", "CV, pair means over models")
+        lines += block("test_rows", "Test, all (pair, model) combinations")
+        lines += block("test_selected", "Test, CV-selected model per pair")
+        lines += ["", "--- Pairs ---"]
+        per_pair = df.drop_duplicates("pair").sort_values("row_mean_p")
+        for _, r in per_pair.iterrows():
+            line = (f"{r['pair']:<24} mean CV {r['cv_mean_models']:.3f}  z {r['row_mean_z']:+.2f}  "
+                    f"p {r['row_mean_p']:.3g} (q {r['row_mean_q']:.3g}; analytic {r['row_mean_p_analytic']:.3g}; indep {r['row_mean_p_indep']:.3g})"
+                    f"  models>0.5 {int(r['n_models_above_chance'])}/{int(r['row_n_models'])}"
+                    f"  ensemble {r['ensemble_bacc']:.3f} p {r['ensemble_p']:.3g}"
+                    f"  best {r['cv_best_model']} ({r['cv_max_models']:.3f}, p {r['best_model_p']:.3g} {r['best_model_p_source']})")
+            if "test_sel_p" in r and pd.notna(r.get("test_sel_p", np.nan)):
+                line += (f"  | test of best {r['test_of_best_cv_model']:.3f} p {r['test_sel_p']:.3g} (q {r['test_sel_q']:.3g})"
+                         f"  test mean {r['test_mean_models']:.3f} p {r['test_row_mean_p']:.3g}")
+            lines.append(line)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+        print(f"Significance summary saved to: {path}")
 
     def write_pairs_overview(self, df):
         """
@@ -323,8 +599,12 @@ class Statistics():
         all_pairs_summary.csv, in the compact form used for reporting.
         """
         cols = ["pair", "n_train_0", "n_train_1", "n_test_0", "n_test_1",
-                "cv_mean_models", "cv_max_models", "cv_best_model", "perm_p_best_model",
+                "cv_mean_models", "cv_max_models", "cv_best_model", "perm_p_best_model", "best_model_p", "best_model_p_source",
+                "row_mean_z", "row_mean_p", "row_mean_q", "row_mean_p_analytic", "row_mean_p_indep",
+                "n_models_above_chance", "n_models_above_1sd", "ensemble_bacc", "ensemble_p", "ensemble_q",
+                "subjects_correct_by_all_models", "n_subjects_cv",
                 "test_mean_models", "test_max_models", "test_of_best_cv_model", "min_of_means",
+                "test_sel_p", "test_sel_q", "test_row_mean_p", "test_row_mean_q",
                 "distance", "rsa_rank", "rsa_p", "rsa_q", "rsa_consistent"]
         cols = [c for c in cols if c in df.columns]
         overview = df.drop_duplicates("pair")[cols]
@@ -453,11 +733,16 @@ class Statistics():
                 df_test = None
 
         df_results = self.add_pair_level_columns(df_results, df_test)
+        df_results, significance = self.add_significance_columns(df_results)
 
         # Reorder columns for readability
-        cols = ["pair", "ml_model", "balanced_accuracy", "perm_p", "perm_mean", "test_bacc",
-                "cv_mean_models", "cv_max_models", "cv_best_model", "perm_p_best_model",
+        cols = ["pair", "ml_model", "balanced_accuracy", "perm_p", "perm_q", "perm_mean", "perm_std", "test_bacc",
+                "cv_mean_models", "cv_max_models", "cv_best_model", "perm_p_best_model", "best_model_p", "best_model_p_source",
+                "row_mean_z", "row_mean_p", "row_mean_q", "row_mean_p_analytic", "row_mean_p_indep",
+                "n_models_above_chance", "n_models_above_1sd", "ensemble_bacc", "ensemble_p", "ensemble_q",
+                "subjects_correct_by_all_models", "n_subjects_cv", "n_permutations", "row_n_models",
                 "test_mean_models", "test_max_models", "test_of_best_cv_model", "min_of_means",
+                "test_sel_z", "test_sel_p", "test_sel_q", "test_row_mean_z", "test_row_mean_p", "test_row_mean_q",
                 "n_train_0", "n_train_1", "n_test_0", "n_test_1",
                 "distance", "rsa_rank", "rsa_p", "rsa_q", "rsa_consistent",
                 "group_0_name", "group_1_name", "group_0_intra", "group_1_intra",
@@ -472,6 +757,7 @@ class Statistics():
         df_results.to_csv(csv_path, index=False)
         print(f"Summary CSV saved to: {csv_path}")
         overview = self.write_pairs_overview(df_results)
+        self.write_significance_summary(df_results, significance)
 
         print("Generating visualization...")
         self.generate_visualizations(df_results)
