@@ -15,6 +15,7 @@ from datetime import datetime
 from joblib import Parallel, delayed
 
 from sklearn.model_selection import GridSearchCV
+from sklearn.base import clone
 from sklearn.metrics import (
     accuracy_score, balanced_accuracy_score, roc_auc_score,
     confusion_matrix, classification_report
@@ -380,22 +381,45 @@ class MLAnalyzer:
             print(f"[ML] Optimal parameters chosen: {grid_search.best_params_}")
 
         # -----------------------------
-        # Permutation test (Evaluates the finalized best model only)
+        # Permutation test
         # -----------------------------
-        n_perm = getattr(self.args, "n_permutations", 5000)
+        # Two modes, controlled by --run-permutations:
+        #   nested (run_permutations=True): every permutation repeats the whole nested
+        #     procedure, i.e. the hyperparameter search runs again on the permuted
+        #     labels inside the outer CV. This is the valid test: the observed score
+        #     was produced with hyperparameters chosen on the true labels, so the null
+        #     scores must be produced the same way. Expensive (n_permutations x the
+        #     cost of the nested CV).
+        #   placeholder (run_permutations=False, default): 5 permutations with the
+        #     hyperparameters frozen at the selected values, only so that the report
+        #     has the usual format. The resulting p-value carries no information and
+        #     stat.py ignores it (it uses analytic p-values instead).
+        run_permutations = bool(getattr(self.args, "run_permutations", False))
+        if run_permutations:
+            n_perm = getattr(self.args, "n_permutations", 5000)
+            perm_mode = "nested"
+        else:
+            n_perm = 5
+            perm_mode = "placeholder"
 
         def run_single_permutation(perm_idx):
             """Helper function to run a single permutation."""
             start_time = time.time()
-            print(f"[Perm-Worker] Starting permutation {perm_idx + 1}/{n_perm}")
+            print(f"[Perm-Worker] Starting permutation {perm_idx + 1}/{n_perm} ({perm_mode})")
 
             # Seed per iteration for reproducibility
             rng_local = np.random.default_rng(42 + perm_idx)
             y_perm = rng_local.permutation(y)
 
             try:
-                # Run permutation strictly on the frozen best model (prevents re-searching)
-                y_perm_pred = cross_val_predict(best_final_model, X, y_perm, cv=outer_cv, method="predict")
+                if run_permutations:
+                    # Full nested procedure on the permuted labels: a fresh copy of the
+                    # grid search (inner CV + hyperparameter selection) inside the outer CV
+                    estimator = clone(outer_estimator)
+                    y_perm_pred = cross_val_predict(estimator, X, y_perm, cv=outer_cv, method="predict")
+                else:
+                    # Placeholder: frozen best model, hyperparameters not re-selected
+                    y_perm_pred = cross_val_predict(best_final_model, X, y_perm, cv=outer_cv, method="predict")
                 score = balanced_accuracy_score(y_perm, y_perm_pred)
             except ValueError as e:
                 print(f"[Perm-Worker] Skipping permutation {perm_idx + 1} due to bootstrap class imbalance.")
@@ -409,8 +433,12 @@ class MLAnalyzer:
 
             return score
 
-        print(f"[ML] Running {n_perm} permutation tests in parallel ({getattr(self.args, 'jobs', 1)} jobs)...")
-        perm_scores_raw = Parallel(n_jobs=getattr(self.args, 'jobs', 1), verbose=10)(
+        print(f"[ML] Running {n_perm} permutation tests ({perm_mode}) in parallel ({getattr(self.args, 'jobs', 1)} jobs)...")
+        # In nested mode each permutation already parallelises its grid search (n_jobs of
+        # GridSearchCV), so the permutations themselves run sequentially to avoid
+        # oversubscribing the CPUs.
+        perm_jobs = 1 if run_permutations else getattr(self.args, 'jobs', 1)
+        perm_scores_raw = Parallel(n_jobs=perm_jobs, verbose=10)(
             delayed(run_single_permutation)(i) for i in range(n_perm)
         )
 
@@ -499,7 +527,7 @@ class MLAnalyzer:
         plt.axvline(bacc, color="red", linestyle="--", label=f"Observed BAcc = {bacc:.3f}")
         plt.xlabel("Balanced Accuracy under permutation")
         plt.ylabel("Count")
-        plt.title("Permutation Test")
+        plt.title(f"Permutation Test ({perm_mode}, n={actual_n_perms})")
         plt.legend()
         savefig(perm_png)
 
@@ -513,7 +541,8 @@ class MLAnalyzer:
                 f.write(f"Best Tuned Parameters: {grid_search.best_params_}\n")
             f.write(f"Target PC index: {self.args.pc_str}\n")
             f.write(f"Row normalization: {self.args.row_normalize_ml}\n")
-            f.write(f"Permutations: {n_perm}\n\n")
+            f.write(f"Permutations: {n_perm}\n")
+            f.write(f"Permutation mode: {perm_mode}\n\n")
 
             f.write("--- TRAIN SET ---\n")
             f.write(f"Number of samples: {len(data)}\n")

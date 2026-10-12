@@ -51,6 +51,7 @@ class Statistics():
             "perm_mean": None,
             "perm_std": None,
             "n_permutations": None,
+            "perm_mode": None,
             "n_class_0": None,
             "n_class_1": None,
         }
@@ -71,6 +72,8 @@ class Statistics():
             n_perm_match = re.search(r"Permutations:\s+(\d+)", content)
             if n_perm_match:
                 data["n_permutations"] = int(n_perm_match.group(1))
+            mode_match = re.search(r"Permutation mode:\s+(\w+)", content)
+            data["perm_mode"] = mode_match.group(1) if mode_match else "unknown"
 
             # Class sizes: the value_counts block printed after "Number of ... samples"
             # looks like "0    22" / "1     8" (class 0 = group_0, class 1 = group_1)
@@ -432,8 +435,11 @@ class Statistics():
         # ---- per pair: row-mean test (CV)
         # permutation-based quantities are used only when enough permutations were run
         n_perm = df["n_permutations"].dropna()
-        perm_ok = (not n_perm.empty) and (n_perm.min() >= self.MIN_PERMUTATIONS_FOR_PERM_TEST)
+        modes = set(df["perm_mode"].dropna()) if "perm_mode" in df.columns else set()
+        nested = bool(modes) and modes <= {"nested"}
+        perm_ok = (not n_perm.empty) and (n_perm.min() >= self.MIN_PERMUTATIONS_FOR_PERM_TEST) and nested
         summary["n_permutations"] = int(n_perm.min()) if not n_perm.empty else None
+        summary["permutation_mode"] = ",".join(sorted(modes)) if modes else "unknown"
         summary["permutation_test_used"] = bool(perm_ok)
         if not perm_ok:
             df["perm_q"] = np.nan   # p-values from a handful of permutations carry no information
@@ -553,8 +559,10 @@ class Statistics():
         thr = summary.get("threshold", 0.60)
         path = os.path.join(self.output_directory, "significance_summary.txt")
         n_perm = summary.get("n_permutations")
-        perm_note = (f"Permutation tests used ({n_perm} permutations)." if summary.get("permutation_test_used")
-                     else f"Permutation tests NOT used ({n_perm} permutations < {self.MIN_PERMUTATIONS_FOR_PERM_TEST}): "
+        perm_mode = summary.get("permutation_mode", "unknown")
+        perm_note = (f"Permutation tests used ({n_perm} nested permutations)." if summary.get("permutation_test_used")
+                     else f"Permutation tests NOT used ({n_perm} permutations, mode '{perm_mode}'; required: >= "
+                          f"{self.MIN_PERMUTATIONS_FOR_PERM_TEST} nested permutations, see --run-permutations): "
                           "all p-values below are analytic, from the null SD of a balanced accuracy for the class sizes, "
                           "0.25*sqrt(1/n0 + 1/n1).")
         lines = ["=== Significance summary ===", "", perm_note, "",

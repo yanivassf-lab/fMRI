@@ -455,7 +455,8 @@ Parameters
 * ``--extra-features-set`` — feature extraction mode for ML:  ``0`` = no features - flattened signal only; ``1`` = features for each roi along the time: mean (on --n-windows-per-exp windows), abs-mean, std; ``2`` = event-driven music transitions; ``3`` = ROI loadings of **all** PCs for both movements (``n_pcs × 2 × 100`` features, no sequence reconstruction; ``--target-pc-index`` is ignored and outputs are named ``all-pcs``); ``4`` = encoding betas: every ROI time series is regressed on per-TR acoustic regressors of the music (``6 × 2 × 100`` features; requires ``--use-raw-data`` and ``--acoustic-features-dir``; outputs are named ``acoustic``) (default: ``1``).
 * ``--acoustic-features-dir`` — directory containing ``acoustic_mov1.csv`` and ``acoustic_mov2.csv`` produced by ``acoustic-features`` (see below). Used by feature set ``4`` only.
 * ``--n-windows-per-exp`` — number of windows to split each experiment for feature mean calculation (if extra-features-set=1) (default: ``6``).
-* ``--n-permutations`` — permutations for the ML significance test (default: ``200``).
+* ``--run-permutations`` — run the full nested permutation test: in every permutation the hyperparameter search is repeated inside the outer cross-validation on the permuted labels, which is the valid null for a score obtained with hyperparameters selected on the true labels. Expensive (``--n-permutations`` times the cost of the nested CV; permutations run sequentially). Without this flag only 5 placeholder permutations with frozen hyperparameters are run, so the report keeps its format; their p-value carries no information and mode ``stat`` ignores it (analytic p-values are reported instead). The report states which mode was used (``Permutation mode: nested`` / ``placeholder``).
+* ``--n-permutations`` — permutations for the nested permutation test when ``--run-permutations`` is set (default: ``200``).
 * ``--test-pairs-file`` — JSON file listing class pairs to evaluate in ``ml-test`` mode.
 * ``--ml-models`` — models to train (default: ``LR SVM NN DTree RandForest``).
 * ``--groups`` — instrument groups for pairwise comparisons.
@@ -544,6 +545,7 @@ run_pipeline.sh file content:
             --raw-data-path) RAW_DATA_PATH="$2"; shift 2 ;;
             --acoustic-features-dir) ACOUSTIC_DIR="$2"; shift 2 ;;
             --n-permutations) N_PERMUTATIONS="$2"; shift 2 ;;
+            --run-permutations) RUN_PERMUTATIONS="1"; shift 1 ;;
             --max-pc) MAX_PC="$2"; shift 2 ;;
             *) shift ;; # Ignore unknown parameters
         esac
@@ -582,6 +584,9 @@ run_pipeline.sh file content:
         fi
         if [ -n "$ACOUSTIC_DIR" ]; then
             BASE_CMD_ARGS+=("--acoustic-features-dir" "$ACOUSTIC_DIR")
+        fi
+        if [ -n "$RUN_PERMUTATIONS" ]; then
+            BASE_CMD_ARGS+=("--run-permutations")
         fi
 
         # Execute the pipeline based on the requested mode
@@ -694,7 +699,7 @@ Trains binary classifiers for every combination of instrument groups (e.g. Guita
 The search space for hyperparameters is defined in the JSON file provided to `ml-hyperparameters.json <_static/ml_hyperparameters.json>`_. It can take a time to run all combinations, so you can delete some models or parameters from the JSON file to reduce the search space.
 
 - Run ML mode for PC indices 0 and 1 using training data.
-- The parameter ``--n-permutations`` controls the number of permutations for the significance test. It is set to 5 by default to make the grid search of the hyper-parameters computationally feasible. However, after finding the best model, you can rerun it (only on the selected parameters by setting them in ``ml_hyperparameters.json`` file) with 5000 or more permutations to obtain a reliable p-value estimation.
+- By default the permutation test is a placeholder (5 permutations, hyperparameters frozen) that only keeps the report format; mode ``stat`` then reports analytic p-values. To obtain a valid permutation p-value, rerun ``ml`` with ``--run-permutations --n-permutations 1000`` (or more) on the pair(s) and model(s) of interest only (restrict ``--groups`` and ``--ml-models``, or the grid in ``ml_hyperparameters.json``): every permutation repeats the whole hyperparameter search, so this is not feasible for all pairs and models at once. Note that a permutation test that keeps the hyperparameters selected on the true labels (the old behaviour) is optimistic and is no longer offered.
 
 ..code-block:: bash
 
@@ -731,7 +736,7 @@ The search space for hyperparameters is defined in the JSON file provided to `ml
    * - File
      - Description
    * - ``ml_report_<model>_pc-<k>_<timestamp>.txt``
-     - CV accuracy, balanced accuracy, ROC AUC, confusion matrix, permutation p-value.
+     - CV accuracy, balanced accuracy, ROC AUC, confusion matrix, class sizes, permutation p-value with the number of permutations and the permutation mode (``nested`` or ``placeholder``).
    * - ``ml_confusion_matrix_<model>_pc-<k>_<timestamp>.png``
      - Confusion matrix plot.
    * - ``ml_permutation_test_<model>_pc-<k>_<timestamp>.png``
@@ -793,6 +798,8 @@ Cross-references ML reports with RSA metrics from ``align-signals``. Produces a 
      - All (pair, model) combinations with balanced accuracy, permutation p-value, RSA distance, p/q values, and intra-group cohesion. Per-pair columns (repeated on every row of the pair): ``cv_mean_models``, ``cv_max_models``, ``cv_best_model`` (the model selected by CV), ``perm_p_best_model``, ``n_train_0``/``n_train_1`` (class sizes read from the reports), ``rsa_rank`` (1 = most distant pair of the run) and ``rsa_consistent`` (``yes``: q < 0.05, ``weak``: p < 0.05, ``rank``: rank ≤ 5, ``no``).
    * - ``pairs_overview.csv``
      - One row per pair with the per-pair columns only, sorted by ``cv_mean_models``.
+   * - ``significance_summary.txt``
+     - Significance of the run. Per (pair, model): ``analytic_p`` (one-sided, from the null SD of a balanced accuracy for the class sizes, ``0.25*sqrt(1/n0+1/n1)``) and, when at least 100 nested permutations were run, ``perm_p``; each with BH-FDR over all rows of the run (``analytic_q``, ``perm_q``). Per pair: ``row_mean_p`` — the mean balanced accuracy over the models against chance, with the conservative null SD of a single model (the models share the subjects, so the mean is not an average of independent scores), ``row_mean_p_indep`` (optimistic bound assuming independent models), ``row_mean_q``; ``best_model_p``/``best_model_q`` for the CV-selected model (its q is the correction needed when the best of several models is reported); ``n_models_above_chance``, ``n_models_above_1sd``, ``ensemble_bacc``/``ensemble_p``/``ensemble_q`` (balanced accuracy of the majority vote of the models' out-of-fold predictions, one statistic for "all models see the same difference"), ``subjects_correct_by_all_models``. Count tests: observed vs expected number of scores above 0.60 (all rows, pair means) with a p-value that assumes independence (optimistic). All these columns are also in ``all_pairs_summary.csv`` and ``pairs_overview.csv``.
    * - ``summary_balanced_accuracy.png``
      - Heatmap of balanced accuracy; y-axis labels include RSA distance metrics per pair; x-axis shows correlation with RSA and top-3 overlap score.
    * - ``correlations_summary.txt``
@@ -909,10 +916,16 @@ Run after ``ml-test``. Produces the same files as ``stat``, extended with the te
      - As in ``stat``, plus ``test_bacc`` (test score of the row's model), ``test_mean_models``, ``test_max_models``, ``test_of_best_cv_model``, ``min_of_means`` (the smaller of the CV and test means over models) and ``n_test_0``/``n_test_1``. Sorted by ``min_of_means``.
    * - ``pairs_overview.csv``
      - One row per pair with the per-pair columns, sorted by ``min_of_means``.
+   * - ``significance_summary.txt``
+     - As in ``stat``, plus ``test_sel_p``/``test_sel_q`` (test score of the CV-selected model against chance, analytic null SD for the test class sizes) and ``test_row_mean_p``/``q`` (mean test score over the models, conservative), and the count tests for the test rows and for the CV-selected test scores.
    * - ``summary_balanced_accuracy.png`` / ``summary_test_balanced_accuracy.png``
      - Heatmaps of the CV and of the test balanced accuracies (with ``correlations_summary.txt`` / ``summary_test_balanced_accuracy_correlations.txt``).
    * - ``roi_importance_selected_pairs.csv`` (``_mov1`` / ``_mov2``)
-     - The ROI importance tables computed by ``stat`` from the saved models (they do not depend on the test set and are not recomputed), filtered to the CV-selected model of the pairs with ``test_of_best_cv_model >= 0.60`` and ``perm_p_best_model <= 0.05``, and annotated with the pair's CV, test and permutation p. Not written when no pair qualifies.
+     - The ROI importance tables computed by ``stat`` from the saved models (they do not depend on the test set and are not recomputed), filtered to the CV-selected model of the pairs with ``test_of_best_cv_model >= 0.60`` and ``best_model_p <= 0.05`` (the permutation p when nested permutations were run, the analytic p otherwise), and annotated with the pair's CV, test and p. Not written when no pair qualifies.
+
+.. note::
+
+   Reading the significance files: a p-value of a single model is meaningful only together with its ``q`` (FDR over all rows of the run), because the best of 5 models x 22 pairs is reported; a pair whose models agree (high ``n_models_above_chance``, ``ensemble_bacc``) shows that the difference is in the data rather than in a model's randomness, but the models share the subjects, so agreement is no evidence against sampling noise. The confirmatory number of a pair is ``test_of_best_cv_model`` with ``test_sel_p``.
 
 .. note::
 

@@ -100,11 +100,11 @@ class PipelineApp:
         if self.args.mode == "stat":
             self.create_stat()
             param_exists = True
-        if self.args.mode == "ml-test":
-            self.run_ml_test(X, ids)
-            param_exists = True
         if self.args.mode == "stat-test":
             self.create_stat(with_test=True)
+            param_exists = True
+        if self.args.mode == "ml-test":
+            self.run_ml_test(X, ids)
             param_exists = True
 
         if not param_exists:
@@ -131,12 +131,19 @@ def build_parser():
     p.add_argument("--n-pcs", type=int, default=7)
     p.add_argument("--target-pc-index", type=int, default=0)
     p.add_argument("--row-normalize-ml", action="store_true", help="Normalize the examples")
+    p.add_argument("--run-permutations", action="store_true", default=False,
+                   help="Run the full nested permutation test (hyperparameter search repeated inside every "
+                        "permutation) with --n-permutations permutations. Without this flag only 5 placeholder "
+                        "permutations with frozen hyperparameters are run, so the report keeps its format; "
+                        "their p-value is ignored by mode 'stat', which then reports analytic p-values.")
     p.add_argument("--n-permutations", type=int, default=200,
                    help="Number of label permutations for ML permutation test")
-    p.add_argument("--extra-features-set", type=int, default=1, choices=[0, 1, 2, 3],
+    p.add_argument("--extra-features-set", type=int, default=1, choices=[0, 1, 2, 3, 4],
                    help="Feature extraction for ML: 0=no features - flattened signal only, 1=features for each roi along the time: mean (on --n-windows-per-exp windows), abs-mean, std, "
-                        "2=Event-driven music transitions, "
-                        "3=ROI loadings of all PCs, both movements (no sequence reconstruction).")
+                        "2=Event-driven music transitions, 3=ROI loadings of all PCs for both movements (no sequence reconstruction), "
+                        "4=encoding betas of ROI time series on acoustic regressors (requires --use-raw-data and --acoustic-features-dir).")
+    p.add_argument("--acoustic-features-dir", type=str, default=None,
+                   help="Directory with acoustic_mov1.csv and acoustic_mov2.csv (from cli/acoustic_features.py); used by --extra-features-set 4.")
     p.add_argument("--n-windows-per-exp", type=int, default=6, help="number of windows to split each experiment for feature mean calculation (if extra-features-set=1).")
     p.add_argument("--mov1-transition-trs", nargs='+', default=[40, 201, 433, 481, 570],
                    help="Transition times in movement 1")
@@ -195,8 +202,13 @@ def main():
         parser.error(f"Test pairs file '{args.test_pairs_file}' does not exist.")
     if args.use_raw_data and not args.raw_data_path:
         parser.error("--raw-data-path is required when --use-raw-data is set.")
+    if args.extra_features_set == 4 and (not args.use_raw_data or not args.acoustic_features_dir):
+        parser.error("--extra-features-set 4 requires --use-raw-data and --acoustic-features-dir.")
     args.target_pc_index = 'raw' if args.use_raw_data else args.target_pc_index
-    args.pc_str = 'raw' if args.use_raw_data else ('all-pcs' if args.extra_features_set == 3 else f"pc-{args.target_pc_index}")
+    if args.extra_features_set == 4:
+        args.pc_str = 'acoustic'
+    else:
+        args.pc_str = 'raw' if args.use_raw_data else ('all-pcs' if args.extra_features_set == 3 else f"pc-{args.target_pc_index}")
     args.cache_file_pardir = args.input_dir if not args.cache_file_pardir else args.cache_file_pardir
     app = PipelineApp(args)
     app.run()
