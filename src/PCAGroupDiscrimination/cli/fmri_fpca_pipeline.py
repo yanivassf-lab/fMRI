@@ -142,8 +142,22 @@ def build_parser():
                    help="Feature extraction for ML: 0=no features - flattened signal only, 1=features for each roi along the time: mean (on --n-windows-per-exp windows), abs-mean, std, "
                         "2=Event-driven music transitions, 3=ROI loadings of all PCs for both movements (no sequence reconstruction), "
                         "4=encoding betas of ROI time series on acoustic regressors (requires --use-raw-data and --acoustic-features-dir).")
+    p.add_argument("--annotation-xlsx", type=str, default=None,
+                   help="Orchestration annotation workbook (one sheet per movement: 'Movement 1', 'Movement 2'; "
+                        "rows = instruments with levels 0/1/2, genre rows; a 'TR' row with the bar start TRs). "
+                        "With --extra-features-set 4 the per-TR regressors are built from it inside the pipeline "
+                        "(instrument groups wind/guitars/keyboards/strings/drums, genres, density) using the run's "
+                        "TR, movement lengths and skipped volumes.")
+    p.add_argument("--encoding-source", type=str, default="fpca", choices=["fpca", "raw"],
+                   help="Signal that feature set 4 regresses on the stimulus regressors: 'fpca' (default) = each "
+                        "subject's ROI signal rebuilt from its own --n-pcs functional principal components "
+                        "(pca-singles outputs in --input-dir); 'raw' = the preprocessed BOLD ROI time series "
+                        "(requires --use-raw-data / --raw-data-path).")
+    p.add_argument("--annotation-split-solo", action="store_true", default=False,
+                   help="With --annotation-xlsx: two regressors per instrument group (playing, solo) instead of one level.")
     p.add_argument("--acoustic-features-dir", type=str, default=None,
-                   help="Directory with acoustic_mov1.csv and acoustic_mov2.csv (from cli/acoustic_features.py); used by --extra-features-set 4.")
+                   help="Alternative to --annotation-xlsx for --extra-features-set 4: directory with precomputed "
+                        "acoustic_mov1.csv and acoustic_mov2.csv (e.g. from cli/acoustic_features.py).")
     p.add_argument("--n-windows-per-exp", type=int, default=6, help="number of windows to split each experiment for feature mean calculation (if extra-features-set=1).")
     p.add_argument("--mov1-transition-trs", nargs='+', default=[40, 201, 433, 481, 570],
                    help="Transition times in movement 1")
@@ -202,11 +216,13 @@ def main():
         parser.error(f"Test pairs file '{args.test_pairs_file}' does not exist.")
     if args.use_raw_data and not args.raw_data_path:
         parser.error("--raw-data-path is required when --use-raw-data is set.")
-    if args.extra_features_set == 4 and (not args.use_raw_data or not args.acoustic_features_dir):
-        parser.error("--extra-features-set 4 requires --use-raw-data and --acoustic-features-dir.")
+    if args.extra_features_set == 4 and not (args.annotation_xlsx or args.acoustic_features_dir):
+        parser.error("--extra-features-set 4 requires --annotation-xlsx (or --acoustic-features-dir).")
+    if args.extra_features_set == 4 and args.encoding_source == "raw" and not args.use_raw_data:
+        parser.error("--extra-features-set 4 with --encoding-source raw requires --use-raw-data and --raw-data-path.")
     args.target_pc_index = 'raw' if args.use_raw_data else args.target_pc_index
     if args.extra_features_set == 4:
-        args.pc_str = 'acoustic'
+        args.pc_str = f'acoustic-{args.encoding_source}'
     else:
         args.pc_str = 'raw' if args.use_raw_data else ('all-pcs' if args.extra_features_set == 3 else f"pc-{args.target_pc_index}")
     args.cache_file_pardir = args.input_dir if not args.cache_file_pardir else args.cache_file_pardir

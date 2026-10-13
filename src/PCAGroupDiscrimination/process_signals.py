@@ -309,9 +309,111 @@ class ProcessSignals:
             X.append(np.concatenate(feats))
         return np.array(X)
 
+    def load_regressors(self, mov1_times, mov2_times):
+        """
+        Per-TR regressors for feature set 4, as {1: DataFrame, 2: DataFrame}.
+        Source, in this order:
+          --annotation-xlsx : built here from the orchestration annotation workbook,
+                              with the movement lengths, TR and skipped volumes of
+                              this run (PCAGroupDiscrimination.annotation_regressors);
+                              the regressors are also written to
+                              <output-dir>/0_regressors/ for inspection.
+          --acoustic-features-dir : precomputed acoustic_mov1.csv / acoustic_mov2.csv
+                              (e.g. from cli/acoustic_features.py).
+        """
+        xlsx = getattr(self.args, "annotation_xlsx", None)
+        if xlsx:
+            from .annotation_regressors import build_annotation_regressors
+            res = build_annotation_regressors(
+                xlsx, mov1_times, mov2_times, self.args.TR,
+                n_skip_vols_start=getattr(self.args, "n_skip_vols_start", 0),
+                split_solo=getattr(self.args, "annotation_split_solo", False),
+                logger=self.logger)
+            out_dir = os.path.join(os.path.dirname(self.args.output_dir), "0_regressors")
+            os.makedirs(out_dir, exist_ok=True)
+            for mov, (reg, raw) in res.items():
+                reg.to_csv(os.path.join(out_dir, f"acoustic_mov{mov}.csv"), index=False)
+                raw.to_csv(os.path.join(out_dir, f"annotation_raw_mov{mov}.csv"), index=False)
+            self.logger.info(f"Regressors built from {xlsx} and written to {out_dir}")
+            return {mov: reg for mov, (reg, raw) in res.items()}
+
+        frames = {}
+        for mov in (1, 2):
+            path = os.path.join(self.args.acoustic_features_dir, f"acoustic_mov{mov}.csv")
+            if not os.path.exists(path):
+                raise FileNotFoundError(f"Missing regressors: {path}")
+            frames[mov] = pd.read_csv(path)
+        if list(frames[1].columns) != list(frames[2].columns):
+            raise ValueError("acoustic_mov1.csv and acoustic_mov2.csv must have the same columns")
+        return frames
+
+    def extract_encoding_betas(self, raw_data_dict, subjects, n_regions, mov1_times, mov2_times):
+        """
+        Feature set 4: encoding betas.
+        For every subject, movement and ROI, the (filtered) ROI time series is
+        regressed on the per-TR acoustic regressors of that movement
+        (acoustic_mov1.csv / acoustic_mov2.csv in --acoustic-features-dir, already
+        HRF-convolved and z-scored by cli/acoustic_features.py). The regression
+        coefficients ("how much this ROI follows loudness, pulse clarity, ...")
+        are the features: n_regressors * n_regions per movement.
+        """
+        regs = {}
+        reg_frames = self.load_regressors(mov1_times, mov2_times)
+        for mov, n_t in [(1, mov1_times), (2, mov2_times)]:
+            R = reg_frames[mov].values.astype(float)
+            if R.shape[0] < n_t:
+                raise ValueError(f"regressors of movement {mov} have {R.shape[0]} TRs but the fMRI data has {n_t}")
+            if R.shape[0] > n_t:
+                self.logger.warning(f"regressors of movement {mov} have {R.shape[0]} TRs, fMRI has {n_t}: truncating")
+            R = R[:n_t]
+            R = (R - R.mean(0)) / (R.std(0) + 1e-12)
+            regs[mov] = np.hstack([np.ones((n_t, 1)), R])  # intercept + regressors
+        self.regressor_names = list(reg_frames[1].columns)
+        self.n_acoustic_regressors = len(self.regressor_names)
+
+        X = []
+        for sub in subjects:
+            M = np.asarray(raw_data_dict[sub][0])  # (n_regions, mov1_times + mov2_times)
+            feats = []
+            for mov, (a, b) in [(1, (0, mov1_times)), (2, (mov1_times, mov1_times + mov2_times))]:
+                Y = M[:, a:b].T  # (T, n_regions)
+                Y = (Y - Y.mean(0)) / (Y.std(0) + 1e-12)  # z-score each ROI over time
+                beta = np.linalg.lstsq(regs[mov], Y, rcond=None)[0]  # (1 + k, n_regions)
+                feats.append(beta[1:].ravel())  # drop intercept; order: regressor-major, ROI-minor
+            X.append(np.concatenate(feats))
+        return np.array(X)
+
     def read_signals(self):
         if self.args.use_raw_data and self.args.extra_features_set == 3:
             raise ValueError("extra-features-set 3 (all-PC loadings) requires PC data, not raw data")
+        encoding_source = getattr(self.args, "encoding_source", "fpca")
+        if self.args.extra_features_set == 4 and encoding_source == "raw" and not self.args.use_raw_data:
+            raise ValueError("extra-features-set 4 with --encoding-source raw requires --use-raw-data (ROI time series)")
+        if self.args.extra_features_set == 4 and not (getattr(self.args, "annotation_xlsx", None)
+                                                      or getattr(self.args, "acoustic_features_dir", None)):
+            raise ValueError("extra-features-set 4 requires --annotation-xlsx or --acoustic-features-dir")
+
+        if self.args.extra_features_set == 4 and encoding_source == "fpca":
+            # ============================================================
+            # Feature set 4 on the subject-level fPCA reconstruction: each
+            # subject's ROI signal is rebuilt from its OWN n_pcs components
+            # (pca-singles outputs), then regressed on the stimulus regressors.
+            # ============================================================
+            from .fpca_subject_signals import build_subject_fpca_signals
+            cache_file_path = os.path.join(self.args.cache_file_pardir,
+                                           f"fpca_subject_signals_{self.args.n_pcs}pcs_cache.joblib")
+            fpca_dict, atlas_labels, mov1_times, mov2_times = build_subject_fpca_signals(
+                self.args.input_dir, self.args.file_name_pattern, self.args.n_pcs,
+                self.args.jobs, cache_file_path, self.logger)
+            subjects = [s for s in fpca_dict if fpca_dict.get(s)]
+            if not subjects:
+                raise RuntimeError("No subjects reconstructed by build_subject_fpca_signals")
+            ids = [f"sub-{s}" if not str(s).startswith("sub-") else str(s) for s in subjects]
+            X_features = self.extract_encoding_betas(fpca_dict, subjects, len(atlas_labels), mov1_times, mov2_times)
+            self.logger.info(f"Encoding-beta feature matrix (subject fPCA reconstruction): {X_features.shape}")
+            if self.args.row_normalize_ml:
+                X_features = normalize(X_features, norm="l2", axis=1)
+            return X_features, ids, atlas_labels
 
         if self.args.use_raw_data:
             # 1. Package all the LoadData and cropping parameters
@@ -335,7 +437,8 @@ class ProcessSignals:
                 logger=self.logger
             )
 
-            cache_file_path = os.path.join(self.args.cache_file_pardir, "processed_raw_data_cache.joblib")
+            cache_suffix = "_test" if self.args.mode == "ml-test" else ""
+            cache_file_path = os.path.join(self.args.cache_file_pardir, f"processed_raw_data_cache{cache_suffix}.joblib")
             # Add logger configuration to the parameters dictionary
             load_params['log_dir'] = self.args.output_dir
 
@@ -353,6 +456,21 @@ class ProcessSignals:
             subjects = list(raw_data_dict.keys())
             if not subjects:
                 raise RuntimeError("No subjects loaded by build_subject_raw_data")
+
+            # ====================================================================
+            # Feature set 4: encoding betas on acoustic regressors (ROI time series
+            # regressed on the music's per-TR features). Handled here, before the
+            # flattening loop, which is not needed for it.
+            # ====================================================================
+            if self.args.extra_features_set == 4:
+                subjects = [s for s in subjects if raw_data_dict.get(s)]
+                ids = [f"sub-{s}" if not str(s).startswith("sub-") else str(s) for s in subjects]
+                X_features = self.extract_encoding_betas(
+                    raw_data_dict, subjects, len(atlas_labels), mov1_times, mov2_times)
+                self.logger.info(f"Encoding-beta feature matrix (raw ROI time series): {X_features.shape}")
+                if self.args.row_normalize_ml:
+                    X_features = normalize(X_features, norm="l2", axis=1)
+                return X_features, ids, atlas_labels
             # Extract the raw concatenated ROI x Time matrix for each subject and build the feature matrix
             X = []
             ids = []

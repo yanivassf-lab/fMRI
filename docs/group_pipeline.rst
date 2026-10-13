@@ -452,8 +452,10 @@ Parameters
 
 * ``--target-pc-index <INT>`` — which PC to analyze (``0`` … ``n_pcs-1``). Run separately for each PC.
 * ``--n-pcs`` — number of PCs available in the input (default: ``7``).
-* ``--extra-features-set`` — feature extraction mode for ML:  ``0`` = no features - flattened signal only; ``1`` = features for each roi along the time: mean (on --n-windows-per-exp windows), abs-mean, std; ``2`` = event-driven music transitions; ``3`` = ROI loadings of **all** PCs for both movements (``n_pcs × 2 × 100`` features, no sequence reconstruction; ``--target-pc-index`` is ignored and outputs are named ``all-pcs``); ``4`` = encoding betas: every ROI time series is regressed on per-TR acoustic regressors of the music (``6 × 2 × 100`` features; requires ``--use-raw-data`` and ``--acoustic-features-dir``; outputs are named ``acoustic``) (default: ``1``).
-* ``--acoustic-features-dir`` — directory containing ``acoustic_mov1.csv`` and ``acoustic_mov2.csv`` produced by ``acoustic-features`` (see below). Used by feature set ``4`` only.
+* ``--extra-features-set`` — feature extraction mode for ML:  ``0`` = no features - flattened signal only; ``1`` = features for each roi along the time: mean (on --n-windows-per-exp windows), abs-mean, std; ``2`` = event-driven music transitions; ``3`` = ROI loadings of **all** PCs for both movements (``n_pcs × 2 × 100`` features, no sequence reconstruction; ``--target-pc-index`` is ignored and outputs are named ``all-pcs``); ``4`` = encoding betas: every ROI time series is regressed on per-TR regressors of the music (``n_regressors × 2 × 100`` features; requires ``--annotation-xlsx`` or ``--acoustic-features-dir``; the signal is the subject-level fPCA reconstruction by default, see ``--encoding-source``; outputs are named ``acoustic-fpca`` / ``acoustic-raw``) (default: ``1``).
+* ``--encoding-source`` — signal that feature set ``4`` regresses on the regressors: ``fpca`` (default) rebuilds each subject's ROI signal from its own ``--n-pcs`` functional principal components (the ``pca-singles`` outputs in ``--input-dir``: ``temporal_profile_pc_<k>.txt`` and ``eigenfunction_<k>_importance_map.nii.gz`` of the subject); ``raw`` uses the preprocessed BOLD ROI time series (requires ``--use-raw-data`` / ``--raw-data-path``).
+* ``--annotation-xlsx`` — orchestration annotation workbook (see *Stimulus regressors* below). With feature set ``4`` the per-TR regressors are built from it inside the pipeline, using the run's TR, movement lengths and skipped volumes; nothing else has to be given. ``--annotation-split-solo`` writes two regressors per instrument group (playing, solo) instead of one level.
+* ``--acoustic-features-dir`` — alternative to ``--annotation-xlsx``: directory containing precomputed ``acoustic_mov1.csv`` and ``acoustic_mov2.csv`` (e.g. from ``cli/acoustic_features.py``, which needs the audio).
 * ``--n-windows-per-exp`` — number of windows to split each experiment for feature mean calculation (if extra-features-set=1) (default: ``6``).
 * ``--run-permutations`` — run the full nested permutation test: in every permutation the hyperparameter search is repeated inside the outer cross-validation on the permuted labels, which is the valid null for a score obtained with hyperparameters selected on the true labels. Expensive (``--n-permutations`` times the cost of the nested CV; permutations run sequentially). Without this flag only 5 placeholder permutations with frozen hyperparameters are run, so the report keeps its format; their p-value carries no information and mode ``stat`` ignores it (analytic p-values are reported instead). The report states which mode was used (``Permutation mode: nested`` / ``placeholder``).
 * ``--n-permutations`` — permutations for the nested permutation test when ``--run-permutations`` is set (default: ``200``).
@@ -494,10 +496,14 @@ The outer product of regional weights (from the NIfTI, resampled to the Schaefer
 
    Because the temporal profile is shared by all subjects, each reconstructed Region × Time matrix has rank one: all the subject-specific information of a PC is the vector of 100 regional weights (the *loadings*) per movement. Feature sets ``0``–``2`` are different encodings of this vector for a single PC. Feature set ``3`` uses the loadings of all PCs directly, and feature set ``4`` replaces the data-driven temporal profiles by stimulus-driven regressors computed from the music (see *Acoustic regressors* below).
 
-Acoustic regressors (feature set 4)
+Stimulus regressors (feature set 4)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Feature set ``4`` needs one CSV of per-TR regressors per movement, produced from the stimulus audio by the ``acoustic-features`` script (``PCAGroupDiscrimination/cli/acoustic_features.py``, requires ``librosa``):
+Feature set ``4`` regresses the time series of every ROI on per-TR regressors that describe the music. The regressors come from one of two sources.
+
+**From the orchestration annotation (recommended, no audio needed).** The workbook given with ``--annotation-xlsx`` has one sheet per movement (``Movement 1``, ``Movement 2``) with, per bar: a ``TR`` row (scan TR at which the bar starts), one row per instrument (column A = family, column B = instrument; levels ``0`` = silent, ``1`` = playing, ``2`` = leading / solo) and genre rows (``Jazz``, ``Rock``, ``Classic``, levels 0/1/2). The pipeline (``PCAGroupDiscrimination.annotation_regressors``) turns it into per-TR step functions at the resolution of the instrument groups used for classification — ``wind`` (woodwind + brass), ``guitars``, ``keyboards``, ``strings``, ``drums`` (maximum level over the instruments of the group), ``jazz``, ``rock``, ``classic`` and ``density`` (number of instruments playing) — convolves them with a canonical HRF, drops the skipped volumes, pads/truncates to the fMRI length and z-scores them. The regressors are written to ``<output-dir>/0_regressors/`` (``acoustic_mov<k>.csv``, and ``annotation_raw_mov<k>.csv`` before HRF convolution) for inspection. The standalone ``cli/annotation_features.py`` builds the same files outside the pipeline.
+
+**From the audio (alternative).** The ``acoustic-features`` script (``PCAGroupDiscrimination/cli/acoustic_features.py``, requires ``librosa``) computes per-TR acoustic regressors from the stimulus audio and writes the same CSV files, to be given with ``--acoustic-features-dir``:
 
 .. code-block:: bash
 
@@ -509,7 +515,9 @@ Feature set ``4`` needs one CSV of per-TR regressors per movement, produced from
 
 For each movement the script computes six time series, one value per TR — ``rms`` (loudness), ``centroid`` (spectral centroid), ``flatness`` (spectral flatness), ``onset`` (onset strength), ``pulse_clarity`` (local autocorrelation peak of the onset envelope) and ``key_clarity`` (peak correlation with the 24 Krumhansl–Kessler key profiles) — convolves them with a canonical double-gamma HRF, drops the skipped volumes, z-scores them, and writes ``acoustic_mov1.csv`` / ``acoustic_mov2.csv``. ``<mov1_times>`` / ``<mov2_times>`` are the numbers of TRs of the fMRI data per movement (see the pipeline log). If the music did not start with the first retained volume, pass the delay in seconds with ``--audio-offset``.
 
-In the pipeline, feature set ``4`` regresses the (filtered, z-scored) time series of every ROI on an intercept plus the six regressors, separately per movement, and uses the six coefficients per ROI and movement as features. It runs on the raw BOLD time series (``--use-raw-data --raw-data-path``), not on the recovered PC signals; the raw-data cache is kept separately for the training (``processed_raw_data_cache.joblib``) and the test (``processed_raw_data_cache_test.joblib``) runs.
+In the pipeline, feature set ``4`` regresses the (z-scored) time series of every ROI on an intercept plus the regressors, separately per movement, and uses the coefficients per ROI and movement as features (with the annotation: 9 regressors × 100 ROIs × 2 movements = 1,800 features).
+
+The time series that is regressed depends on ``--encoding-source``. With ``fpca`` (default) it is the **subject-level fPCA reconstruction** ``PCAGroupDiscrimination.fpca_subject_signals``: for every subject and movement, ``Y[roi, t] = Σ_k w_k[roi] · t_k(t)`` over the subject's own first ``--n-pcs`` components, where ``t_k`` is the subject's temporal profile of component ``k`` and ``w_k[roi]`` the ROI mean of its spatial scores (both written by ``fpca-main --mode pca-singles`` for training and test subjects alike). This keeps the subject's own temporal dynamics, smoothed by the B-spline/GCV/fPCA pipeline and reduced to ``n_pcs`` components — unlike the group reconstruction of feature sets 0–2, which uses a group temporal profile and therefore cannot be regressed on the stimulus. The reconstructions are cached in ``fpca_subject_signals_<n>pcs_cache.joblib`` next to the other caches. With ``raw`` the preprocessed BOLD ROI time series are used instead (``--use-raw-data --raw-data-path``). It runs on the raw BOLD time series (``--use-raw-data --raw-data-path``), not on the recovered PC signals; the raw-data cache is kept separately for the training (``processed_raw_data_cache.joblib``) and the test (``processed_raw_data_cache_test.joblib``) runs.
 
 
 Helper script for running the pipeline
@@ -544,6 +552,8 @@ run_pipeline.sh file content:
             --test-pairs-file) TEST_PAIRS_FILE="$2"; shift 2 ;;
             --raw-data-path) RAW_DATA_PATH="$2"; shift 2 ;;
             --acoustic-features-dir) ACOUSTIC_DIR="$2"; shift 2 ;;
+            --annotation-xlsx) ANNOTATION_XLSX="$2"; shift 2 ;;
+            --encoding-source) ENCODING_SOURCE="$2"; shift 2 ;;
             --n-permutations) N_PERMUTATIONS="$2"; shift 2 ;;
             --run-permutations) RUN_PERMUTATIONS="1"; shift 1 ;;
             --max-pc) MAX_PC="$2"; shift 2 ;;
@@ -585,6 +595,12 @@ run_pipeline.sh file content:
         if [ -n "$ACOUSTIC_DIR" ]; then
             BASE_CMD_ARGS+=("--acoustic-features-dir" "$ACOUSTIC_DIR")
         fi
+        if [ -n "$ANNOTATION_XLSX" ]; then
+            BASE_CMD_ARGS+=("--annotation-xlsx" "$ANNOTATION_XLSX")
+        fi
+        if [ -n "$ENCODING_SOURCE" ]; then
+            BASE_CMD_ARGS+=("--encoding-source" "$ENCODING_SOURCE")
+        fi
         if [ -n "$RUN_PERMUTATIONS" ]; then
             BASE_CMD_ARGS+=("--run-permutations")
         fi
@@ -615,7 +631,7 @@ run_pipeline.sh file content:
 
 .. note::
 
-   For feature set ``3`` the PC index does not matter: pass ``--pc-index "0"`` (one run) and, in ``align-signals`` mode, ``--max-pc 0`` — otherwise the script starts ``MAX_PC + 1`` identical runs that write to the same folder. Feature set ``4`` is run with ``--raw-data-path`` (training data for ``align-signals``/``ml``, test data for ``ml-test``) and ``--acoustic-features-dir``; its outputs are named ``acoustic``.
+   For feature set ``3`` the PC index does not matter: pass ``--pc-index "0"`` (one run) and, in ``align-signals`` mode, ``--max-pc 0`` — otherwise the script starts ``MAX_PC + 1`` identical runs that write to the same folder. Feature set ``4`` is run with ``--annotation-xlsx`` (or ``--acoustic-features-dir``) and, by default, needs nothing else: the subject-level fPCA reconstructions are read from ``--input-dir``. With ``--encoding-source raw`` add ``--raw-data-path`` (training data for ``align-signals``/``ml``, test data for ``ml-test``). Its outputs are named ``acoustic-fpca`` / ``acoustic-raw``.
 
 A. Mode: ``align-signals``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
