@@ -181,7 +181,7 @@ def _process_subject_raw(args):
             smooth_size=load_params.get('smooth_size', None),
             highpass=load_params.get('highpass', None),
             lowpass=load_params.get('lowpass', None),
-            use_nilearn=load_params.get('use_nilearn', False),
+            use_nilearn=load_params.get('use_nilearn_filter', False),
             n_compcor=load_params.get('n_compcor_nilearn_filter', 5),
             nilearn_smoothing_fwhm=load_params.get('smoothing_fwhm_nilearn_filter', 6.0)
         )
