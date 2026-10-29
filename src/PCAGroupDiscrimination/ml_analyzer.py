@@ -36,6 +36,10 @@ from sklearn.manifold import TSNE
 import warnings
 warnings.filterwarnings("ignore", message=".*sklearn.utils.parallel.delayed.*")
 warnings.filterwarnings("ignore", category=UserWarning, module="sklearn.utils.parallel")
+import logging
+
+logger = logging.getLogger("ml_analyzer_logger")
+FPCA_CRITICAL_WARNING = 'fPCA-CRITICAL-WARNING'
 
 from .nn_wrapper import DeepSklearnWrapper
 from .utils import now_str, savefig, setup_logger
@@ -357,7 +361,7 @@ class MLAnalyzer:
             verbose=3  # Print real-time progress for each parameter combination
         )
 
-        print("[ML] Starting Nested CV for performance evaluation...")
+        logger.info("[ML] Starting Nested CV for performance evaluation...")
         outer_estimator = grid_search
 
         # Outer CV Evaluation
@@ -373,12 +377,12 @@ class MLAnalyzer:
         cm = confusion_matrix(y, y_pred)
 
         # 5. Final Fit on ALL data to extract the absolute best parameters
-        print("[ML] Fitting final model on all data...")
+        logger.info("[ML] Fitting final model on all data...")
         grid_search.fit(X, y)
         best_final_model = grid_search.best_estimator_
 
         if param_grid:
-            print(f"[ML] Optimal parameters chosen: {grid_search.best_params_}")
+            logger.info(f"[ML] Optimal parameters chosen: {grid_search.best_params_}")
 
         # -----------------------------
         # Permutation test
@@ -405,7 +409,7 @@ class MLAnalyzer:
         def run_single_permutation(perm_idx):
             """Helper function to run a single permutation."""
             start_time = time.time()
-            print(f"[Perm-Worker] Starting permutation {perm_idx + 1}/{n_perm} ({perm_mode})")
+            logger.info(f"[Perm-Worker] Starting permutation {perm_idx + 1}/{n_perm} ({perm_mode})")
 
             # Seed per iteration for reproducibility
             rng_local = np.random.default_rng(42 + perm_idx)
@@ -422,18 +426,18 @@ class MLAnalyzer:
                     y_perm_pred = cross_val_predict(best_final_model, X, y_perm, cv=outer_cv, method="predict")
                 score = balanced_accuracy_score(y_perm, y_perm_pred)
             except ValueError as e:
-                print(f"[Perm-Worker] Skipping permutation {perm_idx + 1} due to bootstrap class imbalance.")
+                logger.info(f"[Perm-Worker] Skipping permutation {perm_idx + 1} due to bootstrap class imbalance.")
                 return np.nan
             except Exception as e:
-                print(f"[Perm-Worker] Skipping permutation {perm_idx + 1} due to error: {e}")
+                logger.info(f"[Perm-Worker] Skipping permutation {perm_idx + 1} due to error: {e}")
                 return np.nan
 
             elapsed_time = time.time() - start_time
-            print(f"[Perm-Worker] Completed permutation {perm_idx + 1}/{n_perm} | Duration: {elapsed_time:.2f}s")
+            logger.info(f"[Perm-Worker] Completed permutation {perm_idx + 1}/{n_perm} | Duration: {elapsed_time:.2f}s")
 
             return score
 
-        print(f"[ML] Running {n_perm} permutation tests ({perm_mode}) in parallel ({getattr(self.args, 'jobs', 1)} jobs)...")
+        logger.info(f"[ML] Running {n_perm} permutation tests ({perm_mode}) in parallel ({getattr(self.args, 'jobs', 1)} jobs)...")
         # In nested mode each permutation already parallelises its grid search (n_jobs of
         # GridSearchCV), so the permutations themselves run sequentially to avoid
         # oversubscribing the CPUs.
@@ -443,12 +447,15 @@ class MLAnalyzer:
         )
 
         perm_scores = np.array(perm_scores_raw, dtype=float)
+        if not np.isfinite(perm_scores).all():
+            logger.warning(f"{FPCA_CRITICAL_WARNING}: Permutation failures occurred; fix them before reporting a p-value")
         perm_scores = perm_scores[~np.isnan(perm_scores)]
+
         actual_n_perms = len(perm_scores)
-        print(f"[ML] Successfully completed {actual_n_perms} out of {n_perm} permutations.")
+        logger.info(f"[ML] Successfully completed {actual_n_perms} out of {n_perm} permutations.")
 
         perm_p = (np.sum(perm_scores >= bacc) + 1) / (actual_n_perms + 1)
-        print(f"[ML] Permutation test completed: p-value = {perm_p:.6f}")
+        logger.info(f"[ML] Permutation test completed: p-value = {perm_p:.6f}")
 
         # 6. Predict Non-Musicians (NM)
         data_results = data.copy()
@@ -537,11 +544,14 @@ class MLAnalyzer:
             f.write("=" * 88 + "\n")
             f.write(f"Generated: {datetime.now().isoformat()}\n")
             f.write(f"ML model: {model}\n")
+            f.write(
+                f"Model file: best_model_pipeline_{model}_{self.args.pc_str}_{tag}.pkl\n"
+            )
             if param_grid:
                 f.write(f"Best Tuned Parameters: {grid_search.best_params_}\n")
             f.write(f"Target PC index: {self.args.pc_str}\n")
             f.write(f"Row normalization: {self.args.row_normalize_ml}\n")
-            f.write(f"Permutations: {n_perm}\n")
+            f.write(f"Permutations: {actual_n_perms}\n")
             f.write(f"Permutation mode: {perm_mode}\n\n")
 
             f.write("--- TRAIN SET ---\n")
@@ -573,7 +583,7 @@ class MLAnalyzer:
             joblib.dump(best_final_model, model_pkl_path)
             self.logger.info(f"Successfully saved full model pipeline to {model_pkl_path}")
         except Exception as e:
-            self.logger.error(f"Failed to save model pipeline: {e}")
+            self.logger.error(f"{FPCA_CRITICAL_WARNING}: Failed to save model pipeline: {e}")
             model_pkl_path = None
 
         return {

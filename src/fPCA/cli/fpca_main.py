@@ -59,12 +59,6 @@ def run_single_subject(args):
         # Execute heavy math using optimized libraries
         fmri_instance.run()
 
-        # For the very first subject, export the global F and U matrices
-        # so the main Manager script can use them later for Group PCA.
-        if idx == 0:
-            group_mats_path = os.path.join(os.path.dirname(subj_output_folder), "global_F_U_matrices.npz")
-            np.savez_compressed(group_mats_path, F=fmri_instance.F, U=fmri_instance.U)
-
         logger.info(f"--- Finished Subject {idx + 1}/{total}: {base_name} ---")
 
     except Exception as e:
@@ -270,7 +264,8 @@ def main():
                     c_file_paths_ordered[orig_idx] = c_path
                     mask_files_ordered[orig_idx] = task_mask
                 except Exception as exc:
-                    logger.error(f"A subprocess generated an exception for subject {orig_idx}: {exc}")
+                    raise RuntimeError(f"Subject {orig_idx} failed") from exc
+
     else: # "train-pca-group" in args.mode or "train-pca-group" in args.mode
         # Collect existing files using the correct index
         logger.info("Collecting existing files...")
@@ -283,20 +278,7 @@ def main():
                 c_file_paths_ordered[orig_idx] = expected_c_path
                 mask_files_ordered[orig_idx] = task_mask
             else:
-                logger.warning(f"Missing expected file: {expected_c_path}")
-
-        # If the global matrices file is missing due to moving folders,
-        # regenerate it quickly by running ONLY the very first subject.
-        group_mats_path = os.path.join(args.output_folder, "global_F_U_matrices.npz")
-        if not os.path.exists(group_mats_path) and len(tasks) > 0:
-            logger.info("Global matrices missing. Generating them by running the first subject (~1 min)...")
-            try:
-                # Save the returned path and original mask to our ordered lists so it isn't discarded
-                rescued_c_path = process_subject_subprocess(*tasks[0])
-                c_file_paths_ordered[tasks[0][0]] = rescued_c_path
-                mask_files_ordered[tasks[0][0]] = tasks[0][3]
-            except Exception as exc:
-                logger.error(f"Rescue block failed for the first subject: {exc}")
+                raise FileNotFoundError(expected_c_path)
 
         c_file_paths = [p for p in c_file_paths_ordered if p is not None]
         valid_nii_files = [nii_files[i] for i in range(len(nii_files)) if c_file_paths_ordered[i] is not None]
@@ -326,14 +308,29 @@ def main():
                 smoothing_fwhm_nilearn_filter=args.smoothing_fwhm_nilearn_filter
             )
 
-            # Load the global matrices (F and U) created dynamically by the first subprocess
-            group_mats_path = os.path.join(args.output_folder, "global_F_U_matrices.npz")
-            if os.path.exists(group_mats_path):
-                mats = np.load(group_mats_path)
-                fmri_group_instance.F = mats['F']
-                fmri_group_instance.U = mats['U']
-            else:
-                logger.error("Could not find the global F and U matrices file!")
+            group_mats_path = os.path.join(
+                args.output_folder,
+                "global_F_U_matrices.npz",
+            )
+
+            basis_path = (
+                c_file_paths[0]
+                if "train-pca-group" in args.mode
+                else group_mats_path
+            )
+
+            with np.load(basis_path, allow_pickle=False) as mats:
+                fmri_group_instance.F = mats["F"]
+                fmri_group_instance.U = mats["U"]
+                fmri_group_instance.times = mats["times"]
+
+            if "train-pca-group" in args.mode:
+                np.savez_compressed(
+                    group_mats_path,
+                    F=fmri_group_instance.F,
+                    U=fmri_group_instance.U,
+                    times=fmri_group_instance.times,
+                )
             if "train-pca-group" in args.mode:
                 fmri_group_instance.run_group_fpca(c_file_paths, valid_mask_files)
                 logger.info("Group fPCA finished successfully.")
@@ -342,7 +339,7 @@ def main():
                 logger.info("Test projection finished successfully.")
 
         else:
-            logger.error("No valid subjects were processed successfully. Skipping Group fPCA.")
+            raise RuntimeError("No valid subjects available for group fPCA")
 
 if __name__ == "__main__":
     main()

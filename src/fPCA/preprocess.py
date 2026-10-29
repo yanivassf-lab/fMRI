@@ -71,7 +71,7 @@ class LoadData:
             self.TR = zoom[3] if len(zoom) >= 4 else 1.0
 
         # Identify the coordinates of voxels within the mask
-        xlocs, ylocs, zlocs = np.where(mask == 1)
+        xlocs, ylocs, zlocs = np.where(mask > 0)
 
         if not processed:
             logger.info("Applying preprocessing steps: spatial smoothing and temporal filtering...")
@@ -102,40 +102,104 @@ class LoadData:
 
     def filter_fMRI_nilearn(self):
         """
-        Apply confound regression, smoothing, and temporal filtering using Nilearn.
-        Uses fMRIPrep cosine regressors for high-pass filtering.
+        Apply the original Nilearn preprocessing and report flagged volumes.
+
+        Preserve the original motion, cosine, and CompCor regressors.
+        Use sample_mask for diagnostics only: retain every time point,
+        without adding spike regressors or forcing values to zero.
+
+        Write one CRITICAL-tagged warning per affected input. Indices refer
+        to the original input volume sequence, start at zero, and use
+        inclusive ranges. Reporting failures do not stop preprocessing.
 
         Returns:
-            ndarray: Temporally filtered 2D fMRI data for masked voxels (shape: [voxels, time]).
+            ndarray: Filtered masked data with shape (voxels, time).
         """
-        # Load confounds: "high_pass" strategy fetches cosine regressors for drift removal
-        confounds_df, _ = load_confounds(
+        confounds_df, sample_mask = load_confounds(
             self.nii_file,
             strategy=("motion", "high_pass", "compcor"),
-            # motion="full",
             motion="basic",
             compcor="anat_combined",
-            n_compcor=self.n_compcor
+            n_compcor=self.n_compcor,
         )
 
-        # Initialize NiftiMasker. high_pass is None to avoid double filtering,
-        # while low_pass is retained to match the legacy code's upper frequency cutoff.
+        # Diagnostics only: keep the original confounds and all time points.
+        if sample_mask is not None:
+            try:
+                n_scans = len(confounds_df)
+                keep = np.asarray(sample_mask)
+
+                if keep.dtype.kind == "b":
+                    keep = np.flatnonzero(keep)
+
+                flagged = np.setdiff1d(np.arange(n_scans), keep)
+
+                if flagged.size:
+                    # Compress consecutive indices without losing locations.
+                    breaks = np.flatnonzero(np.diff(flagged) > 1)
+                    starts = np.r_[flagged[0], flagged[breaks + 1]]
+                    ends = np.r_[flagged[breaks], flagged[-1]]
+
+                    ranges = ",".join(
+                        str(int(a)) if a == b else f"{int(a)}-{int(b)}"
+                        for a, b in zip(starts, ends)
+                    )
+
+                    leading = int(ends[0] + 1) if starts[0] == 0 else 0
+                    n_flagged = int(flagged.size)
+
+                    # This strategy does not request motion scrubbing.
+                    # The reported flags therefore concern non-steady states.
+                    # %r escapes any newlines in paths and parameters.
+                    logger.warning(
+                        "CRITICAL SAMPLE_MASK_IGNORED | file=%r "
+                        "| flag_type=non_steady_state "
+                        "| total_volumes=%d | flagged_volumes=%d "
+                        "| flagged_pct=%.3f | leading_flagged=%d "
+                        "| nonleading_flagged=%d | flagged_blocks=%d "
+                        "| longest_block=%d | indices_0based=%s "
+                        "| tr_s=%r | n_compcor=%r | smoothing_fwhm_mm=%r "
+                        "| action=KEEP_ALL_ORIGINAL_DENOISING",
+                        str(self.nii_file),
+                        n_scans,
+                        n_flagged,
+                        100.0 * n_flagged / n_scans,
+                        leading,
+                        n_flagged - leading,
+                        len(starts),
+                        int(np.max(ends - starts + 1)),
+                        ranges,
+                        self.TR,
+                        self.n_compcor,
+                        self.nilearn_smoothing_fwhm,
+                    )
+
+            except (TypeError, ValueError, IndexError) as exc:
+                # A diagnostic failure must not prevent normal preprocessing.
+                logger.warning(
+                    "CRITICAL SAMPLE_MASK_REPORT_FAILED | file=%r | error=%r "
+                    "| action=KEEP_ALL_ORIGINAL_DENOISING",
+                    str(self.nii_file),
+                    str(exc),
+                )
+
+        # Original preprocessing settings.
         masker = maskers.NiftiMasker(
             mask_img=self.mask_file,
             smoothing_fwhm=self.nilearn_smoothing_fwhm,
-            standardize='zscore_sample',
+            standardize="zscore_sample",
             detrend=False,
             low_pass=None,
             high_pass=None,
-            # low_pass=self.lowpass,
-            # high_pass=self.highpass,
-            t_r=self.TR
+            t_r=self.TR,
         )
 
-        # Fit and transform the data, regressing out the provided confounds
-        time_series = masker.fit_transform(self.nii_file, confounds=confounds_df)
+        # Preserve the original behavior: no sample_mask is applied.
+        time_series = masker.fit_transform(
+            self.nii_file,
+            confounds=confounds_df,
+        )
 
-        # Transpose the matrix to match the legacy output shape: [voxels, times]
         return time_series.T
 
     def load_nifti_data(self, filename: str):

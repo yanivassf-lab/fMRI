@@ -51,77 +51,146 @@ def _subject_dirs(examples_dir, pattern, logger):
     valid = sorted(set(subs[1]) & set(subs[2]))
     return {s: {1: subs[1][s], 2: subs[2][s]} for s in valid}
 
-
 def _reconstruct_subject(args):
+    """Reconstruct ROI deviations from the subject's spatial mean."""
     sub, dirs, n_pcs, min_len, atlas_img, atlas_labels = args
+
+    if n_pcs < 1:
+        raise ValueError("n_pcs must be positive")
+
     blocks = []
+
     for mov in (1, 2):
-        rec = None
-        n_used = 0
+        rec = np.zeros((len(atlas_labels), min_len[mov]))
+
         for k in range(n_pcs):
-            ts_file = os.path.join(dirs[mov], f"temporal_profile_pc_{k}.txt")
-            nii_file = os.path.join(dirs[mov], f"eigenfunction_{k}_importance_map.nii.gz")
-            if not (os.path.exists(ts_file) and os.path.exists(nii_file)):
-                break
-            w = get_region_weights(nii_file, atlas_img, atlas_labels)
-            t = load_temporal_profile(ts_file)[:min_len[mov]]
-            rec = np.outer(w, t) if rec is None else rec + np.outer(w, t)
-            n_used += 1
-        if rec is None:
-            return sub, None, 0
+            ts_file = os.path.join(
+                dirs[mov],
+                f"temporal_profile_pc_{k}.txt"
+            )
+            nii_file = os.path.join(
+                dirs[mov],
+                f"eigenfunction_{k}_importance_map.nii.gz"
+            )
+
+            # Require every requested component.
+            if not (
+                os.path.isfile(ts_file)
+                and os.path.isfile(nii_file)
+            ):
+                raise FileNotFoundError(
+                    f"Missing component: {sub}, movement {mov}, PC {k}"
+                )
+
+            # Section 7: average scores only inside the explicit brain mask.
+            w = get_region_weights(
+                nii_file, atlas_img, atlas_labels
+            )
+            t = load_temporal_profile(ts_file)
+
+            # Reject incompatible lengths instead of silently truncating.
+            if t.shape != (min_len[mov],):
+                raise ValueError(
+                    f"Time length mismatch: {sub}, movement {mov}, PC {k}"
+                )
+
+            rec += np.outer(w, t)
+
+        # The scores represent deviations from the spatial mean.
+        # Keep this representation: do not add mean_function.
         blocks.append(rec)
-    return sub, np.concatenate(blocks, axis=1), n_used
 
+    return sub, np.concatenate(blocks, axis=1), n_pcs
 
-def build_subject_fpca_signals(examples_dir, pattern, n_pcs, jobs=1, cache_path=None, logger=None):
-    """
-    Returns (data_dict, atlas_labels, mov1_times, mov2_times) with
-    data_dict[sub] = [ROI x (mov1_times + mov2_times) reconstruction].
-    """
+def build_subject_fpca_signals(
+    examples_dir, pattern, n_pcs, jobs=1, cache_path=None, logger=None
+):
+    """Build spatially centered ROI signals on matching acquisition times."""
+
+    # Section 9: do not reuse unvalidated caches in the corrected analysis.
+    cache_path = None
+
     logger = logger or logging.getLogger("clustering")
-    if cache_path and os.path.exists(cache_path):
-        logger.info(f"Loading cached subject-fPCA reconstructions from: {cache_path}")
-        data_dict, atlas_labels, mov1_times, mov2_times = joblib.load(cache_path)
-        return data_dict, list(atlas_labels), mov1_times, mov2_times
 
-    dataset = datasets.fetch_atlas_schaefer_2018(n_rois=100, yeo_networks=7, resolution_mm=2)
+    if n_pcs < 1:
+        raise ValueError("n_pcs must be positive")
+
+    dataset = datasets.fetch_atlas_schaefer_2018(
+        n_rois=100,
+        yeo_networks=7,
+        resolution_mm=2
+    )
     atlas_img = nib.load(dataset.maps)
-    atlas_labels = [l.decode("utf-8") if isinstance(l, bytes) else str(l) for l in dataset.labels]
+    atlas_labels = [
+        label.decode("utf-8") if isinstance(label, bytes) else str(label)
+        for label in dataset.labels
+    ]
 
     subjects = _subject_dirs(examples_dir, pattern, logger)
+
     if not subjects:
-        raise RuntimeError(f"No subject folders found under {examples_dir}/outputs_mov{{1,2}} with pattern {pattern}")
+        raise RuntimeError(
+            f"No subjects with both movements under {examples_dir}"
+        )
 
-    # common length per movement: the shortest subject-level profile
-    min_len = {1: np.inf, 2: np.inf}
-    for dirs in subjects.values():
-        for mov in (1, 2):
-            f = os.path.join(dirs[mov], "temporal_profile_pc_0.txt")
-            if os.path.exists(f):
-                min_len[mov] = min(min_len[mov], len(load_temporal_profile(f)))
-    min_len = {m: int(v) for m, v in min_len.items()}
-    logger.info(f"Subject-level fPCA reconstruction: {len(subjects)} subjects, {n_pcs} components, "
-                f"movement lengths {min_len[1]} / {min_len[2]} TRs")
+    # Require identical acquisition times within each movement.
+    # Do not truncate all subjects to the shortest scan.
+    min_len = {}
 
-    args_list = [(s, d, n_pcs, min_len, atlas_img, atlas_labels) for s, d in subjects.items()]
+    for mov in (1, 2):
+        reference = None
+
+        for sub, dirs in subjects.items():
+            archive = os.path.join(
+                dirs[mov], "eigvecs_eigval_F.npz"
+            )
+
+            with np.load(archive, allow_pickle=False) as data:
+                times = data["times"]
+
+            if times.ndim != 1 or times.size == 0:
+                raise ValueError(
+                    f"Invalid acquisition times: {sub}, movement {mov}"
+                )
+
+            if reference is None:
+                reference = times
+            elif times.shape != reference.shape or not np.allclose(
+                times, reference, rtol=0, atol=1e-10
+            ):
+                raise ValueError(
+                    f"Different acquisition times: {sub}, movement {mov}"
+                )
+
+        min_len[mov] = len(reference)
+
+    logger.info(
+        "Centered subject-fPCA: %d subjects, %d PCs, "
+        "movement lengths %d / %d",
+        len(subjects), n_pcs, min_len[1], min_len[2]
+    )
+
+    args_list = [
+        (sub, dirs, n_pcs, min_len, atlas_img, atlas_labels)
+        for sub, dirs in subjects.items()
+    ]
+
     if jobs and jobs > 1:
         from joblib import Parallel, delayed
-        results = Parallel(n_jobs=jobs)(delayed(_reconstruct_subject)(a) for a in args_list)
+
+        results = Parallel(n_jobs=jobs)(
+            delayed(_reconstruct_subject)(args)
+            for args in args_list
+        )
     else:
-        results = [_reconstruct_subject(a) for a in args_list]
+        results = [
+            _reconstruct_subject(args)
+            for args in args_list
+        ]
 
-    data_dict = {}
-    for sub, mat, n_used in results:
-        if mat is None:
-            logger.warning(f"{sub}: no subject-level components found, skipped")
-            continue
-        if n_used < n_pcs:
-            logger.warning(f"{sub}: only {n_used} of {n_pcs} components found")
-        data_dict[sub] = [mat]
-    mov1_times, mov2_times = min_len[1], min_len[2]
+    data_dict = {
+        sub: [matrix]
+        for sub, matrix, _ in results
+    }
 
-    if cache_path:
-        os.makedirs(os.path.dirname(cache_path), exist_ok=True)
-        joblib.dump((data_dict, atlas_labels, mov1_times, mov2_times), cache_path)
-        logger.info(f"Subject-fPCA reconstructions cached to: {cache_path}")
-    return data_dict, atlas_labels, mov1_times, mov2_times
+    return data_dict, atlas_labels, min_len[1], min_len[2]

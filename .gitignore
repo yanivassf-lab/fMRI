@@ -1,5 +1,9 @@
 .DS_Store
 
+# Old code:
+src/PCAGroupDiscrimination.bck/
+src/fPCA.bck/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

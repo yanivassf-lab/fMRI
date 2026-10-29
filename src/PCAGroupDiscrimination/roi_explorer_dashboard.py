@@ -540,34 +540,6 @@ class ROIExplorerDashboard:
                     global_roi_fig,
                     table_data,
                 )
-                    if not summary_df.empty:
-                        global_pair_fig.add_trace(go.Bar(y=summary_df["pair"], x=summary_df["high_consensus_count"], orientation="h", marker=dict(color=summary_df["high_consensus_count"], colorscale="Tealgrn"), hovertemplate="<b>%{y}</b><br>High Consensus ROIs (>=4 models): %{x}<extra></extra>"), row=i, col=1)
-
-                    # roi summary for movement
-                    roi_summary = (mov_top.groupby(["roi_label", "roi_index"]).size().reset_index(name="global_frequency").sort_values("global_frequency", ascending=False).head(15))
-                    if not roi_summary.empty:
-                        global_roi_fig.add_trace(go.Bar(x=roi_summary["roi_label"], y=roi_summary["global_frequency"], text=roi_summary["roi_index"], textposition="outside", marker=dict(color=roi_summary["global_frequency"], colorscale="Sunset"), hovertemplate="<b>%{x}</b><br>Global Frequency: %{y}<extra></extra>"), row=i, col=1)
-                        global_roi_fig.update_xaxes(tickangle=-45, row=i, col=1)
-
-                global_pair_fig.update_layout(title_text="Pair Consensus Ranking (per movement)", height=650 * len(mov_keys), margin=dict(l=150))
-                global_roi_fig.update_layout(title_text="Top Global Influential ROIs (per movement)", height=450 * len(mov_keys))
-
-                # Detailed table: concatenate movement data for selected filters
-                table_df = pd.concat([m[1] for m in mov_summaries], ignore_index=True)
-                display_df = table_df[["pair", "ml_model", "roi_label", "roi_index", "importance", "rank", "movement"]].sort_values(["movement", "pair", "ml_model", "rank"])
-                display_df["importance"] = display_df["importance"].round(6)
-                table_data = display_df.to_dict("records")
-
-                return (
-                    summary_children,
-                    top_fig,
-                    freq_fig,
-                    algo_fig,
-                    pair_fig,
-                    global_pair_fig,
-                    global_roi_fig,
-                    table_data,
-                )
 
             # Default concatenated view (existing behavior)
             # Get top N ROIs
@@ -595,7 +567,7 @@ class ROIExplorerDashboard:
             # Use filtered_df (which contains ALL ranks for the selected pairs and algorithms),
             # specifically ignoring top_rois_df so the table shows the entire dataset.
             display_df = filtered_df[["pair", "ml_model", "roi_label", "roi_index", "importance", "rank"]].sort_values(
-                ["pair", "ml_model", "rank"]) 
+                ["pair", "ml_model", "rank"])
 
             # Format the importance column for cleaner display in the table
             display_df["importance"] = display_df["importance"].round(6)

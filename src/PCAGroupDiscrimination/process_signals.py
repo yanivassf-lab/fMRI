@@ -4,7 +4,7 @@ import pandas as pd
 from sklearn.preprocessing import normalize
 
 from .build_signals_from_files import build_subject_data, scan_input_folder, \
-    build_subject_raw_data
+    build_subject_raw_data, load_temporal_profile
 
 class ProcessSignals:
     def __init__(self, args, logger):
@@ -284,16 +284,20 @@ class ProcessSignals:
         Output per subject: n_pcs * 2 * n_regions values.
         """
         n_pcs = len(data_dict[subjects[0]])
-        ref = data_dict[subjects[0]]
-        t_ref = []
-        for pc in range(n_pcs):
-            M = np.asarray(ref[pc])
-            segs = []
-            for a, b in [(0, mov1_times), (mov1_times, M.shape[1])]:
-                # top right singular vector of the rank-one block = temporal profile
-                _, _, vt = np.linalg.svd(M[:, a:b], full_matrices=False)
-                segs.append(vt[0])
-            t_ref.append(segs)
+
+        t_ref = [
+            [
+                load_temporal_profile(
+                    os.path.join(
+                        self.args.input_dir,
+                        f"outputs_mov{mov}",
+                        f"temporal_profile_pc_{pc}_group.txt",
+                    )
+                )
+                for mov in (1, 2)
+            ]
+            for pc in range(n_pcs)
+        ]
         X = []
         for sub in subjects:
             feats = []
@@ -301,10 +305,15 @@ class ProcessSignals:
                 M = np.asarray(data_dict[sub][pc])
                 for (a, b), t in zip([(0, mov1_times), (mov1_times, M.shape[1])], t_ref[pc]):
                     block = M[:, a:b]
+                    if block.shape[1] != len(t) or t @ t <= 0:
+                        raise ValueError(
+                            "Invalid or incompatible group temporal profile"
+                        )
+
                     w = block @ t / (t @ t)
                     resid = np.linalg.norm(block - np.outer(w, t)) / (np.linalg.norm(block) + 1e-12)
                     if resid > 1e-4:
-                        self.logger.warning(f"{sub} pc{pc}: rank-one residual {resid:.2e}")
+                        self.logger.warning(f"fPCA-CRITICAL-WARNING: {sub} pc{pc}: rank-one residual {resid:.2e}")
                     feats.append(w)
             X.append(np.concatenate(feats))
         return np.array(X)
@@ -427,7 +436,10 @@ class ProcessSignals:
                 'smoothing_fwhm_nilearn_filter': self.args.smoothing_fwhm_nilearn_filter,
                 'processed': self.args.processed,
                 'n_skip_vols_start': self.args.n_skip_vols_start,
-                'n_skip_vols_end': self.args.n_skip_vols_end
+                'n_skip_vols_end': self.args.n_skip_vols_end,
+
+                # Match the spatially centered representation of Set 4.
+                'spatial_center': self.args.extra_features_set == 4
             }
 
             # 2. Dynamically scan the drive to pair NIfTI files with their specific masks

@@ -1,12 +1,42 @@
 #!/usr/bin/env bash
 
-# Activate the virtual environment from the first argument
-source "$1/bin/activate"
+# ./run_fpca.sh "pca-singles" "Input Directory" "Project Output Directory"
+#
+# Positional arguments: MODE INPUT_DIR PROJECT_OUTPUT_DIR
+# Optional flags after them:
+#   --use-nilearn-filter                 CompCor filtering of the BOLD series before the fPCA, with
+#   --n-compcor-nilearn-filter 2 --smoothing-fwhm-nilearn-filter 4
+#   --n-jobs 20                          parallel jobs of fpca-main (default: 20)
+#
+# Example of a filtered run:
+# ./run_fpca.sh pca-singles /path/to/input_dir_train /path/to/output --use-nilearn-filter --n-compcor-nilearn-filter 2 --smoothing-fwhm-nilearn-filter 4
 
-# Assign the remaining arguments to variables
-MODE="$2"
-INPUT_DIR="$3"
-PROJECT_OUTPUT_DIR="$4"
+# Assign the positional arguments to variables
+MODE="$1"
+INPUT_DIR="$2"
+PROJECT_OUTPUT_DIR="$3"
+shift 3
+
+# Optional flags
+N_JOBS=20
+FILTER_ARGS=()
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --use-nilearn-filter) USE_NILEARN_FILTER="1"; shift 1 ;;
+        --n-compcor-nilearn-filter) N_COMPCOR_NILEARN_FILTER="$2"; shift 2 ;;
+        --smoothing-fwhm-nilearn-filter) SMOOTHING_FWHM_NILEARN_FILTER="$2"; shift 2 ;;
+        --n-jobs) N_JOBS="$2"; shift 2 ;;
+        *) echo "Unknown parameter: $1"; exit 1 ;;
+    esac
+done
+if [ -n "$USE_NILEARN_FILTER" ]; then
+    FILTER_ARGS=("--use-nilearn-filter"
+                 "--n-compcor-nilearn-filter" "${N_COMPCOR_NILEARN_FILTER:-2}"
+                 "--smoothing-fwhm-nilearn-filter" "${SMOOTHING_FWHM_NILEARN_FILTER:-4}")
+    echo "CompCor filtering enabled: ${FILTER_ARGS[*]}"
+else
+    echo "No CompCor filtering"
+fi
 #########################################################################################
 
 mkdir -p "$PROJECT_OUTPUT_DIR"
@@ -61,12 +91,13 @@ if [ ${#NII_FILES_MOV1[@]} -gt 0 ]; then
         --mask-files "${MASK_FILES_MOV1[@]}" \
         --output-folder "$OUTPUT_DIR_MOV1" \
         --calc-penalty-skfda \
-        --n-jobs 5 \
-        --use-nilearn-filter \
+        "${FILTER_ARGS[@]}" \
+        --n-jobs "$N_JOBS" \
         --low-mem \
-        --force
+        --force || exit 1
 else
-    echo "Warning: No files found for Movement 1. Skipping..."
+    echo "No files found for Movement 1" >&2
+    exit 1
 fi
 
 echo "--------------------------------------------------"
@@ -83,13 +114,15 @@ if [ ${#NII_FILES_MOV2[@]} -gt 0 ]; then
         --nii-files "${NII_FILES_MOV2[@]}" \
         --mask-files "${MASK_FILES_MOV2[@]}" \
         --output-folder "$OUTPUT_DIR_MOV2" \
-        --n-jobs 5 \
         --calc-penalty-skfda \
-        --use-nilearn-filter \
+        "${FILTER_ARGS[@]}" \
+        --n-jobs "$N_JOBS" \
         --low-mem \
-        --force
+        --force || exit 1
 else
     echo "Warning: No files found for Movement 2. Skipping..."
+    exit 1
 fi
 
 echo "All tasks completed successfully!"
+

@@ -1,0 +1,10 @@
+{
+  "LR": {
+    "selectkbest__k": [50, 100, 200],
+    "logisticregression__C": [0.01, 0.1, 1.0]
+  },
+  "SVM": {
+    "selectkbest__k": [50, 100, 200],
+    "svc__C": [0.01, 0.1, 1.0]
+  }
+}

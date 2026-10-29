@@ -29,7 +29,7 @@ class LatentSpaceNN(nn.Module):
         return logits, latent
 
 
-class DeepSklearnWrapper(BaseEstimator, ClassifierMixin):
+class DeepSklearnWrapper(ClassifierMixin, BaseEstimator):
     """
     A minimal scikit-learn compatible wrapper around a small PyTorch network so
     it can be used in pipelines / cross_val_predict. Implements fit, predict,
