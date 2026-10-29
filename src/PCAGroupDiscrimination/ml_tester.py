@@ -43,6 +43,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import seaborn as sns
 from datetime import datetime
+from scipy.stats import hypergeom
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, roc_auc_score, confusion_matrix, \
     classification_report
 
@@ -51,6 +52,10 @@ from .utils import now_str, savefig, setup_logger
 # Crucial import: Required for joblib to successfully unpickle the custom NN model.
 # Using noqa to prevent IDE warnings about unused imports.
 from .nn_wrapper import DeepSklearnWrapper  # noqa: F401
+
+import logging
+logger = logging.getLogger("ml_tester_logger")
+FPCA_CRITICAL_WARNING = 'fPCA-CRITICAL-WARNING'
 
 
 class MLTester:
@@ -131,11 +136,14 @@ class MLTester:
         model_files = glob.glob(search_pattern)
 
         if not model_files:
-            self.logger.error(f"Could not find trained .pkl model for {model_name}. Did the training phase complete?")
-            return
+            raise FileNotFoundError(f"No trained model for {model_name}: {train_subfolder}")
 
-        # Select the most recently created model file in case multiple exist
-        latest_model_path = max(model_files, key=os.path.getmtime)
+        if len(model_files) != 1:
+            raise RuntimeError(
+                "Multiple trained models found; use a clean run directory"
+            )
+
+        latest_model_path = model_files[0]
         self.logger.info(f"Loaded trained model from: {latest_model_path}")
 
         loaded_pipeline = joblib.load(latest_model_path)
@@ -152,6 +160,20 @@ class MLTester:
 
         acc = accuracy_score(y_test, y_pred)
         bacc = balanced_accuracy_score(y_test, y_pred)
+        n1 = int(np.sum(y_test == 1))
+        predicted_positive = int(np.sum(y_pred == 1))
+        true_positive = int(
+            np.sum((y_test == 1) & (y_pred == 1))
+        )
+
+        test_exact_p = float(
+            hypergeom.sf(
+                true_positive - 1,
+                len(y_test),
+                n1,
+                predicted_positive,
+            )
+        )
         auc = roc_auc_score(y_test, y_prob) if y_prob is not None else np.nan
         cm = confusion_matrix(y_test, y_pred)
 
@@ -186,6 +208,8 @@ class MLTester:
             f.write("=" * 88 + "\n")
             f.write(f"Generated: {datetime.now().isoformat()}\n")
             f.write(f"ML model: {model_name}\n")
+            f.write(f"Model file: {os.path.basename(latest_model_path)}\n")
+            f.write(f"Test exact p-value: {test_exact_p:.17g}\n")
             f.write(f"Target PC index: {self.args.pc_str}\n\n")
 
             f.write("--- TEST SET INFO ---\n")

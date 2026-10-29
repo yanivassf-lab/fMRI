@@ -47,8 +47,7 @@ def load_temporal_profile(filepath):
     profile_str = content.split('#PC temporal profile:\n')[1]
     return np.array([float(x) for x in profile_str.split()])
 
-
-def get_region_weights(nii_file, atlas_img, atlas_labels):
+def get_region_weights(nii_file, atlas_img, atlas_labels, return_coverage=False):
     """
     Calculate mean weight per ROI region from a spatial map (PC eigenfunction).
 
@@ -56,23 +55,48 @@ def get_region_weights(nii_file, atlas_img, atlas_labels):
         nii_file (str): Path to NIfTI file containing spatial map (eigenfunction).
         atlas_img (nibabel.Nifti1Image): Loaded atlas image object.
         atlas_labels (list): List of ROI label names from atlas.
+        return_coverage (bool): If True, also return a boolean array indicating which ROIs are covered by the mask.
 
     Returns:
         np.ndarray: 1D array of mean weights for each ROI (length = number of atlas labels).
     """
-    # Load spatial map and calculate mean weight per region
     pc_img = nib.load(nii_file)
-    resampled = resample_to_img(atlas_img, pc_img, interpolation='nearest', force_resample=True, copy_header=True)
     pc_data = pc_img.get_fdata()
-    atlas_data = resampled.get_fdata()
+
+    archive = os.path.join(
+        os.path.dirname(nii_file),
+        "eigvecs_eigval_F.npz",
+    )
+
+    with np.load(archive, allow_pickle=False) as data:
+        mask = data["mask"].astype(bool)
+        affine = data["affine"]
+
+    if mask.shape != pc_data.shape or not np.allclose(
+        affine,
+        pc_img.affine,
+    ):
+        raise ValueError(f"Mask/grid mismatch for {nii_file}")
+
+    atlas_data = resample_to_img(
+        atlas_img,
+        pc_img,
+        interpolation="nearest",
+        force_resample=True,
+        copy_header=True,
+    ).get_fdata()
 
     weights = np.zeros(len(atlas_labels))
-    for idx, _ in enumerate(atlas_labels):
-        roi_mask = (atlas_data == (idx + 1))
-        if np.sum(roi_mask) > 0:
-            weights[idx] = np.mean(pc_data[roi_mask])
-    return weights
+    covered = np.zeros(len(atlas_labels), dtype=bool)
 
+    for idx in range(len(atlas_labels)):
+        inside = mask & (atlas_data == idx + 1)
+        covered[idx] = inside.any()
+
+        if covered[idx]:
+            weights[idx] = pc_data[inside].mean()
+
+    return (weights, covered) if return_coverage else weights
 
 def scan_input_folder(input_dir, file_name_pattern, logger=None):
     """
@@ -189,9 +213,20 @@ def _process_subject_raw(args):
         # Load filtered data; fmri_data_all shape is (n_voxels, n_timepoints)
         fmri_data_all, mask, _ = data_loader.load_data(processed=load_params.get('processed', False))
 
-        # Crop timepoints
-        end_idx = fmri_data_all.shape[1] - n_skip_vols_end if n_skip_vols_end > 0 else fmri_data_all.shape[1]
+        # Crop timepoints.
+        end_idx = (
+            fmri_data_all.shape[1] - n_skip_vols_end
+            if n_skip_vols_end > 0
+            else fmri_data_all.shape[1]
+        )
         fmri_data = fmri_data_all[:, n_skip_vols_start:end_idx]
+
+        # For Set 4, subtract the spatial mean at each time point.
+        # Use ALL voxels inside the subject's brain mask.
+        # This runs separately for each subject and movement,
+        # before averaging voxels into ROIs.
+        if load_params.get("spatial_center", False):
+            fmri_data = fmri_data - fmri_data.mean(axis=0, keepdims=True)
 
         # Resample the atlas to match the functional image space
         resampled_atlas = resample_to_img(atlas_img, nii_file, interpolation='nearest')
@@ -283,13 +318,31 @@ def build_subject_raw_data(subject_files_map, load_params, jobs, cache_path=None
         # Using the default 'loky' backend is usually best, but you can explicitly define it
         results = Parallel(n_jobs=jobs)(delayed(_process_subject_raw)(args) for args in args_list)
 
-    # Reconstruct the output dictionary
+    # Require complete data for every requested subject.
+    if not results or any(
+        not matrices or t1 is None or t2 is None
+        for _, matrices, t1, t2 in results
+    ):
+        raise ValueError(
+            "Missing raw data for one or more subjects"
+        )
+
+    # Both movement lengths must match across subjects.
+    lengths = {
+        (t1, t2)
+        for _, _, t1, t2 in results
+    }
+
+    if len(lengths) != 1:
+        raise ValueError(
+            f"Different raw movement lengths: {sorted(lengths)}"
+        )
+
+    mov1_times, mov2_times = lengths.pop()
+
     data_dict = {}
-    subs, matrix_lists, mov1_times_list, mov2_times_list = zip(*results)
-    valid_mov1 = next(t for t in mov1_times_list if t is not None)
-    valid_mov2 = next(t for t in mov2_times_list if t is not None)
-    mov1_times = valid_mov1
-    mov2_times = valid_mov2
+    subs, matrix_lists, _, _ = zip(*results)
+
     for sub, matrix_list in zip(subs, matrix_lists):
         if matrix_list:
             data_dict[sub] = matrix_list
@@ -368,9 +421,9 @@ def _process_subject_pc(args):
             # Note: The global matrices file is available at os.path.join(group_dirs[mov], 'global_F_U_matrices.npz')
             # if required for downstream mathematical operations.
 
+            # Missing components must fail explicitly.
             if not os.path.exists(ts_file) or not os.path.exists(nii_file):
-                # Skip if files are missing to prevent breaking the concatenation
-                continue
+                raise FileNotFoundError(f"Incomplete components: {ts_file}; {nii_file}")
 
             w = get_region_weights(nii_file, atlas_img, atlas_labels)
             t = load_temporal_profile(ts_file)[:min_len[mov]]
@@ -465,6 +518,29 @@ def build_subject_data(examples_dir, pattern, n_pcs, sample_pct, skip_nm, is_tes
     # Keep only subjects that exist in BOTH movement 1 and movement 2
     valid_subs = list(set(subs_per_mov[1].keys()).intersection(set(subs_per_mov[2].keys())))
     valid_subs.sort()
+
+    # Load subjects only when maps for the requested split exist
+    # for both movements.
+    suffix = "group_test_proj" if is_test else "group"
+
+    valid_subs = [
+        sub
+        for sub in valid_subs
+        if all(
+            os.path.isfile(
+                os.path.join(
+                    subs_per_mov[mov][sub],
+                    f"eigenfunction_0_importance_map_{suffix}.nii.gz"
+                )
+            )
+            for mov in (1, 2)
+        )
+    ]
+
+    if not valid_subs:
+        raise RuntimeError(
+            f"No subjects with {suffix} maps for both movements"
+        )
 
     # Apply the skip list if required
     if skip_nm:

@@ -71,7 +71,7 @@ class LoadData:
             self.TR = zoom[3] if len(zoom) >= 4 else 1.0
 
         # Identify the coordinates of voxels within the mask
-        xlocs, ylocs, zlocs = np.where(mask == 1)
+        xlocs, ylocs, zlocs = np.where(mask > 0)
 
         if not processed:
             logger.info("Applying preprocessing steps: spatial smoothing and temporal filtering...")
@@ -109,7 +109,7 @@ class LoadData:
             ndarray: Temporally filtered 2D fMRI data for masked voxels (shape: [voxels, time]).
         """
         # Load confounds: "high_pass" strategy fetches cosine regressors for drift removal
-        confounds_df, _ = load_confounds(
+        confounds_df, sample_mask = load_confounds(
             self.nii_file,
             strategy=("motion", "high_pass", "compcor"),
             # motion="full",
@@ -117,6 +117,18 @@ class LoadData:
             compcor="anat_combined",
             n_compcor=self.n_compcor
         )
+
+        if sample_mask is not None:
+            keep = np.asarray(sample_mask)
+
+            if keep.dtype == bool:
+                keep = np.flatnonzero(keep)
+
+            if not np.array_equal(keep, np.arange(len(confounds_df))):
+                raise ValueError(
+                    "Censored volumes detected. Align retained acquisition "
+                    "times and stimulus regressors before proceeding."
+                )
 
         # Initialize NiftiMasker. high_pass is None to avoid double filtering,
         # while low_pass is retained to match the legacy code's upper frequency cutoff.

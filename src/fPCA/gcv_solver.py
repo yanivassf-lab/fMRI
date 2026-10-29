@@ -1,97 +1,164 @@
 import numpy as np
 
 
-def solve_batch_gcv(voxel_data_batch: np.ndarray,
-                    F_V: np.ndarray,
-                    VT_FT: np.ndarray,
-                    V: np.ndarray,
-                    evals: np.ndarray,
-                    lambda_values: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def solve_batch_gcv(
+    voxel_data_batch,
+    F_V,
+    VT_FT,
+    V,
+    evals,
+    lambda_values,
+):
     """
     Solves the penalized regression problem for a batch of voxels using
-    Generalized Cross Validation (GCV) via Generalized Eigenvalue Decomposition.
+    Generalized Cross Validation (GCV) and a precomputed generalized
+    eigenvalue decomposition.
 
     Mathematical Logic:
-    Instead of inverting (F.T@F + lambda*P) for every lambda, we use the
-    decomposition: (F.T@F)V = (P)V@Lambda.
-    This allows us to diagonalize the problem.
+        For each voxel, we solve the penalized least-squares problem:
+
+            minimize_c  ||y - F @ c||^2 + lambda * c.T @ P @ c
+
+        The precomputed transformation V satisfies:
+
+            V.T @ F.T @ F @ V = I
+            V.T @ P @ V = diag(evals)
+
+        Thus, writing c = V @ a diagonalizes the problem:
+
+            a_k = z_k / (1 + lambda * evals_k)
+
+        where z = V.T @ F.T @ y.
+
+        Unlike a decomposition that requires P to be invertible, this
+        formulation allows zero penalty eigenvalues. A direction with
+        evals_k = 0 has shrinkage factor 1 and remains unpenalized.
+
+        Since F_V = F @ V has orthonormal columns, the residual sum of
+        squares can be calculated in these coordinates without rebuilding
+        the full fitted time series for every candidate lambda.
 
     Parameters:
-        voxel_data_batch (ndarray): Shape (n_voxels, n_timepoints). Observed data.
-        F_V (ndarray): Shape (n_timepoints, n_basis). Precomputed F @ V.
-        VT_FT (ndarray): Shape (n_basis, n_timepoints). Precomputed V.T @ F.T.
-        V (ndarray): Shape (n_basis, n_basis). Eigenvectors from GEVD.
-        evals (ndarray): Shape (n_basis,). Generalized eigenvalues.
-        lambda_values (ndarray): Array of candidate regularization parameters.
+        voxel_data_batch (ndarray):
+            Shape (n_voxels, n_timepoints). Observed voxel time series.
+        F_V (ndarray):
+            Shape (n_timepoints, n_basis). Precomputed F @ V, with
+            orthonormal columns.
+        VT_FT (ndarray):
+            Shape (n_basis, n_timepoints). Precomputed V.T @ F.T,
+            which equals F_V.T.
+        V (ndarray):
+            Shape (n_basis, n_basis). Generalized eigenvectors normalized
+            with respect to F.T @ F, as specified above.
+        evals (ndarray):
+            Shape (n_basis,). Penalty eigenvalues in the transformed
+            coordinates; assumed nonnegative.
+        lambda_values (iterable):
+            Candidate nonnegative regularization parameters, evaluated
+            in the supplied order.
 
     Returns:
-        coeffs (ndarray): Shape (n_voxels, n_basis). Fitted B-spline coefficients.
-        best_lambdas (ndarray): Shape (n_voxels,). Optimal lambda per voxel.
-        best_gcv_scores (ndarray): Shape (n_voxels,). Minimum GCV score per voxel.
+        coefficients (ndarray):
+            Shape (n_voxels, n_basis). Fitted B-spline coefficients,
+            using the selected lambda for each voxel.
+        best_lambdas (ndarray):
+            Shape (n_voxels,). Selected lambda per voxel.
+        best_scores (ndarray):
+            Shape (n_voxels,). Minimum accepted GCV score per voxel.
+
+    Raises:
+        ValueError:
+            If at least one voxel has no finite accepted GCV score.
     """
-    n_voxels, n_timepoints = voxel_data_batch.shape
-    n_lambdas = len(lambda_values)
+    # 1. Arrange the data with one voxel per column.
+    # Shape: (n_timepoints, n_voxels)
+    Y = np.asarray(voxel_data_batch, dtype=float).T
+    n_timepoints, n_voxels = Y.shape
 
-    # 1. Project data onto the generalized eigen-basis
-    # We compute: Z = V.T @ F.T @ y
+    # Project all voxel time series onto the transformed basis:
+    # Z = V.T @ F.T @ Y = F_V.T @ Y.
     # Shape: (n_basis, n_voxels)
-    Z = VT_FT @ voxel_data_batch.T
+    Z = VT_FT @ Y
 
-    # Initialize arrays to store scores
-    # Shape: (n_lambdas, n_voxels)
-    gcv_scores_all = np.zeros((n_lambdas, n_voxels))
+    # Cache the squared projected coordinates for the RSS calculation.
+    # Shape: (n_basis, n_voxels)
+    Z2 = Z * Z
 
-    # 2. Iterate over lambda values to calculate GCV scores
-    # This loop is fast because it involves only diagonal operations (vector scaling)
-    for i, lam in enumerate(lambda_values):
-        # Calculate the scaling vector for the inverse: 1 / (evals + lambda)
-        # Shape: (n_basis, 1) to allow broadcasting
-        D_inv = 1.0 / (evals + lam)
-        D_inv = D_inv[:, np.newaxis]
+    # 2. Calculate the part of the residual that is independent of lambda.
+    # F_V has orthonormal columns.
+    # Compute the residual outside their span only once.
+    # F_V @ Z is the orthogonal projection of Y onto that span.
+    # Shape of residual_ss: (n_voxels,)
+    residual_ss = np.sum((Y - F_V @ Z) ** 2, axis=0)
 
-        # Calculate fitted coefficients in the eigen-basis for this lambda
-        # C_eig = D_inv * Z
-        C_eig = Z * D_inv
+    # 3. Initialize the best result for each voxel.
+    # Keep only the current best scores and lambdas, rather than storing
+    # a complete (n_lambdas, n_voxels) table.
+    # A voxel's first finite accepted score replaces its initial infinity.
+    best_scores = np.full(n_voxels, np.inf)
+    best_lambdas = np.full(n_voxels, np.nan)
 
-        # Calculate fitted values (y_hat)
-        # y_hat = F @ V @ C_eig = F_V @ C_eig
-        # Shape: (n_timepoints, n_voxels)
-        Y_hat = F_V @ C_eig
+    # 4. Evaluate each candidate lambda for all voxels simultaneously.
+    for lam in lambda_values:
+        # Shrinkage factors in the transformed coordinates:
+        # shrink_k = 1 / (1 + lambda * evals_k).
+        # Shape: (n_basis,)
+        # Zero penalty eigenvalues retain shrinkage factor 1.
+        shrink = 1.0 / (1.0 + lam * evals)
 
-        # Calculate Residual Sum of Squares (RSS) per voxel
+        # The fitted-value operator (hat matrix) is:
+        # H = F_V @ diag(shrink) @ F_V.T.
+        # Since F_V has orthonormal columns:
+        # tr(H) = sum(shrink).
+        # GCV uses the remaining degrees of freedom n - tr(H).
+        remaining_df = n_timepoints - shrink.sum()
+
+        # Skip candidates whose GCV denominator is numerically too small.
+        # This skips the current lambda and proceeds to the next one.
+        if remaining_df <= np.finfo(float).eps * n_timepoints:
+            continue
+
+        # Split the residual into two orthogonal parts:
+        #   - The component outside the span of F_V.
+        #   - The component left inside that span by shrinkage.
+        #
+        # Therefore, for each voxel:
+        # RSS = residual_ss + sum_k((1 - shrink_k)^2 * Z_k^2).
+        #
+        # The matrix product sums over basis directions for every voxel:
+        # (n_basis,) @ (n_basis, n_voxels) -> (n_voxels,)
+        rss = residual_ss + ((1.0 - shrink) ** 2) @ Z2
+
+        # Generalized Cross Validation:
+        # GCV = (RSS / n) / (1 - tr(H) / n)^2
+        #     = n * RSS / (n - tr(H))^2.
         # Shape: (n_voxels,)
-        rss = np.sum((voxel_data_batch.T - Y_hat) ** 2, axis=0)
+        scores = n_timepoints * rss / remaining_df ** 2
 
-        # Calculate Effective Degrees of Freedom (Trace of Hat Matrix)
-        # tr(H) = sum( evals / (evals + lambda) )
-        tr_H = np.sum(evals / (evals + lam))
+        # Update only voxels whose GCV score strictly improves.
+        # Exact ties retain the earlier candidate in lambda_values.
+        better = scores < best_scores
+        best_scores[better] = scores[better]
+        best_lambdas[better] = lam
 
-        # Calculate GCV Score
-        # GCV = (RSS / n) / (1 - tr_H / n)^2
-        denominator = (1 - tr_H / n_timepoints) ** 2
-        gcv_scores_all[i, :] = (rss / n_timepoints) / denominator
+    # 5. Verify that every voxel obtained a finite accepted GCV score.
+    # If any voxel did not, the function raises the existing error.
+    if not np.isfinite(best_scores).all():
+        raise ValueError("No finite GCV score; check basis and lambda range")
 
-    # 3. Select optimal Lambda
-    # Find the index of the minimum GCV score for each voxel
-    best_indices = np.argmin(gcv_scores_all, axis=0)  # Shape: (n_voxels,)
+    # 6. Reconstruct coefficients using each voxel's selected lambda.
+    # Broadcasting combines:
+    #   evals[:, None]:         (n_basis, 1)
+    #   best_lambdas[None, :]:  (1, n_voxels)
+    # Resulting shrink shape:  (n_basis, n_voxels)
+    shrink = 1.0 / (
+        1.0 + evals[:, None] * best_lambdas[None, :]
+    )
 
-    best_lambdas = lambda_values[best_indices]
-    best_gcv_scores = gcv_scores_all[best_indices, np.arange(n_voxels)]
-
-    # 4. Reconstruct the final coefficients for the optimal lambdas
-    # We need to compute C = V @ (1/(evals + best_lambda) * Z) specific to each voxel
-
-    # Create a matrix of the optimal scaling factors per voxel
-    # Shape: (n_basis, n_voxels)
-    # broadcasting: (n_basis, 1) + (n_voxels,) -> (n_basis, n_voxels)
-    optimal_D_inv = 1.0 / (evals[:, np.newaxis] + best_lambdas[np.newaxis, :])
-
-    # Scale the projected data Z by the optimal inverse term
-    Z_scaled = Z * optimal_D_inv
-
-    # Transform back to the original B-spline basis
-    # C = V @ Z_scaled
-    # Shape: (n_basis, n_basis) @ (n_basis, n_voxels) -> (n_basis, n_voxels)
-    coeffs_transposed = V @ Z_scaled
-
-    return coeffs_transposed.T, best_lambdas, best_gcv_scores
+    # Z * shrink contains the fitted coefficients in transformed coordinates.
+    # Multiplying by V returns them to the original B-spline basis:
+    # C = V @ (Z * shrink).
+    # Transpose to return one row per voxel.
+    # Final shape: (n_voxels, n_basis)
+    coefficients = (V @ (Z * shrink)).T
+    return coefficients, best_lambdas, best_scores

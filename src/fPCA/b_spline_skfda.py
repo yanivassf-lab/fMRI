@@ -1,7 +1,7 @@
 import matplotlib
 import numpy as np
 
-matplotlib.use('TkAgg')
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from skfda.representation.basis import BSplineBasis
 from skfda import FDataBasis

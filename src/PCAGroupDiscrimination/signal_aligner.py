@@ -23,9 +23,53 @@ class SignalAligner:
         self.logger = setup_logger(self.step_folder)
 
     def align(self, X, ids, atlas_labels):
-        self.plot_flattened_alignment(X, ids, pd.read_csv(self.args.metadata_csv),
-                                      atlas_labels=atlas_labels)
-        self.run_rsa_analysis(X, ids, pd.read_csv(self.args.metadata_csv))
+        meta = pd.read_csv(self.args.metadata_csv)
+
+        clean = lambda x: str(x).removeprefix("sub-").strip()
+        meta["sub_id"] = meta["sub_id"].map(clean)
+
+        if meta["sub_id"].duplicated().any():
+            raise ValueError("Duplicate subject IDs in metadata")
+
+        split = pd.to_numeric(
+            meta["is_train_set"],
+            errors="raise",
+        )
+
+        if not split.isin([0, 1]).all():
+            raise ValueError("is_train_set must contain only 0 or 1")
+
+        ids = [clean(sub) for sub in ids]
+
+        if len(ids) != len(set(ids)) or len(ids) != len(X):
+            raise ValueError("Duplicate or mismatched feature IDs")
+
+        if set(ids) - set(meta["sub_id"]):
+            raise ValueError("Some feature IDs are absent from metadata")
+
+        train_meta = meta.loc[split == 1].copy()
+        train_ids = set(train_meta["sub_id"])
+
+        keep = np.array([sub in train_ids for sub in ids])
+
+        if not keep.any():
+            raise ValueError("No training subjects for RSA")
+
+        X = np.asarray(X)[keep]
+        ids = [
+            sub for sub, use in zip(ids, keep)
+            if use
+        ]
+
+        self.logger.info("RSA training IDs: %s", ids)
+
+        self.plot_flattened_alignment(
+            X,
+            ids,
+            train_meta,
+            atlas_labels=atlas_labels,
+        )
+        self.run_rsa_analysis(X, ids, train_meta)
 
     def plot_flattened_alignment(self, X, ids, metadata_df, atlas_labels):
         """
