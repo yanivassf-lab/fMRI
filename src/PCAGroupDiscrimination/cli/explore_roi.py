@@ -9,7 +9,15 @@ import os
 import sys
 import argparse
 from pathlib import Path
-
+try:
+    from PCAGroupDiscrimination.roi_explorer_dashboard import ROIExplorerDashboard
+except ImportError as e:
+    try:
+        from .roi_explorer_dashboard import ROIExplorerDashboard
+    except ImportError as e:
+        print(f"Error importing dashboard: {e}", file=sys.stderr)
+        print("Make sure dash and plotly are installed: pip install dash plotly", file=sys.stderr)
+        sys.exit(1)
 
 def find_roi_importance_csv(search_path: str) -> str:
     """
@@ -106,14 +114,6 @@ Examples:
     # Verify file exists
     if not os.path.exists(csv_path):
         print(f"Error: File not found: {csv_path}", file=sys.stderr)
-        sys.exit(1)
-
-    # Import and launch dashboard
-    try:
-        from PCAGroupDiscrimination.roi_explorer_dashboard import ROIExplorerDashboard
-    except ImportError as e:
-        print(f"Error importing dashboard: {e}", file=sys.stderr)
-        print("Make sure dash and plotly are installed: pip install dash plotly", file=sys.stderr)
         sys.exit(1)
 
     print(f"\nLaunching ROI Importance Explorer")

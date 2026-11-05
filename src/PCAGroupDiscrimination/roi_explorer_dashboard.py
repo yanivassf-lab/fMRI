@@ -4,18 +4,22 @@ Interactive Dash dashboard for exploring ROI importance analysis results.
 Enables selection of pairs, algorithms, and top-N ROIs with visualization
 of common influential ROIs and comparative statistics.
 """
-
+import argparse
+import csv
 import os
-import pandas as pd
 from pathlib import Path
-from typing import Optional
+import warnings
 
 import dash
-from dash import dcc, html, Input, Output, State, dash_table
+import pandas as pd
 import plotly.graph_objects as go
+from dash import dcc, html, Input, Output, dash_table
 from plotly.subplots import make_subplots
-import plotly.express as px
 
+try:
+    import polars as pl
+except ImportError:
+    pl = None
 
 class ROIExplorerDashboard:
     """Interactive dashboard for ROI importance analysis."""
@@ -48,7 +52,7 @@ class ROIExplorerDashboard:
                 mov_path = csv_dir / f"roi_importance_mov{mov}_all.csv"
                 if mov_path.exists():
                     try:
-                        df_mov = pd.read_csv(mov_path)
+                        df_mov = self._fix_roi_display(self._load_csv(mov_path))
                         # Ensure a movement column exists for easier handling
                         if "movement" not in df_mov.columns:
                             df_mov["movement"] = mov
@@ -62,12 +66,16 @@ class ROIExplorerDashboard:
         # ==========================================
         # ADDED: Global Importance Normalization
         # ==========================================
-        # Normalize importance to [0, 1] per specific model run (pair + algorithm)
-        # This completely removes magnitude bias when averaging across models or pairs
+        # Validate and prepare the display mapping using the original scores.
+        display_df = self._fix_roi_display(self.df)
+
         self.df['importance'] = self.df.groupby(['pair', 'ml_model'])['importance'].transform(
             lambda x: (x - x.min()) / (x.max() - x.min()) if x.max() > x.min() else x
         )
-        # Extract unique pairs and algorithms
+
+        # Preserve the existing normalization, then omit the empty extra slot.
+        display_df["importance"] = self.df.loc[display_df.index, "importance"]
+        self.df = display_df        # Extract unique pairs and algorithms
         self.pairs = sorted(self.df["pair"].unique())
         self.algorithms = sorted(self.df["ml_model"].unique())
 
@@ -75,6 +83,44 @@ class ROIExplorerDashboard:
         self.app = dash.Dash(__name__)
         self._setup_layout()
         self._setup_callbacks()
+
+    @staticmethod
+    def _fix_roi_display(df: pd.DataFrame) -> pd.DataFrame:
+        """Align displayed names and IDs with the Schaefer-100 atlas.
+
+        Legacy exports label feature slot i using label i, although that
+        slot contains atlas parcel i+1. Their final slot (100) is empty.
+        Correct labels and IDs together, preserving scores, ranks and row
+        indices. Already corrected IDs (1..100) are left unchanged.
+        """
+        label_rows = df[["roi_index", "roi_label"]].drop_duplicates()
+        if label_rows["roi_index"].duplicated().any():
+            warnings.warn("Conflicting ROI labels; display correction skipped.")
+            return df.copy()
+
+        labels = label_rows.set_index("roi_index")["roi_label"].to_dict()
+        indices = set(labels)
+        fixed = df.copy()
+
+        if indices == set(range(101)) and labels.get(0) == "Background":
+            if not df.loc[df["roi_index"].eq(100), "importance"].eq(0).all():
+                warnings.warn("ROI slot 100 is not empty; display correction skipped.")
+                return fixed
+
+            fixed = fixed.loc[fixed["roi_index"].lt(100)].copy()
+            fixed["source_roi_index"] = fixed["roi_index"]
+            fixed["roi_index"] += 1
+            fixed["roi_label"] = fixed["roi_index"].map(labels)
+
+        elif indices == set(range(100)) and "Background" not in labels.values():
+            # Labels are already correct; convert feature indices to atlas IDs.
+            fixed["source_roi_index"] = fixed["roi_index"]
+            fixed["roi_index"] += 1
+
+        elif indices != set(range(1, 101)) or "Background" in labels.values():
+            warnings.warn("Unrecognized ROI layout; display correction skipped.")
+
+        return fixed
 
     @staticmethod
     def _load_csv(csv_path: str) -> pd.DataFrame:
@@ -105,17 +151,13 @@ class ROIExplorerDashboard:
         except Exception as e:
             pass
 
-        # Fallback: use polars if available
-        try:
-            import polars as pl
-
-            return pl.read_csv(csv_path).to_pandas()
-        except ImportError:
-            pass
-
-        # Final fallback: manual loading with csv module
-        import csv
-
+        # Fallback: use polars if available.
+        if pl is not None:
+            try:
+                return pl.read_csv(csv_path).to_pandas()
+            except Exception:
+                pass
+        # Final fallback: manual loading with csv module.
         rows = []
         with open(csv_path, "r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
@@ -239,13 +281,13 @@ class ROIExplorerDashboard:
                     [
                         html.Div(
                             [
-                                dcc.Graph(id="top-rois-bar-chart", style={"height": "500px"})
+                                dcc.Graph(id="top-rois-bar-chart", responsive="auto")
                             ],
                             style={"flex": 1},
                         ),
                         html.Div(
                             [
-                                dcc.Graph(id="roi-frequency-chart", style={"height": "500px"})
+                                dcc.Graph(id="roi-frequency-chart", responsive="auto")
                             ],
                             style={"flex": 1},
                         ),
@@ -258,13 +300,13 @@ class ROIExplorerDashboard:
                     [
                         html.Div(
                             [
-                                dcc.Graph(id="algorithm-comparison", style={"height": "500px"})
+                                dcc.Graph(id="algorithm-comparison", responsive="auto")
                             ],
                             style={"flex": 1},
                         ),
                         html.Div(
                             [
-                                dcc.Graph(id="pair-comparison", style={"height": "500px"})
+                                dcc.Graph(id="pair-comparison", responsive="auto")
                             ],
                             style={"flex": 1},
                         ),
@@ -287,14 +329,14 @@ class ROIExplorerDashboard:
                                 html.Div(
                                     [
                                         dcc.Graph(id="global-pair-consensus-chart",
-                                                  style={"height": "100%", "minHeight": "500px"})
+                                                  responsive="auto")
                                     ],
                                     style={"flex": 1, "minWidth": "300px"},
                                 ),
                                 html.Div(
                                     [
                                         dcc.Graph(id="global-roi-summary-chart",
-                                                  style={"height": "100%", "minHeight": "500px"})
+                                                  responsive="auto")
                                     ],
                                     style={"flex": 1, "minWidth": "300px"},
                                 ),
@@ -331,7 +373,7 @@ class ROIExplorerDashboard:
                                 {"name": "Pair", "id": "pair"},
                                 {"name": "Algorithm", "id": "ml_model"},
                                 {"name": "ROI Label", "id": "roi_label"},
-                                {"name": "ROI Index", "id": "roi_index"},
+                                {"name": "Atlas ROI ID", "id": "roi_index"},
                                 {"name": "Importance", "id": "importance"},
                                 {"name": "Rank", "id": "rank"},
                             ],
@@ -448,24 +490,45 @@ class ROIExplorerDashboard:
 
                 # Helper to build stacked figs for an arbitrary list of (name, df, top_df)
                 def _build_stacked_bar(summaries, title_base, bar_builder):
+                    """Reserve space for each plot and its long category labels."""
                     rows = len(summaries)
-                    fig = make_subplots(rows=rows, cols=1, shared_xaxes=False, vertical_spacing=0.08, subplot_titles=[s[0] + " - " + title_base for s in summaries])
+                    row_height, gap = 360, 210
+                    margins = dict(l=170, r=40, t=90, b=190)
+                    plot_height = rows * row_height + (rows - 1) * gap
+
+                    fig = make_subplots(
+                        rows=rows,
+                        cols=1,
+                        shared_xaxes=False,
+                        vertical_spacing=gap / plot_height if rows > 1 else 0,
+                        subplot_titles=[name for name, _, _ in summaries],
+                    )
                     for i, (_, mov_filtered, mov_top) in enumerate(summaries, start=1):
                         trace = bar_builder(mov_filtered, mov_top)
                         if trace is None:
                             continue
-                        # trace may be a list of traces
-                        if isinstance(trace, list):
-                            for t in trace:
-                                fig.add_trace(t, row=i, col=1)
-                        else:
-                            fig.add_trace(trace, row=i, col=1)
-                        fig.update_xaxes(tickangle=-45, row=i, col=1)
-                    # smaller height when showing three panels together
-                    height = 380 * rows
-                    fig.update_layout(title_text=f"{title_base} (per view)", height=height, showlegend=False)
-                    return fig
 
+                        traces = trace if isinstance(trace, list) else [trace]
+                        for item in traces:
+                            fig.add_trace(item, row=i, col=1)
+
+                        horizontal = all(item.orientation == "h" for item in traces)
+                        fig.update_xaxes(
+                            tickangle=0 if horizontal else -45,
+                            automargin=True, row=i, col=1,
+                        )
+                        fig.update_yaxes(automargin=True, row=i, col=1)
+
+                    fig.update_traces(cliponaxis=False)
+                    fig.update_annotations(font_size=13)
+                    fig.update_layout(
+                        title_text=f"{title_base} (per view)",
+                        height=plot_height + margins["t"] + margins["b"],
+                        margin=margins,
+                        autosize=True,
+                        showlegend=False,
+                    )
+                    return fig
                 # Builders for each chart type
                 def _top_builder(mov_filtered, mov_top):
                     roi_importance = (
@@ -854,8 +917,6 @@ def launch_roi_explorer(csv_path: str, port: int = 8050, debug: bool = False):
 
 
 if __name__ == "__main__":
-    import argparse
-
     parser = argparse.ArgumentParser(description="Launch ROI Importance Explorer Dashboard")
     parser.add_argument(
         "csv_path",
