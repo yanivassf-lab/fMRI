@@ -1,970 +1,523 @@
-Group fPCA Pipeline
-===================
-
-This page documents the end-to-end workflow for group-level functional PCA and downstream group-discrimination analysis.
-
-The workflow has two main stages:
-
-1. **``fpca-main``** — extract per-subject B-spline coefficients, build a shared group PCA space on the training set, and project held-out test subjects into that space.
-2. **``fmri-fpca-pipeline``** — reconstruct spatiotemporal signals from the group PCA outputs, run alignment / RSA analysis, train ML classifiers, and evaluate generalization on a test set.
-
-.. contents:: Table of Contents
-   :depth: 3
-
-Overview
---------
-
-Recommended execution order:
-
-.. code-block:: text
-
-   Training/Test subjects (same output folder)
-   └── fpca-main  --mode pca-singles        (per-subject analysis train and test sets together)
-
-   Training subjects only
-   └── fpca-main  --mode train-pca-group  (shared group PCA train set only)
-
-   Test subjects only
-   └── fpca-main  --mode test-pca-project   (project test set onto training PCA space)
-
-   Downstream analysis (per PC, per movement)
-   ├── fmri-fpca-pipeline  --mode align-signals
-   ├── fmri-fpca-pipeline  --mode ml
-   ├── fmri-fpca-pipeline  --mode stat
-   ├── fmri-fpca-pipeline  --mode ml-test   (selected pairs only)
-   └── fmri-fpca-pipeline  --mode stat-test (summary of training + test results)
-
-.. note::
-
-   ``pca-singles`` and ``train-pca-group`` / ``test-pca-project`` must be run as **separate invocations**.
-   When a group mode is present, ``fpca-main`` collects existing per-subject outputs instead of re-running single-subject analysis.
-
-
-Entry Point:
-------------
-
-Input file naming
-~~~~~~~~~~~~~~~~~
-
-The pipeline expects preprocessed BOLD files and matching masks. For training and test sets,
-the BOLD files and masks should be organized as follows:
-
-.. code-block:: text
-
-   input_dir_train/
-   ├── sub-<sample-1>_ses-[A-Za-z0-9]+.*-movement1_.*-preproc_bold.nii.gz
-   ├── sub-<sample-1>_ses-[A-Za-z0-9]+.*-movement2_.*-brain_mask.nii.gz
-   ├── sub-<sample-1>_ses-[A-Za-z0-9]+.*-movement1_.*-preproc_bold.nii.gz
-   ├── sub-<sample-1>_ses-[A-Za-z0-9]+.*-movement2_.*-brain_mask.nii.gz
-   ├── ...
-   ├── sub-<sample-N>_ses-[A-Za-z0-9]+.*-movement1_.*-preproc_bold.nii.gz
-   ├── sub-<sample-N>_ses-[A-Za-z0-9]+.*-movement2_.*-brain_mask.nii.gz
-   ├── sub-<sample-N>_ses-[A-Za-z0-9]+.*-movement1_.*-preproc_bold.nii.gz
-   └── sub-<sample-N>_ses-[A-Za-z0-9]+.*-movement2_.*-brain_mask.nii.gz
-
-   input_dir_test/
-   ├── sub-<sample-1>_ses-[A-Za-z0-9]+.*-movement1_.*-preproc_bold.nii.gz
-   ├── sub-<sample-1>_ses-[A-Za-z0-9]+.*-movement2_.*-brain_mask.nii.gz
-   ├── sub-<sample-1>_ses-[A-Za-z0-9]+.*-movement1_.*-preproc_bold.nii.gz
-   ├── sub-<sample-1>_ses-[A-Za-z0-9]+.*-movement2_.*-brain_mask.nii.gz
-   ├── ...
-   ├── sub-<sample-M>_ses-[A-Za-z0-9]+.*-movement1_.*-preproc_bold.nii.gz
-   ├── sub-<sample-M>_ses-[A-Za-z0-9]+.*-movement2_.*-brain_mask.nii.gz
-   ├── sub-<sample-M>_ses-[A-Za-z0-9]+.*-movement1_.*-preproc_bold.nii.gz
-   └── sub-<sample-M>_ses-[A-Za-z0-9]+.*-movement2_.*-brain_mask.nii.gz
-
-Part 1 — ``fpca-main`` script
------------------------------
-
-A. Mode: ``pca-singles``
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-Runs independent functional PCA on each subject. For every subject this mode:
-
-1. Applies preprocessing (filtering, smoothing) unless ``--processed`` is set.
-2. Fits B-spline basis functions and extracts voxel-wise **coefficient matrices**.
-3. Performs subject-level PCA and saves all results under that subject's output folder.
-
-The key artifact for later group analysis is ``eigvecs_eigval_F.npz``, which stores the per-voxel B-spline **coefficient matrix** (``C``), along with the subject-specific eigenvectors, eigenvalues, basis matrix ``F``, and time vector.
-
-When ``--low-mem`` is set, only NPZ/TXT/NIfTI files are written (no PNG plots).
-Since you run this mode on both training and test subjects into the same output folder, use the ``--force`` flag to enable run even if the output folder already exists.
-
-The full description of the other parameters can be found in :doc:`running`.
-
-Example --- automatically collect files using Bash and run fpca-main on each one with the default parameters:
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-- Run the following script twice with the same output directory, once for the training set and once for the test set:
-
-.. code-block:: bash
-
-    chmod +x run_fpca.sh
-    ./run_fpca.sh /path/to/fpca-env pca-singles /path/to/preprocessed/input_dir_train /path/to/output
-    ./run_fpca.sh /path/to/fpca-env pca-singles /path/to/preprocessed/input_dir_test /path/to/output
-
-For example, if your virtual environment is located at ``/home/user/fpca-env``, your preprocessed input directories are ``/home/user/preprocessed/input_dir_train``/``/home/user/preprocessed/input_dir_test``, and you want the output to go to ``/home/user/output_pca``, you would run:
-
-.. code-block:: bash
-
-    chmod +x run_fpca.sh
-    ./run_fpca.sh /home/user/fpca-env pca-singles /home/user/preprocessed/input_dir_train /home/user/output_pca
-    ./run_fpca.sh /home/user/fpca-env pca-singles /home/user/preprocessed/input_dir_test /home/user/output_pca
-
-run_fpca.sh file content:
-
-.. code-block:: bash
-
-    #!/usr/bin/env bash
-
-    # Activate the virtual environment from the first argument
-    source "$1/bin/activate"
-
-    # Assign the remaining arguments to variables
-    MODE="$2"
-    INPUT_DIR="$3"
-    PROJECT_OUTPUT_DIR="$4"
-    #########################################################################################
-
-    mkdir -p "$PROJECT_OUTPUT_DIR"
-
-    # Force mathematical libraries to use exactly one thread per process
-    # This is crucial to prevent CPU thrashing when running parallel jobs
-    export OMP_NUM_THREADS=1
-    export OPENBLAS_NUM_THREADS=1
-    export MKL_NUM_THREADS=1
-    export VECLIB_MAXIMUM_THREADS=1
-    export NUMEXPR_NUM_THREADS=1
-
-    # Initialize separate arrays for movement 1 and movement 2
-    NII_FILES_MOV1=()
-    MASK_FILES_MOV1=()
-
-    NII_FILES_MOV2=()
-    MASK_FILES_MOV2=()
-
-    # Loop through all files and categorize them based on the task string
-    for bold_file in "$INPUT_DIR"/*.nii.gz; do
-        if [ -f "$bold_file" ]; then
-            filename=$(basename "$bold_file")
-            base=${filename%%-preproc_bold*}
-            mask_file="$INPUT_DIR/${base}-brain_mask.nii.gz"
-
-            if [ -f "$mask_file" ]; then
-                # Route to mov1 arrays if the filename contains '-movement1'
-                if [[ "$filename" == *"-movement1"* ]]; then
-                    NII_FILES_MOV1+=("$bold_file")
-                    MASK_FILES_MOV1+=("$mask_file")
-                # Route to mov2 arrays if the filename contains '-movement2'
-                elif [[ "$filename" == *"-movement2"* ]]; then
-                    NII_FILES_MOV2+=("$bold_file")
-                    MASK_FILES_MOV2+=("$mask_file")
-                fi
-            fi
-        fi
-    done
-
-
-    # ==========================================
-    # Execute Group fPCA for Movement 1
-    # ==========================================
-    echo "Found ${#NII_FILES_MOV1[@]} subjects for Movement 1. Starting Group fPCA pipeline..."
-
-    OUTPUT_DIR_MOV1="$PROJECT_OUTPUT_DIR"/outputs_mov1
-    if [ ${#NII_FILES_MOV1[@]} -gt 0 ]; then
-        fpca-main \
-            --mode "$MODE" \
-            --nii-files "${NII_FILES_MOV1[@]}" \
-            --mask-files "${MASK_FILES_MOV1[@]}" \
-            --output-folder "$OUTPUT_DIR_MOV1" \
-            --calc-penalty-skfda \
-            --n-jobs 5 \
-            --low-mem \
-            --force
-    else
-        echo "Warning: No files found for Movement 1. Skipping..."
-    fi
-
-    echo "--------------------------------------------------"
-
-    # ==========================================
-    # Execute Group fPCA for Movement 2
-    # ==========================================
-    echo "Found ${#NII_FILES_MOV2[@]} subjects for Movement 2. Starting Group fPCA pipeline..."
-
-    OUTPUT_DIR_MOV2="$PROJECT_OUTPUT_DIR"/outputs_mov2
-    if [ ${#NII_FILES_MOV2[@]} -gt 0 ]; then
-        fpca-main \
-            --mode "$MODE" \
-            --nii-files "${NII_FILES_MOV2[@]}" \
-            --mask-files "${MASK_FILES_MOV2[@]}" \
-            --output-folder "$OUTPUT_DIR_MOV2" \
-            --n-jobs 5 \
-            --calc-penalty-skfda \
-            --low-mem \
-            --force
-    else
-        echo "Warning: No files found for Movement 2. Skipping..."
-    fi
-
-    echo "All tasks completed successfully!"
-
-Output directory layout
-^^^^^^^^^^^^^^^^^^^^^^^
-
-After a full training run, each subject's outputs in each movement are written to a sub-folder named after ``<base>`` (the part before ``-preproc_bold``).
-
-The output folder typically looks like:
-
-.. code-block:: text
-
-   proj_output/
-   ├── outputs_mov1/
-   │   ├── global_F_U_matrices.npz
-   │   ├── sample-1/
-   │   │   ├── eigvecs_eigval_F.npz
-   │   │   ├── original_averaged_signal_intensity.png
-   │   │   ├── eigenfunction_0_importance_map.nii.gz
-   │   │   ├── eigenfunction_1_importance_map.nii.gz
-   │   │   ├── ...
-   │   │   ├── eigenfunction_0_best_voxel.txt
-   │   │   ├── eigenfunction_1_best_voxel.txt
-   │   │   ├── ...
-   │   │   ├── temporal_profile_pc_0.txt
-   │   │   ├── temporal_profile_pc_1.txt
-   │   │   └── ...
-   │   ├──...
-   │   ├──...
-   │   ├── sample-N/
-   │   │   └── ...
-   ├── outputs_mov2/
-   │   ├── global_F_U_matrices.npz
-   │   ├── sample-1/
-   │   │   └── ...
-   │   ├──...
-   │   ├── sample-N/
-   │   │   └── ...
-
-
-
-B. Mode: ``train-pca-group``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Builds a **shared group PCA space** across all listed training subjects.
-
-This mode reads the coefficient matrices saved by ``pca-singles`` (from ``eigvecs_eigval_F.npz``), computes a global mean and group covariance, and extracts group-level principal components. Each group PC index then represents the same functional pattern across subjects — a property **not** guaranteed when PCA is run independently per subject.
-
-The mode also writes group-level temporal profiles and per-subject spatial scores/maps in the shared PC space.
-
-**Prerequisites:** ``pca-singles`` must have been run on all training subjects into the same ``--output-folder``.
-
-
-Example --- run fpca-main in mode ``train-pca-group`` on the training set:
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-- Run the following script with the same output directory as in the first step.
-
-.. code-block:: bash
-
-    ./run_fpca.sh /path/to/fpca-env train-pca-group /path/to/preprocessed/input_dir_train /path/to/output
-
-For example, if your virtual environment is located at ``/home/user/fpca-env``, your preprocessed input directory of the train set is ``/home/user/preprocessed/input_dir_train``, and you want the output to go to ``/home/user/output_pca``, you would run:
-
-.. code-block:: bash
-
-    ./run_fpca.sh /home/user/fpca-env train-pca-group /home/user/preprocessed/input_dir_train /home/user/output_pca
-
-Group-level outputs (``train-pca-group``)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-This step add "group" files into the existing output folders.
-
-The output folder typically looks like:
-
-.. code-block:: text
-
-   proj_output/
-   ├── outputs_mov1/
-   │   ├── global_mean.npy
-   │   ├── global_eigvecs.npy
-   │   ├── global_F_U_matrices.npz
-   │   ├── sample-1/
-   │   │   ├── eigvecs_eigval_F.npz
-   │   │   ├── global_pca_scores.npy
-   │   │   ├── original_averaged_signal_intensity.png
-   │   │   ├── eigenfunction_0_importance_map.nii.gz
-   │   │   ├── eigenfunction_1_importance_map.nii.gz
-   │   │   ├── eigenfunction_0_importance_map_group.nii.gz
-   │   │   ├── eigenfunction_1_importance_map_group.nii.gz
-   │   │   ├── ...
-   │   │   ├── eigenfunction_0_best_voxel.txt
-   │   │   ├── eigenfunction_1_best_voxel.txt
-   │   │   ├── ...
-   │   │   ├── temporal_profile_pc_0.txt
-   │   │   ├── temporal_profile_pc_1.txt
-   │   │   ├── temporal_profile_pc_0_group.txt
-   │   │   ├── temporal_profile_pc_1_group.txt
-   │   │   └── ...
-   │   ├──...
-   │   ├──...
-   │   ├── sample-N/
-   │   │   └── ...
-   ├── outputs_mov2/
-   │   ├── global_mean.npy
-   │   ├── global_eigvecs.npy
-   │   ├── global_F_U_matrices.npz
-   │   ├── sample-1/
-   │   │   └── ...
-   │   ├──...
-   │   ├── sample-N/
-   │   │   └── ...
-
-
-Files at the **output-folder root**:
+Run the group pipeline
+================================================================================
+
+This page covers the current two-movement workflow for feature Sets 0, 1,
+and 4. It uses three scripts from the same source revision:
 
 .. list-table::
    :header-rows: 1
-   :widths: 35 65
-
-   * - File
-     - Description
-   * - ``global_mean.npy``
-     - Global mean of B-spline coefficients across all training voxels. Used to center test data during projection.
-   * - ``global_eigvecs.npy``
-     - Group eigenvectors. Defines the shared PC space.
-   * - ``global_F_U_matrices.npz``
-     - Basis matrix ``F`` and penalty matrix ``U`` (exported from the first processed subject).
-   * - ``temporal_profile_pc_<k>_group.txt`` / ``.png``
-     - Group-level temporal profile for PC ``k``.
-
-Per-subject files (inside each subject folder):
-
-.. list-table::
-   :header-rows: 1
-   :widths: 35 65
-
-   * - File
-     - Description
-   * - ``global_pca_scores.npy``
-     - Contains the combined spatial scores for all extracted Principal Components (PCs) per subject, serving as the primary feature matrix for the downstream Machine Learning pipeline.
-   * - ``eigenfunction_<k>_importance_map_group.nii.gz``
-     - 3D spatial importance map for PC ``k`` in the **group** space.
-   * - ``eigenfunction_<k>_importance_map_group.png``
-     - Middle-slice plot (skipped with ``--low-mem``).
-
-
-
-C. Mode: ``test-pca-project``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Projects **test-set** subjects onto the PCA space learned during ``train-pca-group``.
-
-For each test subject the pipeline:
-
-1. Loads the subject's coefficient matrix from ``eigvecs_eigval_F.npz`` (produced by ``pca-singles`` on the test subject).
-2. Centers the coefficients using the **training** ``global_mean.npy``.
-3. Computes spatial scores using the **training** ``global_eigvecs.npy``.
-4. Saves projected scores and 3D importance maps.
-
-**Prerequisites:**
-
-* ``train-pca-group`` completed on training subjects in the parent output folder.
-* ``pca-singles`` completed on **every test subject** (into subject folders under the same output tree).
-* ``global_mean.npy`` and ``global_eigvecs.npy`` must exist two levels above each test subject folder (i.e. at the movement output root).
-
-
-Example --- run fpca-main in mode ``test-pca-project`` on the training set:
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-- Run the following script with the same output directory as in the first step.
-
-.. code-block:: bash
-
-    ./run_fpca.sh /path/to/fpca-env test-pca-project /path/to/preprocessed/input_dir_test /path/to/output
-
-For example, if your virtual environment is located at ``/home/user/fpca-env``, your preprocessed input directory of the train set is ``/home/user/preprocessed/input_dir_test``, and you want the output to go to ``/home/user/output_pca``, you would run:
-
-.. code-block:: bash
-
-    chmod +x run_fpca.sh
-    ./run_fpca.sh /home/user/fpca-env test-pca-project /home/user/preprocessed/input_dir_test /home/user/output_pca
-
-Test-set outputs (``test-pca-project``)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. list-table::
-   :header-rows: 1
-   :widths: 35 65
-
-   * - File
-     - Description
-   * - ``global_pca_scores_proj.npy``
-     - Projected spatial scores in the training group PC space.
-   * - ``eigenfunction_<k>_importance_map_group_test_proj.nii.gz``
-     - 3D importance map for PC ``k`` after projection onto the training space.
-
-
-
-
-Part 2 — ``fmri-fpca-pipeline`` script
---------------------------------------
-
-
-Workflow
-~~~~~~~~
-
-1. **``align-signals``** (run first) — computes RSA distances between instrument groups based on the **full recovered time series**, not isolated feature windows. Identifies which group pairs are most separated in signal space.
-2. **``ml``** — trains classifiers on extracted features from the training set. Saves the best model per (model, hyperparameters) combination.
-3. **``stat``** — merges ML balanced-accuracy scores with RSA metrics from step 1. Use this to identify pairs that are both ML-discriminable **and** consistent with whole-sequence alignment.
-4. **``ml-test``** — apply saved models to held-out test subjects for pairs selected from step 3. Configure pairs in ``test_pairs.json`` (see below).
-5. **``stat-test``** — the same summary as ``stat``, extended with the test-set results of step 4 (one confirmatory number per pair: the test score of the model selected by cross-validation).
-
-.. note::
-
-   ML training uses windowed / event-driven **features** extracted from the signal, while ``align-signals`` operates on the **full sequence**. Reviewing ``stat`` output helps confirm that ML findings are consistent with whole-signal RSA separation.
-
-
-Entry point for downstream group-discrimination analysis on the outputs of Part 1.
-
-.. code-block:: bash
-
-   fmri-fpca-pipeline \
-       --mode <MODE> \
-       --input-dir <DIR> \
-       --output-dir <DIR> \
-       --metadata-csv <CSV> \
-       --ml-hyperparameters-file <JSON> \
-       [options]
-
-Parameters
-~~~~~~~~~~
-
-**Modes** (can be combined in one invocation, e.g. ``--mode align-signals ml``):
-
-* ``align-signals`` — signal alignment and RSA analysis on the full recovered spatiotemporal sequence.
-* ``ml`` — train ML classifiers on the training set (``is_train_set == 1``).
-* ``stat`` — cross-reference ML results with RSA alignment metrics.
-* ``ml-test`` — evaluate saved models on the test set for pairs listed in ``--test-pairs-file``.
-* ``stat-test`` — ``stat`` plus the test-set columns; run after ``ml-test``. Output goes to ``3_ml_test_<pc>/global_summary/``.
-* ``all`` — run all of the above in sequence.
-
-**Key options**
-
-* ``--target-pc-index <INT>`` — which PC to analyze (``0`` … ``n_pcs-1``). Run separately for each PC.
-* ``--n-pcs`` — number of PCs available in the input (default: ``7``).
-* ``--extra-features-set`` — feature extraction mode for ML:  ``0`` = no features - flattened signal only; ``1`` = features for each roi along the time: mean (on --n-windows-per-exp windows), abs-mean, std; ``2`` = event-driven music transitions; ``3`` = ROI loadings of **all** PCs for both movements (``n_pcs × 2 × 100`` features, no sequence reconstruction; ``--target-pc-index`` is ignored and outputs are named ``all-pcs``); ``4`` = encoding betas: every ROI time series is regressed on per-TR regressors of the music (``n_regressors × 2 × 100`` features; requires ``--annotation-xlsx`` or ``--acoustic-features-dir``; the signal is the subject-level fPCA reconstruction by default, see ``--encoding-source``; outputs are named ``acoustic-fpca`` / ``acoustic-raw``) (default: ``1``).
-* ``--encoding-source`` — signal that feature set ``4`` regresses on the regressors: ``fpca`` (default) rebuilds each subject's ROI signal from its own ``--n-pcs`` functional principal components (the ``pca-singles`` outputs in ``--input-dir``: ``temporal_profile_pc_<k>.txt`` and ``eigenfunction_<k>_importance_map.nii.gz`` of the subject); ``raw`` uses the preprocessed BOLD ROI time series (requires ``--use-raw-data`` / ``--raw-data-path``).
-* ``--annotation-xlsx`` — orchestration annotation workbook (see *Stimulus regressors* below). With feature set ``4`` the per-TR regressors are built from it inside the pipeline, using the run's TR, movement lengths and skipped volumes; nothing else has to be given. ``--annotation-split-solo`` writes two regressors per instrument group (playing, solo) instead of one level.
-* ``--acoustic-features-dir`` — alternative to ``--annotation-xlsx``: directory containing precomputed ``acoustic_mov1.csv`` and ``acoustic_mov2.csv`` (e.g. from ``cli/acoustic_features.py``, which needs the audio).
-* ``--n-windows-per-exp`` — number of windows to split each experiment for feature mean calculation (if extra-features-set=1) (default: ``6``).
-* ``--run-permutations`` — run the full nested permutation test: in every permutation the hyperparameter search is repeated inside the outer cross-validation on the permuted labels, which is the valid null for a score obtained with hyperparameters selected on the true labels. Expensive (``--n-permutations`` times the cost of the nested CV; permutations run sequentially). Without this flag only 5 placeholder permutations with frozen hyperparameters are run, so the report keeps its format; their p-value carries no information and mode ``stat`` ignores it (analytic p-values are reported instead). The report states which mode was used (``Permutation mode: nested`` / ``placeholder``).
-* ``--n-permutations`` — permutations for the nested permutation test when ``--run-permutations`` is set (default: ``200``).
-* ``--test-pairs-file`` — JSON file listing class pairs to evaluate in ``ml-test`` mode.
-* ``--ml-models`` — models to train (default: ``LR SVM NN DTree RandForest``).
-* ``--groups`` — instrument groups for pairwise comparisons.
-* ``--jobs`` — parallel workers for ML grid search (default: ``16``).
-
-**files arguments**
-
-* ``--input-dir`` — parent directory containing ``outputs_mov1/`` and ``outputs_mov2/`` from ``fpca-main``.
-* ``--output-dir`` — directory for pipeline outputs (alignment, ML, statistics, test results).
-* ``--metadata-csv`` — participant metadata (must include ``sub_id``, ``instrument_group``, ``is_train_set``, and genre columns).
-* ``--ml-hyperparameters-file`` — JSON file with hyperparameter grids per model (see example bellow).
-* ``--test-pairs-file`` — JSON file containing specific pairs to evaluate in test mode (see example bellow).
-* ``--use-raw-data`` / ``--raw-data-path`` — optional alternative that uses raw BOLD time series instead of recovered PC signals.
-
-Requied files
-~~~~~~~~~~~~~
-
-- Prepare a metadata CSV file with columns ``sub_id``, ``instrument_group``, ``is_train_set``, and any other grouping columns you want to analyze (e.g. ``group``, ``genre``). See an example in `status_fMRI_participants.csv <_static/status_fMRI_participants-example.csv>`_.
-  Note that in last column, ``is_train_set``, a value of ``1`` indicates that the subject is part of the training set (all subjects in ``/home/user/preprocessed/input_dir_train``), while ``0`` indicates that the subject is part of the test set (all subjects in ``/home/user/preprocessed/input_dir_test``).
-- Prepare a JSON file with hyperparameter grids for each ML model. See an example `ml_hyperparameters.json <_static/ml_hyperparameters.json>`_.
-- Prepare a JSON file with the list of test pairs to evaluate in ``ml-test`` mode. See an example `test_pairs.json <_static/test_pairs.json>`_.
-
-
-How signals are reconstructed
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-For each subject and PC, the pipeline combines:
-
-* A **group-level temporal profile** from ``outputs_mov<N>/temporal_profile_pc_<k>_group.txt``
-* A **subject-specific spatial map** from ``outputs_mov<N>/<subject>/eigenfunction_<k>_importance_map_group.nii.gz``
-
-The outer product of regional weights (from the NIfTI, resampled to the Schaefer-100 atlas) and the temporal profile yields a Region × Time matrix per movement. Movement 1 and movement 2 matrices are concatenated along time to form the full signal used in alignment and ML.
-
-.. note::
-
-   Because the temporal profile is shared by all subjects, each reconstructed Region × Time matrix has rank one: all the subject-specific information of a PC is the vector of 100 regional weights (the *loadings*) per movement. Feature sets ``0``–``2`` are different encodings of this vector for a single PC. Feature set ``3`` uses the loadings of all PCs directly, and feature set ``4`` replaces the data-driven temporal profiles by stimulus-driven regressors computed from the music (see *Acoustic regressors* below).
-
-Stimulus regressors (feature set 4)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Feature set ``4`` regresses the time series of every ROI on per-TR regressors that describe the music. The regressors come from one of two sources.
-
-**From the orchestration annotation (recommended, no audio needed).** The workbook given with ``--annotation-xlsx`` has one sheet per movement (``Movement 1``, ``Movement 2``) with, per bar: a ``TR`` row (scan TR at which the bar starts), one row per instrument (column A = family, column B = instrument; levels ``0`` = silent, ``1`` = playing, ``2`` = leading / solo) and genre rows (``Jazz``, ``Rock``, ``Classic``, levels 0/1/2). The pipeline (``PCAGroupDiscrimination.annotation_regressors``) turns it into per-TR step functions at the resolution of the instrument groups used for classification — ``wind`` (woodwind + brass), ``guitars``, ``keyboards``, ``strings``, ``drums`` (maximum level over the instruments of the group), ``jazz``, ``rock``, ``classic`` and ``density`` (number of instruments playing) — convolves them with a canonical HRF, drops the skipped volumes, pads/truncates to the fMRI length and z-scores them. The regressors are written to ``<output-dir>/0_regressors/`` (``acoustic_mov<k>.csv``, and ``annotation_raw_mov<k>.csv`` before HRF convolution) for inspection. The standalone ``cli/annotation_features.py`` builds the same files outside the pipeline.
-
-**From the audio (alternative).** The ``acoustic-features`` script (``PCAGroupDiscrimination/cli/acoustic_features.py``, requires ``librosa``) computes per-TR acoustic regressors from the stimulus audio and writes the same CSV files, to be given with ``--acoustic-features-dir``:
-
-.. code-block:: bash
-
-    python PCAGroupDiscrimination/cli/acoustic_features.py \
-        --audio-mov1 /path/to/movement1.wav --audio-mov2 /path/to/movement2.wav \
-        --tr 0.75 --n-trs-mov1 <mov1_times> --n-trs-mov2 <mov2_times> \
-        --n-skip-vols-start <same value as the pipeline> \
-        --out-dir /home/user/acoustic
-
-For each movement the script computes six time series, one value per TR — ``rms`` (loudness), ``centroid`` (spectral centroid), ``flatness`` (spectral flatness), ``onset`` (onset strength), ``pulse_clarity`` (local autocorrelation peak of the onset envelope) and ``key_clarity`` (peak correlation with the 24 Krumhansl–Kessler key profiles) — convolves them with a canonical double-gamma HRF, drops the skipped volumes, z-scores them, and writes ``acoustic_mov1.csv`` / ``acoustic_mov2.csv``. ``<mov1_times>`` / ``<mov2_times>`` are the numbers of TRs of the fMRI data per movement (see the pipeline log). If the music did not start with the first retained volume, pass the delay in seconds with ``--audio-offset``.
-
-In the pipeline, feature set ``4`` regresses the (z-scored) time series of every ROI on an intercept plus the regressors, separately per movement, and uses the coefficients per ROI and movement as features (with the annotation: 9 regressors × 100 ROIs × 2 movements = 1,800 features).
-
-The time series that is regressed depends on ``--encoding-source``. With ``fpca`` (default) it is the **subject-level fPCA reconstruction** ``PCAGroupDiscrimination.fpca_subject_signals``: for every subject and movement, ``Y[roi, t] = Σ_k w_k[roi] · t_k(t)`` over the subject's own first ``--n-pcs`` components, where ``t_k`` is the subject's temporal profile of component ``k`` and ``w_k[roi]`` the ROI mean of its spatial scores (both written by ``fpca-main --mode pca-singles`` for training and test subjects alike). This keeps the subject's own temporal dynamics, smoothed by the B-spline/GCV/fPCA pipeline and reduced to ``n_pcs`` components — unlike the group reconstruction of feature sets 0–2, which uses a group temporal profile and therefore cannot be regressed on the stimulus. The reconstructions are cached in ``fpca_subject_signals_<n>pcs_cache.joblib`` next to the other caches. With ``raw`` the preprocessed BOLD ROI time series are used instead (``--use-raw-data --raw-data-path``). It runs on the raw BOLD time series (``--use-raw-data --raw-data-path``), not on the recovered PC signals; the raw-data cache is kept separately for the training (``processed_raw_data_cache.joblib``) and the test (``processed_raw_data_cache_test.joblib``) runs.
-
-
-Helper script for running the pipeline
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-- Save the following content as ``run_pipeline.sh`` and make it executable (``chmod +x run_pipeline.sh``)
-
-run_pipeline.sh file content:
-
-.. code-block:: bash
-
-    #!/usr/bin/env bash
-
-    # Set default values
-    FEATURES_SETS="1"
-    PC_INDEX="0"
-    RAW_DATA_PATH=""
-    N_PERMUTATIONS=5
-    MAX_PC=6
-
-    # Parse arguments sequentially
-    while [[ "$#" -gt 0 ]]; do
-        case $1 in
-            --venv) VENV="$2"; shift 2 ;;
-            --mode) MODE="$2"; shift 2 ;;
-            --features-sets) FEATURES_SETS="$2"; shift 2 ;;
-            --pc-index) PC_INDEX="$2"; shift 2 ;;
-            --input-dir) INPUT_DIR="$2"; shift 2 ;;
-            --output-dir) OUTDIR="$2"; shift 2 ;;
-            --metadata-file) METADATA_FILE="$2"; shift 2 ;;
-            --hyperparameters-file) HYPERPARAMETERS_FILE="$2"; shift 2 ;;
-            --test-pairs-file) TEST_PAIRS_FILE="$2"; shift 2 ;;
-            --raw-data-path) RAW_DATA_PATH="$2"; shift 2 ;;
-            --acoustic-features-dir) ACOUSTIC_DIR="$2"; shift 2 ;;
-            --annotation-xlsx) ANNOTATION_XLSX="$2"; shift 2 ;;
-            --encoding-source) ENCODING_SOURCE="$2"; shift 2 ;;
-            --n-permutations) N_PERMUTATIONS="$2"; shift 2 ;;
-            --run-permutations) RUN_PERMUTATIONS="1"; shift 1 ;;
-            --max-pc) MAX_PC="$2"; shift 2 ;;
-            *) shift ;; # Ignore unknown parameters
-        esac
-    done
-
-    # Evaluate conditions after parsing arguments
-    if [ "$RAW_DATA_PATH" != "" ]; then
-        echo "Using raw data path: $RAW_DATA_PATH"
-        MAX_PC=0
-    fi
-
-    # Activate virtual environment
-    source "$VENV/bin/activate"
-
-    #########################################################################################
-
-    mkdir -p "$OUTDIR"
-
-    # Iterate over feature sets
-    for SET_NUM in $FEATURES_SETS; do
-
-        # Define common base arguments for this specific feature set
-        BASE_CMD_ARGS=(
-            "--input-dir" "$INPUT_DIR"
-            "--output-dir" "$OUTDIR/full_pipeline_set${SET_NUM}"
-            "--metadata-csv" "$METADATA_FILE"
-            "--ml-hyperparameters-file" "$HYPERPARAMETERS_FILE"
-            "--test-pairs-file" "$TEST_PAIRS_FILE"
-            "--extra-features-set" "$SET_NUM"
-            "--n-permutations" "$N_PERMUTATIONS"
-        )
-
-        # Conditionally append the raw data arguments if the path is provided
-        if [ -n "$RAW_DATA_PATH" ]; then
-            BASE_CMD_ARGS+=("--use-raw-data" "--raw-data-path" "$RAW_DATA_PATH")
-        fi
-        if [ -n "$ACOUSTIC_DIR" ]; then
-            BASE_CMD_ARGS+=("--acoustic-features-dir" "$ACOUSTIC_DIR")
-        fi
-        if [ -n "$ANNOTATION_XLSX" ]; then
-            BASE_CMD_ARGS+=("--annotation-xlsx" "$ANNOTATION_XLSX")
-        fi
-        if [ -n "$ENCODING_SOURCE" ]; then
-            BASE_CMD_ARGS+=("--encoding-source" "$ENCODING_SOURCE")
-        fi
-        if [ -n "$RUN_PERMUTATIONS" ]; then
-            BASE_CMD_ARGS+=("--run-permutations")
-        fi
-
-        # Execute the pipeline based on the requested mode
-        if [ "$MODE" == "align-signals" ]; then
-            for ((i=0; i<=MAX_PC; i++)); do
-                # Append the dynamic arguments on the fly and run in background
-                fmri-fpca-pipeline "${BASE_CMD_ARGS[@]}" "--mode" "$MODE" "--target-pc-index" "$i" &
-            done
-            # Wait for all background processes to finish before moving to the next feature set
-            wait
-
-        elif [[ "$MODE" == "ml" || "$MODE" == "stat" || "$MODE" == "ml-test" || "$MODE" == "stat-test" ]]; then
-            for i in $PC_INDEX; do
-                # Append the dynamic arguments on the fly and run synchronously
-                fmri-fpca-pipeline "${BASE_CMD_ARGS[@]}" "--mode" "$MODE" "--target-pc-index" "$i"
-            done
-
-        else
-            echo "Warning: Unrecognized mode '$MODE'"
-        fi
-
-    done
-
-    echo "All tasks completed successfully!"
-
-
-.. note::
-
-   For feature set ``3`` the PC index does not matter: pass ``--pc-index "0"`` (one run) and, in ``align-signals`` mode, ``--max-pc 0`` — otherwise the script starts ``MAX_PC + 1`` identical runs that write to the same folder. Feature set ``4`` is run with ``--annotation-xlsx`` (or ``--acoustic-features-dir``) and, by default, needs nothing else: the subject-level fPCA reconstructions are read from ``--input-dir``. With ``--encoding-source raw`` add ``--raw-data-path`` (training data for ``align-signals``/``ml``, test data for ``ml-test``). Its outputs are named ``acoustic-fpca`` / ``acoustic-raw``.
-
-A. Mode: ``align-signals``
-~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Runs signal alignment plots and RSA (representational similarity analysis) between instrument groups.
-
-
-- Run align-signals mode for PC indices 0 and 1 using the recovered signals from pc 0 and 1 (default) in the training set.
-- The ``input-dir`` should point to the output of ``fpca-main`` (``/home/user/output_pca`` - the parent folder containing ``outputs_mov1/`` and ``outputs_mov2/``).
-- The output will be saved in ``<output-dir>/1_align_signals/``
-
-
-.. code-block:: bash
-
-    ./run_pipeline.sh \
-      --mode "align-signals" \
-      --venv "/home/user/fpca-env" \
-      --input-dir "/home/user/output_pca" \
-      --output-dir "/home/user/output_pipeline" \
-      --features-sets "1" \
-      --pc-index "0 1" \
-      --metadata-file "status_fMRI_participants.csv" \
-
-- You can try to align-signals using the training raw data in order to compare the results from the recovered signals with the original BOLD time series.
-- The ``raw-data-path`` should point to the preprocessed training data.
-
-.. code-block:: bash
-
-    ./run_pipeline.sh \
-      --mode "align-signals" \
-      --venv "/home/user/fpca-env" \
-      --input-dir "/home/user/output_pca" \
-      --output-dir "/home/user/output_pipeline" \
-      --features-sets "1" \
-      --metadata-file "status_fMRI_participants.csv" \
-      --raw-data-path "/home/user/preprocessed/input_dir_train"
-
-
-**Outputs** (under ``<output-dir>/1_align_signals/``):
-
-.. list-table::
-   :header-rows: 1
-   :widths: 40 60
-
-   * - File
-     - Description
-   * - ``flattened_alignment_<column>_pc-<k>.png``
-     - Heatmap of features sorted by metadata column (e.g. ``group``, ``instrument_group``).
-   * - ``rsa_analysis_<column>_pc-<k>_<timestamp>.png``
-     - RSA distance matrix and clustering for a metadata grouping.
-   * - ``rsa_metrics_summary_pc-<k>_<timestamp>.csv``
-     - Pairwise inter-group distances, p/q values, and intra-group cohesion.
-   * - ``rsa_summary_pc-<k>_<timestamp>.txt``
-     - Text summary of RSA clustering and permutation statistics.
-
-.. figure:: _static/rsa_analysis_instrument_group_pc-0.png
-   :align: center
-   :figwidth: 80%
-   :alt: RSA analysis heatmap
-   :figclass: align-center
-
-.. figure:: _static/rsa_analysis_instrument_group_pc-1.png
-   :align: center
-   :figwidth: 80%
-   :alt: RSA analysis heatmap
-   :figclass: align-center
-
-.. figure:: _static/flattened_alignment_instrument_group_pc-1.png
-   :align: center
-   :figwidth: 80%
-   :alt: Flattened alignment heatmap of features sorted by instrument group
-   :figclass: align-center
-
-
-
-B. Mode: ``ml``
-~~~~~~~~~~~~~~~
-
-Trains binary classifiers for every combination of instrument groups (e.g. Guitars vs Wind, Strings vs Keyboards, mus vs NM). Uses nested cross-validation on training subjects and saves the best tuned pipeline.
-
-The search space for hyperparameters is defined in the JSON file provided to `ml-hyperparameters.json <_static/ml_hyperparameters.json>`_. It can take a time to run all combinations, so you can delete some models or parameters from the JSON file to reduce the search space.
-
-- Run ML mode for PC indices 0 and 1 using training data.
-- By default the permutation test is a placeholder (5 permutations, hyperparameters frozen) that only keeps the report format; mode ``stat`` then reports analytic p-values. To obtain a valid permutation p-value, rerun ``ml`` with ``--run-permutations --n-permutations 1000`` (or more) on the pair(s) and model(s) of interest only (restrict ``--groups`` and ``--ml-models``, or the grid in ``ml_hyperparameters.json``): every permutation repeats the whole hyperparameter search, so this is not feasible for all pairs and models at once. Note that a permutation test that keeps the hyperparameters selected on the true labels (the old behaviour) is optimistic and is no longer offered.
-
-..code-block:: bash
-
-    ./run_pipeline.sh \
-      --mode "ml" \
-      --venv "/home/user/fpca-env" \
-      --input-dir "/home/user/output_pca" \
-      --output-dir "/home/user/output_pipeline" \
-      --features-sets "1" \
-      --pc-index "0 1" \
-      --metadata-file "status_fMRI_participants.csv" \
-      --hyperparameters-file "ml_hyperparameters.json"
-
-- Running on raw data instead of recovered signals is also possible. The ``raw-data-path`` should point to the preprocessed training data.
-
-.. code-block:: bash
-
-    ./run_pipeline.sh \
-      --mode "ml" \
-      --venv "/home/user/fpca-env" \
-      --input-dir "/home/user/output_pca" \
-      --output-dir "/home/user/output_pipeline" \
-      --features-sets "1" \
-      --metadata-file "status_fMRI_participants.csv" \
-      --hyperparameters-file "ml_hyperparameters.json" \
-      --raw-data-path "/home/user/preprocessed/input_dir_train"
-
-**Outputs** (under each folder ``<output-dir>/2_ml_pc-<k>/ml_<group0>_vs_<group1>/``) that contains the best model for each pair of instrument groups:
-
-.. list-table::
-   :header-rows: 1
-   :widths: 40 60
-
-   * - File
-     - Description
-   * - ``ml_report_<model>_pc-<k>_<timestamp>.txt``
-     - CV accuracy, balanced accuracy, ROC AUC, confusion matrix, class sizes, permutation p-value with the number of permutations and the permutation mode (``nested`` or ``placeholder``).
-   * - ``ml_confusion_matrix_<model>_pc-<k>_<timestamp>.png``
-     - Confusion matrix plot.
-   * - ``ml_permutation_test_<model>_pc-<k>_<timestamp>.png``
-     - Permutation-test null distribution.
-   * - ``ml_cv_results_<model>_pc-<k>_<timestamp>.csv``
-     - Per-fold CV predictions.
-   * - ``best_model_pipeline_<model>_pc-<k>_<timestamp>.pkl``
-     - Saved best model (loaded by ``ml-test``).
-   * - ``manifold_*_<model>_<timestamp>.html``
-     - Interactive PCA / UMAP / t-SNE visualizations of the feature space.
-
-.. figure:: _static/ml_confusion_matrix_LR_pc-1.png
-   :align: center
-   :figwidth: 80%
-   :alt: ML confusion matrix
-   :figclass: align-center
-
-
-C. Mode: ``stat``
-~~~~~~~~~~~~~~~~~
-
-Cross-references ML reports with RSA metrics from ``align-signals``. Produces a ranked summary to help choose which group pairs to test for generalization.
-
-- Run statistical analysis for PC indices 0 and 1 using training data
-
-.. code-block:: bash
-
-    ./run_pipeline.sh \
-      --mode "stat" \
-      --venv "/home/user/fpca-env" \
-      --input-dir "/home/user/output_pca" \
-      --output-dir "/home/user/output_pipeline" \
-      --features-sets "1" \
-      --pc-index "0 1" \
-      --metadata-file "status_fMRI_participants.csv" \
-
-- Running on raw data instead of recovered signals is also possible. The ``raw-data-path`` should point to the preprocessed training data.
-
-.. code-block:: bash
-
-    ./run_pipeline.sh \
-      --mode "stat" \
-      --venv "/home/user/fpca-env" \
-      --input-dir "/home/user/output_pca" \
-      --output-dir "/home/user/output_pipeline" \
-      --features-sets "1" \
-      --metadata-file "status_fMRI_participants.csv" \
-      --raw-data-path "/home/user/preprocessed/input_dir_train"
-
-**Outputs** (under ``<output-dir>/2_ml_pc-<k>/global_summary/``):
-
-.. list-table::
-   :header-rows: 1
-   :widths: 40 60
-
-   * - File
-     - Description
-   * - ``all_pairs_summary.csv``
-     - All (pair, model) combinations with balanced accuracy, permutation p-value, RSA distance, p/q values, and intra-group cohesion. Per-pair columns (repeated on every row of the pair): ``cv_mean_models``, ``cv_max_models``, ``cv_best_model`` (the model selected by CV), ``perm_p_best_model``, ``n_train_0``/``n_train_1`` (class sizes read from the reports), ``rsa_rank`` (1 = most distant pair of the run) and ``rsa_consistent`` (``yes``: q < 0.05, ``weak``: p < 0.05, ``rank``: rank ≤ 5, ``no``).
-   * - ``pairs_overview.csv``
-     - One row per pair with the per-pair columns only, sorted by ``cv_mean_models``.
-   * - ``significance_summary.txt``
-     - Significance of the run. Per (pair, model): ``analytic_p`` (one-sided, from the null SD of a balanced accuracy for the class sizes, ``0.25*sqrt(1/n0+1/n1)``) and, when at least 100 nested permutations were run, ``perm_p``; each with BH-FDR over all rows of the run (``analytic_q``, ``perm_q``). Per pair: ``row_mean_p`` — the mean balanced accuracy over the models against chance, with the conservative null SD of a single model (the models share the subjects, so the mean is not an average of independent scores), ``row_mean_p_indep`` (optimistic bound assuming independent models), ``row_mean_q``; ``best_model_p``/``best_model_q`` for the CV-selected model (its q is the correction needed when the best of several models is reported); ``n_models_above_chance``, ``n_models_above_1sd``, ``ensemble_bacc``/``ensemble_p``/``ensemble_q`` (balanced accuracy of the majority vote of the models' out-of-fold predictions, one statistic for "all models see the same difference"), ``subjects_correct_by_all_models``. Count tests: observed vs expected number of scores above 0.60 (all rows, pair means) with a p-value that assumes independence (optimistic). All these columns are also in ``all_pairs_summary.csv`` and ``pairs_overview.csv``.
-   * - ``summary_balanced_accuracy.png``
-     - Heatmap of balanced accuracy; y-axis labels include RSA distance metrics per pair; x-axis shows correlation with RSA and top-3 overlap score.
-   * - ``correlations_summary.txt``
-     - Per-model correlation between RSA distance and ML balanced accuracy, plus top-3 overlap counts.
-
-Use ``all_pairs_summary.csv`` and the heatmap to select well-separated pairs before running ``ml-test``.
-
-.. figure:: _static/summary_balanced_accuracy.png
-   :align: center
-   :figwidth: 80%
-   :alt: Stat summary heatmap
-   :figclass: align-center
-
-
-D. Mode: ``ml-test``
-~~~~~~~~~~~~~~~~~~~~
-
-Loads the best saved model for each specified pair and evaluates it on test subjects (``is_train_set == 0`` in the metadata CSV).
-
-- Create test pairs file (`test_pairs.json <_static/test_pairs.json>`_) with the list of instrument group pairs to evaluate. For example:
-
-# No comma after the last pair !!!
-
-.. note::
-
-   Each pair must be written in the order used by training, i.e. the order of the groups in ``--groups`` (default ``Guitars Vocal Wind Drums Strings Keyboards NM mus``): ``["Guitars", "Drums"]`` is trained, ``["Drums", "Guitars"]`` is not and is skipped (no model is found for it). Group names must match ``instrument_group`` in the metadata exactly (``Vocal``, not ``Vocals``).
+   :widths: 28 72
+
+   * - Script
+     - Role
+   * - ``run_all_background.sh``
+     - Run the fPCA and classification stages in order using fixed paths
+       defined inside the script.
+   * - ``run_fpca.sh``
+     - Run individual fPCA, group fitting, or test projection for both movements.
+   * - ``run_pipeline.sh``
+     - Run one downstream mode for selected feature sets and component indices.
+
+Prepare the inputs
+--------------------------------------------------------------------------------
+
+Use :doc:`installation` to prepare ``fpca-env``. Then check the following:
+
+* Put training recordings and masks in ``raw_data_train`` and test recordings
+  and masks in ``raw_data_test``. The participant sets must be disjoint.
+* Each participant must have both movements and a matching mask for each.
+  Use the naming pattern described in :doc:`running`.
+* Images and masks must have compatible shapes and spatial coordinates.
+  The regional analysis uses the Schaefer 100-region, 7-network atlas.
+  Resampling that atlas does not register an image into standard space.
+* Use the correct TR. The current scripts use the Python default of 0.75 s.
+  For Set 4, the workbook's scan times must match the recordings.
+* For the Nilearn branch, include the matching fMRIPrep confound TSV and JSON
+  files in the layout expected by Nilearn.
+
+The metadata CSV must have one row per participant. ``sub_id`` identifies
+the participant, ``instrument_group`` gives the classification group, and
+``is_train_set`` must be numeric 1 for training or 0 for test. Its split must
+agree with the input folders.
+
+The alignment plots also use these columns from the current metadata format:
+``group``, ``main_instrument``, ``genres``, ``has_classical``, ``has_jazz``,
+``has_rock``, ``has_pop``, ``is_wind``, ``is_rhythm``, and ``pca_tSNE``.
+Keep the supplied metadata structure when preparing a new file. Use unique
+participant IDs and check that every loaded participant has a metadata row.
+
+``ml_hyperparameters.json`` defines the model search values.
+``test_pairs.json`` defines which trained group pairs to evaluate on the
+test set. A minimal example of its structure is:
 
 .. code-block:: json
 
-   {
-       "test_pairs": [
-           ["Drums", "Keyboards"],
-           ["NM", "Keyboards"],
-           ["Drums", "Strings"],
-           ["Guitars", "NM"],
-           ["Guitars", "Wind"],
-           ["NM", "mus"],
-           ["Strings", "NM"],
-           ["Vocal", "NM"],
-           ["Wind", "Strings"]
-       ]
-   }
+   {"test_pairs": [["Guitars", "Drums"], ["NM", "mus"]]}
 
-- Run ML test mode for PC indices 0 and 1 using test data.
+Pair names and their order must match the trained model folders. Keep the
+full supplied pair list for the current analysis. Choose pairs before
+looking at their test scores.
 
-.. code-block:: bash
+Set 4 also needs ``visualize_05102026.xlsx``. The current workbook has sheets
+named ``Movement 1`` and ``Movement 2``, a scan-TR row, and instrument and
+genre annotation rows. Keep its layout and scan timing. See
+:doc:`implementation` for how those rows become regression inputs.
 
-    ./run_pipeline.sh \
-      --mode "ml-test" \
-      --venv "/home/user/fpca-env" \
-      --input-dir "/home/user/output_pca" \
-      --output-dir "/home/user/output_pipeline" \
-      --features-sets "1" \
-      --pc-index "0 1" \
-      --metadata-file "status_fMRI_participants.csv" \
-      --hyperparameters-file "ml_hyperparameters.json" \
-      --test-pairs-file "test_pairs.json"
+Prepare a working folder
+--------------------------------------------------------------------------------
 
-- Running on raw data instead of recovered signals is also possible. The ``raw-data-path`` should point to the preprocessed test data.
+The full-run script calls ``./run_fpca.sh`` and ``./run_pipeline.sh``.
+Its configuration files are also relative to the current working folder.
+Copy these files into one run folder. Replace the example paths first:
 
 .. code-block:: bash
 
-    ./run_pipeline.sh \
-      --mode "ml-test" \
-      --venv "/home/user/fpca-env" \
-      --input-dir "/home/user/output_pca" \
-      --output-dir "/home/user/output_pipeline" \
-      --features-sets "1" \
-      --metadata-file "status_fMRI_participants.csv" \
-      --hyperparameters-file "ml_hyperparameters.json" \
-      --test-pairs-file "test_pairs.json" \
-      --raw-data-path "/home/user/preprocessed/input_dir_test" # Note that this is the test set, not the training set !
+   FMRI_CODE=/path/to/fMRI
+   RUN_DIR=/path/to/fmri-run
+   CONFIG_DIR=/path/to/analysis-inputs
 
-**Outputs** (under ``<output-dir>/3_ml_test_pc-<k>/ml_test_<group0>_vs_<group1>/``):
+   mkdir -p "$RUN_DIR"
+   cp "$FMRI_CODE/src/full_pipeline/run_all_background.sh" "$RUN_DIR/"
+   cp "$FMRI_CODE/src/fPCA/cli/run_fpca.sh" "$RUN_DIR/"
+   cp "$FMRI_CODE/src/PCAGroupDiscrimination/cli/run_pipeline.sh" "$RUN_DIR/"
+   cp "$FMRI_CODE/src/PCAGroupDiscrimination/cli/ml_hyperparameters.json" "$RUN_DIR/"
+   cp "$CONFIG_DIR/status_fMRI_participants_05102026.csv" "$RUN_DIR/"
+   cp "$CONFIG_DIR/test_pairs.json" "$RUN_DIR/"
+   cp "$CONFIG_DIR/visualize_05102026.xlsx" "$RUN_DIR/"
+   cd "$RUN_DIR"
+   chmod +x run_all_background.sh run_fpca.sh run_pipeline.sh
+
+Before running, edit the paths near the top of ``run_all_background.sh``:
+
+* ``OUTPUT_DIR_RAW`` is the parent of ``raw_data_train`` and ``raw_data_test``.
+* The two ``OUTPUT_DIR`` assignments choose the filtered and basic output
+  folders. They are separate fixed paths. Changing ``OUTPUT_DIR_RAW`` alone
+  does not change them.
+* ``METADATA``, ``HYPERPARAMS``, ``TEST_PAIRS``, and ``ANNOTATION_XLSX`` must
+  match the files in the run folder, or use absolute paths.
+
+The examples below retain the script's current root,
+``/mnt/my_passport/R_output``. Adjust it everywhere if your data are elsewhere.
+
+Understand the four configurations
+--------------------------------------------------------------------------------
+
+The recent runs requested ``--sets "1 0 4"`` in four combinations:
 
 .. list-table::
    :header-rows: 1
-   :widths: 40 60
+   :widths: 22 28 50
 
-   * - File
-     - Description
-   * - ``test_report_<model>_pc-<k>_<timestamp>.txt``
-     - Test-set accuracy, balanced accuracy, ROC AUC, confusion matrix.
-   * - ``test_confusion_matrix_<model>_pc-<k>_<timestamp>.png``
-     - Test-set confusion matrix plot.
+   * - Signal
+     - Extra full-run flags
+     - Preprocessing and output branch
+   * - fPCA
+     - None
+     - Basic preprocessing; ``output_no_filter``.
+   * - fPCA
+     - ``--filter``
+     - Nilearn preprocessing; ``output_filter1``.
+   * - BOLD without fPCA
+     - ``--raw --skip-fpca``
+     - Basic preprocessing; raw result folders in ``output_no_filter``.
+   * - BOLD without fPCA
+     - ``--raw --skip-fpca --filter``
+     - Nilearn preprocessing; raw result folders in ``output_filter1``.
 
+``output_no_filter`` is a historical folder name. The program still applies
+spatial box smoothing and temporal band-pass filtering in this branch.
+``--filter`` selects a different preprocessing procedure; it does not
+simply add a filter to an otherwise untouched signal.
 
+.. important::
 
-E. Mode: ``stat-test``
-~~~~~~~~~~~~~~~~~~~~~~
+   The current raw-data cache does not record the feature set or its spatial
+   centering setting. Running raw Sets 0, 1, and 4 together can make Set 4
+   reuse the uncentered cache from Sets 0 and 1. It can also reuse stale
+   data after input or preprocessing changes. For new raw runs, use the
+   separate Set 4 cache folder shown below.
 
-Run after ``ml-test``. Produces the same files as ``stat``, extended with the test-set results, under ``<output-dir>/3_ml_test_pc-<k>/global_summary/``. The selection rule is unchanged: the model of each pair is chosen by cross-validation, and its test score (``test_of_best_cv_model``) is the confirmatory number; the test scores of the other models are descriptive only.
+Run the fPCA configurations
+--------------------------------------------------------------------------------
+
+Create the log directories before using shell redirection:
 
 .. code-block:: bash
 
-    ./run_pipeline.sh \
-      --mode "stat-test" \
-      --venv "/home/user/fpca-env" \
-      --input-dir "/home/user/output_pca" \
-      --output-dir "/home/user/output_pipeline" \
-      --features-sets "1" \
-      --pc-index "0 1" \
-      --metadata-file "status_fMRI_participants.csv"
+   mkdir -p /mnt/my_passport/R_output/output_no_filter
+   mkdir -p /mnt/my_passport/R_output/output_filter1
 
-**Outputs** (under ``<output-dir>/3_ml_test_pc-<k>/global_summary/``):
+Run the basic preprocessing configuration:
 
-.. list-table::
-   :header-rows: 1
-   :widths: 40 60
+.. code-block:: bash
 
-   * - File
-     - Description
-   * - ``all_pairs_summary.csv``
-     - As in ``stat``, plus ``test_bacc`` (test score of the row's model), ``test_mean_models``, ``test_max_models``, ``test_of_best_cv_model``, ``min_of_means`` (the smaller of the CV and test means over models) and ``n_test_0``/``n_test_1``. Sorted by ``min_of_means``.
-   * - ``pairs_overview.csv``
-     - One row per pair with the per-pair columns, sorted by ``min_of_means``.
-   * - ``significance_summary.txt``
-     - As in ``stat``, plus ``test_sel_p``/``test_sel_q`` (test score of the CV-selected model against chance, analytic null SD for the test class sizes) and ``test_row_mean_p``/``q`` (mean test score over the models, conservative), and the count tests for the test rows and for the CV-selected test scores.
-   * - ``summary_balanced_accuracy.png`` / ``summary_test_balanced_accuracy.png``
-     - Heatmaps of the CV and of the test balanced accuracies (with ``correlations_summary.txt`` / ``summary_test_balanced_accuracy_correlations.txt``).
-   * - ``roi_importance_selected_pairs.csv`` (``_mov1`` / ``_mov2``)
-     - The ROI importance tables computed by ``stat`` from the saved models (they do not depend on the test set and are not recomputed), filtered to the CV-selected model of the pairs with ``test_of_best_cv_model >= 0.60`` and ``best_model_p <= 0.05`` (the permutation p when nested permutations were run, the analytic p otherwise), and annotated with the pair's CV, test and p. Not written when no pair qualifies.
+   nohup ./run_all_background.sh --sets "1 0 4" \
+     > /mnt/my_passport/R_output/output_no_filter/all_run.log 2>&1 &
 
-.. note::
+Run the Nilearn configuration when the machine has enough free resources:
 
-   Reading the significance files: a p-value of a single model is meaningful only together with its ``q`` (FDR over all rows of the run), because the best of 5 models x 22 pairs is reported; a pair whose models agree (high ``n_models_above_chance``, ``ensemble_bacc``) shows that the difference is in the data rather than in a model's randomness, but the models share the subjects, so agreement is no evidence against sampling noise. The confirmatory number of a pair is ``test_of_best_cv_model`` with ``test_sel_p``.
+.. code-block:: bash
 
-.. note::
+   nohup ./run_all_background.sh --sets "1 0 4" --filter \
+     > /mnt/my_passport/R_output/output_filter1/all_run.log 2>&1 &
 
-   Pairs without a ``test_report`` get empty test columns. The test subjects of a pair are the same for every feature set and PC, so agreement between the CV score and the test score is evidence of generalization only across subjects, not a replication on new ones.
+``nohup`` lets a command continue after the terminal closes; ``&`` puts it
+in the background. Neither one schedules jobs or prevents two runs from
+writing to the same folder. For a simple, reproducible workflow, let each
+run finish before starting another in the same output branch.
 
-Metadata CSV requirements
-~~~~~~~~~~~~~~~~~~~~~~~~~
+Do not run fPCA and raw Set 4 at the same time in one branch. Their result
+folders differ, but the full-run script uses the same Set 4 log filenames.
+Use a fresh analysis root when rerunning a changed configuration.
 
-The metadata file must include at minimum:
+What the full-run script does
+--------------------------------------------------------------------------------
+
+Unless ``--skip-fpca`` is set, it runs:
+
+1. Individual fPCA for training recordings.
+2. Individual fPCA for test recordings, in the same output tree.
+3. Group fPCA using only the training recordings.
+4. Projection of test recordings onto the training group basis.
+
+For each requested feature set, the downstream modes then run in this order:
 
 .. list-table::
    :header-rows: 1
-   :widths: 25 75
+   :widths: 20 80
 
-   * - Column
-     - Purpose
-   * - ``sub_id``
-     - Subject identifier (matched to folder names).
-   * - ``instrument_group``
-     - Instrument category (e.g. Guitars, Wind, NM).
-   * - ``is_train_set``
-     - ``1`` for training subjects (used by ``ml``); ``0`` for test subjects (used by ``ml-test``).
-   * - ``group``
-     - General group label (used in alignment plots).
-   * - ``has_classical``, ``has_jazz``, ``has_rock``, ``has_pop``
-     - Genre familiarity flags (used as optional alignment columns).
+   * - Mode
+     - Work performed
+   * - ``align-signals``
+     - Make feature plots and run representational similarity analysis (RSA)
+       using training participants. This does not shift or register recordings.
+   * - ``ml``
+     - Tune and evaluate classifiers on training participants, then fit and
+       save the final models using the training data.
+   * - ``stat``
+     - Read training results and write summary tables and ROI importance files.
+   * - ``ml-test``
+     - Load saved models and predict test participants for the requested pairs.
+   * - ``stat-test``
+     - Combine training and test results into summary tables.
+
+For fPCA Sets 0 and 1, the full-run script trains classifiers for component
+indices 0 and 1. Its alignment step defaults to indices 0 through 6.
+For Set 4, it runs alignment and classification only once.
+
+The full-run script accepts ``--sets``, ``--filter``, ``--raw``,
+``--encoding-source``, ``--skip-fpca``, and ``--annotation-xlsx``.
+It does not forward arbitrary options to the lower-level commands.
+Always supply ``--sets "1 0 4"`` for this workflow; the script's default
+also includes Set 3, which is outside this guide.
+
+``--skip-fpca`` is appropriate for a downstream rerun only when its required
+fPCA outputs already match the intended data and settings. For a raw run,
+fPCA outputs are not needed, but ``--raw`` alone does not skip their creation;
+also supply ``--skip-fpca``.
+
+The full-run script currently uses 20 fPCA workers and 32 classifier-search
+workers through its wrappers. It has no ``--jobs`` option of its own.
+Use the lower-level examples below when you need smaller worker counts.
+
+Run stages separately
+--------------------------------------------------------------------------------
+
+For a fresh fPCA output, run the four fPCA commands in order:
+
+.. code-block:: bash
+
+   DATA_ROOT=/mnt/my_passport/R_output
+   BRANCH="$DATA_ROOT/output_no_filter"
+
+   ./run_fpca.sh pca-singles "$DATA_ROOT/raw_data_train" "$BRANCH/output_pca" --n-jobs 4
+   ./run_fpca.sh pca-singles "$DATA_ROOT/raw_data_test" "$BRANCH/output_pca" --n-jobs 4
+   ./run_fpca.sh train-pca-group "$DATA_ROOT/raw_data_train" "$BRANCH/output_pca" --n-jobs 4
+   ./run_fpca.sh test-pca-project "$DATA_ROOT/raw_data_test" "$BRANCH/output_pca" --n-jobs 4
+
+For the Nilearn branch, use ``output_filter1`` and append the three filter
+options from :doc:`running` to all four commands.
+
+Run the five downstream modes for Sets 0 and 1:
+
+.. code-block:: bash
+
+   for mode in align-signals ml stat ml-test stat-test; do
+     ./run_pipeline.sh \
+       --mode "$mode" \
+       --features-sets "0 1" \
+       --pc-index "0 1" \
+       --max-pc 1 \
+       --input-dir "$BRANCH/output_pca" \
+       --output-dir "$BRANCH/output_pipeline" \
+       --metadata-file status_fMRI_participants_05102026.csv \
+       --hyperparameters-file ml_hyperparameters.json \
+       --test-pairs-file test_pairs.json \
+       --jobs 4 || break
+   done
+
+Here, ``--max-pc 1`` limits alignment to components 0 and 1.
+``--pc-index`` controls the other modes. During alignment, the wrapper
+instead runs every index from 0 to ``--max-pc``, inclusive, in parallel.
+Check the first failing mode before continuing; do not skip over failures.
+
+For Set 4 on individual fPCA reconstructions, use the same loop with
+``--features-sets "4"``, ``--pc-index "0"``, and ``--max-pc 0``, and add
+``--encoding-source fpca --annotation-xlsx visualize_05102026.xlsx``.
+The component index is just a required wrapper setting for this run.
+Set 4 still uses seven individual components by default.
+
+Run the raw configurations with separate caches
+--------------------------------------------------------------------------------
+
+First run raw Sets 0 and 1. Use only one of these commands at a time:
+
+.. code-block:: bash
+
+   ./run_all_background.sh --sets "1 0" --raw --skip-fpca
+
+   ./run_all_background.sh --sets "1 0" --raw --skip-fpca --filter
+
+Then run raw Set 4 with a separate cache parent. In the raw branch,
+``--input-dir`` supplies that parent; the recordings themselves come from
+``--raw-data-path``. The following example is for basic preprocessing:
+
+.. code-block:: bash
+
+   DATA_ROOT=/mnt/my_passport/R_output
+   BRANCH="$DATA_ROOT/output_no_filter"
+   FILTER_ARGS=()
+   mkdir -p "$BRANCH/raw_set4_cache"
+
+   for mode in align-signals ml stat ml-test stat-test; do
+     RAW_INPUT="$DATA_ROOT/raw_data_train"
+     if [[ "$mode" == "ml-test" || "$mode" == "stat-test" ]]; then
+       RAW_INPUT="$DATA_ROOT/raw_data_test"
+     fi
+
+     ./run_pipeline.sh \
+       --mode "$mode" \
+       --features-sets "4" \
+       --pc-index "0" \
+       --max-pc 0 \
+       --input-dir "$BRANCH/raw_set4_cache" \
+       --output-dir "$BRANCH/output_pipeline" \
+       --raw-data-path "$RAW_INPUT" \
+       --encoding-source raw \
+       --annotation-xlsx visualize_05102026.xlsx \
+       --metadata-file status_fMRI_participants_05102026.csv \
+       --hyperparameters-file ml_hyperparameters.json \
+       --test-pairs-file test_pairs.json \
+       --jobs 4 \
+       "${FILTER_ARGS[@]}" || break
+   done
+
+For the Nilearn version, change the branch and the filter array before
+running the same loop:
+
+.. code-block:: bash
+
+   BRANCH="$DATA_ROOT/output_filter1"
+   FILTER_ARGS=(--use-nilearn-filter --n-compcor-nilearn-filter 2 --smoothing-fwhm-nilearn-filter 4)
+   mkdir -p "$BRANCH/raw_set4_cache"
+
+Use a new cache folder when the recordings, masks, preprocessing settings,
+or source code change. The current cache filenames do not detect such
+changes. In a given cache parent, training raw data use
+``processed_raw_data_cache.joblib`` and test raw data use
+``processed_raw_data_cache_test.joblib``.
+
+Group-fPCA features also use caches under ``--input-dir``, with names
+starting with ``recoverd_pcs_``. New fPCA outputs should therefore use a
+new parent folder. Set 4's individual-fPCA loader currently bypasses its
+feature cache and reconstructs the signals again.
+
+Wrapper options and direct Python options
+--------------------------------------------------------------------------------
+
+``run_pipeline.sh`` accepts the options shown above, plus
+``--ml-models``, ``--groups``, ``--n-permutations``, ``--run-permutations``,
+and ``--acoustic-features-dir``. Its default model list is
+``SVM LR NN DTree RandForest``. Its default maximum alignment component
+index is 6 and its default worker count is 32.
+
+Some option names differ in the direct Python command:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 36 36 28
+
+   * - ``run_pipeline.sh``
+     - ``fmri-fpca-pipeline``
+     - Meaning
+   * - ``--features-sets "0 1"``
+     - ``--extra-features-set 0``
+     - The wrapper loops over sets; the direct command accepts one set.
+   * - ``--pc-index "0 1"``
+     - ``--target-pc-index 0``
+     - The wrapper loops over indices outside alignment.
+   * - ``--metadata-file``
+     - ``--metadata-csv``
+     - Participant table.
+   * - ``--hyperparameters-file``
+     - ``--ml-hyperparameters-file``
+     - Model search configuration.
+   * - ``--raw-data-path``
+     - ``--use-raw-data --raw-data-path``
+     - The wrapper adds the raw-data flag and the ``-raw`` result suffix.
+   * - ``--max-pc``
+     - No matching option
+     - Controls the wrapper's alignment loop.
+
+The direct command also has ``--n-pcs`` (default 7), ``--TR`` (default
+0.75), ``--n-windows-per-exp`` (default 6), and ``--cache-file-pardir``
+(default: input folder). The wrapper does not forward these options.
+Its unknown options are currently ignored, so a misspelled or unsupported
+flag can leave the default in place. Use only documented wrapper options
+and check the logged settings.
+
+For direct raw commands, create the output folder name with ``-raw``
+yourself. The Python command does not add the feature-set folder for you.
+
+Find the results
+--------------------------------------------------------------------------------
+
+All paths below are relative to ``<branch>/output_pipeline``:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 28 36 36
+
+   * - Analysis
+     - Training folder
+     - Test folder
+   * - fPCA Set 0 or 1, component ``k``
+     - ``full_pipeline_setN/2_ml_pc-k``
+     - ``full_pipeline_setN/3_ml_test_pc-k``
+   * - Raw Set 0 or 1
+     - ``full_pipeline_setN-raw/2_ml_raw``
+     - ``full_pipeline_setN-raw/3_ml_test_raw``
+   * - fPCA Set 4
+     - ``full_pipeline_set4/2_ml_acoustic-fpca``
+     - ``full_pipeline_set4/3_ml_test_acoustic-fpca``
+   * - Raw Set 4
+     - ``full_pipeline_set4-raw/2_ml_acoustic-raw``
+     - ``full_pipeline_set4-raw/3_ml_test_acoustic-raw``
+
+Replace ``N`` by 0 or 1 and ``k`` by the component index. Each summary
+folder is named ``global_summary``. It contains ``all_pairs_summary.csv``
+and ``pairs_overview.csv``. The training summary also contains the ROI
+importance files used by the dashboard. Set 4 writes its annotation
+regressors under ``0_regressors`` in the feature-set output folder.
+
+Example output plots
+--------------------------------------------------------------------------------
+
+The figures below are examples from the earlier documentation. They show
+the layout of the outputs, not the results of the current runs. Use the
+files from your own run for scores and statistical conclusions. Select an
+image to open it at full size, especially the wide RSA panels and long
+summary plots.
+
+Participant features
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The alignment heatmap places participants in rows and their feature values
+in columns. Participants are grouped by their metadata labels. Use this
+view to inspect broad patterns and unusual rows before reading classifier
+results. A visible pattern alone does not establish a group difference.
+
+.. figure:: _static/flattened_alignment_instrument_group_pc-1.png
+   :align: center
+   :width: 440px
+   :alt: Feature heatmap with participants in rows, grouped by instrument.
+
+   Example feature matrix for component 1, grouped by instrument category.
+
+Distances between participants and groups
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Representational similarity analysis (RSA) compares the pattern of feature
+distances with the pattern defined by the group labels. The example panels
+show the label pattern, participant distances, average distances between
+groups, and statistical summaries from that example run.
+
+.. figure:: _static/rsa_analysis_instrument_group_pc-0.png
+   :align: center
+   :width: 100%
+   :alt: RSA panels showing label and feature distances for component 0.
+
+   Example RSA output for component 0.
+
+.. figure:: _static/rsa_analysis_instrument_group_pc-1.png
+   :align: center
+   :width: 100%
+   :alt: RSA panels showing label and feature distances for component 1.
+
+   Example RSA output for component 1. Each component is a separate analysis.
+
+Correct and incorrect predictions
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In a confusion matrix, rows are the true classes and columns are the
+predicted classes. The diagonal counts correct predictions; the other
+cells count errors. The figure below reports cross-validation predictions.
+Keep these separate from predictions for the held-out test participants.
+
+.. figure:: _static/ml_confusion_matrix_LR_pc-1.png
+   :align: center
+   :width: 520px
+   :alt: Two-class cross-validation confusion matrix for logistic regression.
+
+   Example logistic regression confusion matrix for component 1.
+
+Compare pairs and model families
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The summary heatmap places group pairs in rows and model families in
+columns. Each cell shows balanced accuracy. Use the current summary CSV
+to read the exact values and identify the model selected by training
+cross-validation.
+
+.. figure:: _static/summary_balanced_accuracy.png
+   :align: center
+   :width: 440px
+   :alt: Balanced accuracy heatmap with group pairs in rows and models in columns.
+
+   Example training summary. The colours show prediction scores, not
+   statistical significance.
+
+Read the statistics correctly
+--------------------------------------------------------------------------------
+
+``balanced_accuracy`` is a training cross-validation score.
+``cv_best_model`` identifies the model family selected by its training
+cross-validation score. ``test_of_best_cv_model`` is that family's held-out
+test score. Selecting the largest test score across models would use the
+test set to choose the model and answers a different question.
+
+The recent commands do not set ``--run-permutations``. They produce five
+placeholder training permutations, not a valid training significance test.
+The corrected summary leaves the corresponding significance fields empty.
+Increasing ``--n-permutations`` alone does not enable the full nested test.
+
+For valid nested training permutations, the summary requires the nested
+mode and at least 100 successful permutations. That more expensive mode
+is outside the current implementation description. An empty training
+p-value is not evidence of significance or of no effect.
+
+On the test set, ``test_sel_p`` is the exact, one-sided label-permutation
+p-value for the model selected by training cross-validation.
+``test_sel_p_fwer`` applies a Bonferroni correction over the summary's
+group pairs. This does not correct a later search across feature sets,
+components, preprocessing branches, or repeated test analyses.
+
+Legacy columns for analytic training tests, model-average tests, ensemble
+tests, and ``test_sel_q`` may remain in the CSV schema but are empty in the
+corrected summary. Do not substitute them for the supported test columns.
+RSA describes the distances between training feature representations; it
+does not establish classifier or ROI significance.
+
+See :doc:`implementation` for the validation procedure and
+:doc:`roi_explorer_guide` for regional interpretation.
+

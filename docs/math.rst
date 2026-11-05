@@ -1,145 +1,179 @@
+Functional PCA: mathematical background
+================================================================================
 
-=======================================
-Functional PCA - Mathmatical Background
-=======================================
+This page explains the mathematical method. The fPCA method follows the work of Roberto Viviani, Georg Grön and Manfred Spitzer, `Functional Principal Component Analysis of fMRI Data, Human Brain Mapping 24, 109–129 (2005) <https://onlinelibrary.wiley.com/doi/epdf/10.1002/hbm.20074>`_.
+The calculation used by the program is described separately in :doc:`implementation`.
 
+There are :math:`n` time points and :math:`N` voxels. For one voxel,
+:math:`y(t)` is a signal as a function of time. Its recorded values form the
+column vector :math:`y=(y(t_1),\ldots,y(t_n))^\top`.
 
-Below is the step-by-step mathematical description of the method. The equations are presented at the level of a single voxel time series. (In the implementation, these calculations are applied in batches for efficiency.)
+Represent the signal with smooth curves
+--------------------------------------------------------------------------------
 
-B-Spline Representation of the Signal
----------------------------------------
-Let :math:`n` is number of the timepoints, and :math:`N` is the nuber of the voxels. Each voxel’s time series, denoted by
-
-.. math::
-
-   y(t) \in \mathbb{R}^{n},
-
-is approximated using a spline basis with :math:`K` basis functions :math:`f_k(t)`:
+We use :math:`K` B-spline basis functions. These are simple curves that can
+be added together to describe a smooth signal:
 
 .. math::
 
-   y(t) \approx \sum_{k=1}^{K} c_k\, f_k(t),
+   y(t) \approx \sum_{k=1}^{K} c_k f_k(t).
 
-or, in vector-matrix notation,
-
-.. math::
-
-   y \approx F\, c,
-
-where:
-
-- :math:`F \in \mathbb{R}^{n \times K}` is the basis matrix with entries
-  :math:`F_{ik} = f_k(t_i)`,
-- :math:`c \in \mathbb{R}^{K}` is the vector of coefficients.
-
-Regularized Regression for Spline Coefficient Estimation
----------------------------------------------------------
-To estimate the coefficient vector :math:`c`, the method minimizes the penalized least-squares criterion:
+The coefficients :math:`c_k` control the contribution of each basis function.
+At the recorded time points, the same expression is
 
 .. math::
 
-   J(c) = \|y - F\, c\|^2 + \lambda\, c^\top P\, c,
+   y \approx Fc, \qquad F_{jk}=f_k(t_j),
 
-where:
+where :math:`F` has size :math:`n\times K` and :math:`c` has size
+:math:`K\times 1`.
 
-- :math:`\lambda` is the regularization parameter,
-- :math:`P \in \mathbb{R}^{K \times K}` is the penalty matrix defined as
+Fit the curve while limiting roughness
+--------------------------------------------------------------------------------
 
-.. math::
-
-   P_{kl} = \int_{T_{\min}}^{T_{\max}} f_k^{(d)}(t)\, f_l^{(d)}(t)\, dt,
-
-with :math:`d` indicating the derivative order to be penalized (e.g., :math:`d=2` to penalize curvature).
-
-The minimizer :math:`c` satisfies the penalized normal equations:
+A curve should follow the data without following every small fluctuation.
+We choose its coefficients by minimizing
 
 .. math::
 
-   \left(F^\top F + \lambda P\right) c = F^\top y.
+   J(c)=\lVert y-Fc\rVert^2+\lambda c^\top P c,
 
-Selection of :math:`\lambda` for each voxel using Generalized Cross-Validation (GCV)
-------------------------------------------------------------------------------------
-For selection of :math:`\lambda`, the following is calculated separately for each voxel. The hat matrix :math:`H_\lambda \in \mathbb{R}^{n \times n}` is calculated
+with
 
 .. math::
 
-   H_\lambda = F\, \left(F^\top F + \lambda P\right)^{-1} F^\top.
+   P_{kl}=\int_{T_{\min}}^{T_{\max}}
+   f_k^{(d)}(t)f_l^{(d)}(t)\,dt.
 
+The first term measures the difference from the recorded signal. The second
+term penalizes roughness. With :math:`d=2`, it penalizes curvature, which
+measures how quickly the slope changes.
 
-Then the generalized cross-validation (GCV) score for each candidate :math:`\lambda` is computed as:
+The parameter :math:`\lambda` controls the balance between the two terms.
+A larger value gives more weight to smoothness. It does not force the
+signal to be zero: constant and linear functions have zero curvature.
 
-.. math::
-
-   \text{GCV}(\lambda) = \frac{n\, \| (I - H_\lambda) y \|^2}{\left[\text{trace}(I - H_\lambda)\right]^2},
-
-where:
-
-- :math:`I` is the :math:`n \times n` identity matrix,
-- :math:`n` is the number of timepoints.
-
-The optimal :math:`\lambda` is chosen as the value that minimizes the GCV score.
-
-Functional Principal Component Analysis (fPCA)
------------------------------------------------
-After estimating the coefficient vector :math:`c` for each voxel, these coefficients are stored in a matrix
+The fitted coefficients satisfy
 
 .. math::
 
-   C \in \mathbb{R}^{N \times K},
+   (F^\top F+\lambda P)c=F^\top y.
 
-where :math:`N` is the number of voxels.
+When the matrix on the left is invertible, this equation has a unique solution.
 
-The fPCA steps are as follows:
+Choose the smoothing level for each voxel
+--------------------------------------------------------------------------------
 
-1. Centering the Coefficient Matrix:
-
-   .. math::
-
-      \tilde{C} = C - \mu,\quad \text{with}\quad \mu = \frac{1}{N} \sum_{i=1}^{N} C_{i,:}.
-
-2. Compute the Penalized Covariance Matrix :math:`\Sigma \in \mathbb{R}^{K \times K}` in the Spline Basis:
-
-   .. math::
-
-      \Sigma = \frac{1}{N}\, \tilde{C}^\top\, \tilde{C}\, U,
-
-where the Gram matrix :math:`U \in \mathbb{R}^{K \times K}` is defined as:
+Generalized cross-validation (GCV) balances the error of the fit against
+the flexibility of the fitted curve. Define
 
 .. math::
 
-   U_{kl} = \int_{T_{\min}}^{T_{\max}} f_k(t)\, f_l(t)\, dt,  k,l=1,2 ... K
+   H_\lambda=F(F^\top F+\lambda P)^{-1}F^\top.
 
-3. Eigen-decomposition:
+Then :math:`H_\lambda y` is the fitted signal, and
+:math:`\operatorname{tr}(H_\lambda)` measures its effective flexibility.
+For each candidate smoothing level, calculate
 
-   Solve for the eigenvalues :math:`\gamma` and eigenvectors :math:`\phi`:
+.. math::
 
-   .. math::
+   \operatorname{GCV}(\lambda)=
+   \frac{n\lVert(I-H_\lambda)y\rVert^2}
+        {[n-\operatorname{tr}(H_\lambda)]^2}.
 
-      \Sigma\, \phi = \gamma\, \phi.
+Choose the candidate with the smallest score, separately for each voxel.
+The denominator must be nonzero.
 
-   The eigenvalues are sorted in descending order.
+This step chooses the smoothness of a time series. It is different from
+cross-validation of a classifier across participants. In particular, it
+does not test prediction on new participants.
 
-4. Compute Voxel Scores for the Principal Components:
+Center the fitted curves
+--------------------------------------------------------------------------------
 
-   For each voxel :math:`i`, the scores are computed as:
+Collect the fitted coefficients in a matrix :math:`C` of size
+:math:`N\times K`, with one row per voxel. Let :math:`c_i` be the coefficient
+column vector for voxel :math:`i`.
 
-   .. math::
+.. math::
 
-      \text{scores}_i = \tilde{c}_i^\top\, U\, \phi.
+   \mu_c=\frac{1}{N}\sum_{i=1}^{N}c_i,
+   \qquad \widetilde c_i=c_i-\mu_c,
+   \qquad S=\frac{1}{N}\widetilde C^\top\widetilde C.
 
-   - The computed score indicates the contribution or importance of that voxel for the corresponding principal component.
-   - Using the spatial information from the original brain mask, these voxel scores are then mapped back to a volume of the brain. This produces an importance map, saved as a file with the brain’s dimensions, where each voxel’s value indicates its contribution to the fPCA component.
+The mean curve is
 
+.. math::
 
-5. Recover Eigenfunctions in the Time Domain:
+   \mu(t)=\sum_{k=1}^{K}(\mu_c)_k f_k(t).
 
-   The eigenfunctions that describe temporal dynamics are given by:
+Centering removes this mean curve across voxels. It does not mean subtracting
+each voxel's own average over time.
 
-   .. math::
+Find the main temporal patterns
+--------------------------------------------------------------------------------
 
-      \psi = F\, \phi.
+B-spline basis functions are not generally orthogonal. We therefore need
+their Gram matrix, which records their overlap:
 
-   The resulting function :math:`\psi(t)=F_{t,:}\,\cdot \, \phi` is plotted as a graph (intensity plot) that illustrates the time-course of the fPCA component across the entire brain.
+.. math::
 
+   U_{kl}=\int_{T_{\min}}^{T_{\max}}f_k(t)f_l(t)\,dt.
 
+The fPCA coefficient vectors solve
+
+.. math::
+
+   SU\phi_j=\gamma_j\phi_j,
+   \qquad \phi_j^\top U\phi_k=\delta_{jk}.
+
+Here, :math:`\delta_{jk}` is 1 when :math:`j=k` and 0 otherwise. This
+condition makes the temporal patterns have unit length and be orthogonal
+under integration over time.
+
+The eigenvalues :math:`\gamma_j` measure the variance explained by the
+patterns. We order them from largest to smallest. The temporal pattern
+for component :math:`j` is
+
+.. math::
+
+   \psi_j(t)=\sum_{k=1}^{K}(\phi_j)_k f_k(t).
+
+At the recorded time points, its values are :math:`F\phi_j`.
+
+The matrices :math:`S` and :math:`U` are symmetric, but their product
+:math:`SU` need not be symmetric. The Gram matrix accounts for the basis
+overlap; it is not an additional smoothing penalty.
+
+Find voxel scores and reconstruct a signal
+--------------------------------------------------------------------------------
+
+The score of voxel :math:`i` on component :math:`j` is
+
+.. math::
+
+   a_{ij}=\widetilde c_i^\top U\phi_j.
+
+A score may be positive or negative. Mapping it back to the voxel's
+location gives the spatial score map for that component.
+
+With :math:`r` retained components, the fitted signal is approximated by
+
+.. math::
+
+   \widehat y_i(t)\approx\mu(t)+\sum_{j=1}^{r}a_{ij}\psi_j(t).
+
+The sum without :math:`\mu(t)` describes the deviation from the spatial
+mean curve. The full fitted curve and this centered representation serve
+different purposes.
+
+Changing the signs of both :math:`\phi_j` and its scores leaves the
+reconstruction unchanged. Component signs alone therefore do not establish
+the direction of a biological effect.
+
+Reference
+--------------------------------------------------------------------------------
+
+Roberto Viviani, Georg Grön, and Manfred Spitzer. *Functional Principal
+Component Analysis of fMRI Data*. Human Brain Mapping 24, 109–129 (2005).
 

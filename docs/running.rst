@@ -1,301 +1,238 @@
 Run fPCA
-============
+================================================================================
 
-This section describes how to run the `fpca-main` command-line tool to perform functional PCA on each example of fMRI data.
+Use ``fpca-main`` for direct control of fPCA. Use ``run_fpca.sh`` to process
+the two movement folders in the current workflow. The complete run order,
+including classifiers, is in :doc:`group_pipeline`.
 
-Main command-line tool
-----------------------
+Activate the environment from :doc:`installation` before running commands
+on this page.
 
-Synopsis
-~~~~~~~~
+Run one recording
+--------------------------------------------------------------------------------
+
+This example uses the same spline settings as the current batch runs.
+Replace the input paths with your recording and its matching mask:
 
 .. code-block:: bash
 
-   fpca-main --mode <STR> \
-             --nii-file <PATH_TO_4D_NIFTI> \
-             --mask-file <PATH_TO_3D_MASK_NIFTI> \
-             --output-folder <OUTPUT_DIR> \
-             [--force <BOOL>] \
-             [--degree <INT>] \
-             [--n-basis <INT>] \
-             [--threshold <FLOAT>] \
-             [--num-pca-comp <INT>] \
-             [--batch-size <INT>] \
-             [--TR <FLOAT>] \
-             [--lambda-min <FLOAT>] \
-             [--lambda-max <FLOAT>] \
-             [--derivatives-num-p <INT>] \
-             [--derivatives-num-u <INT>] \
-             [--no-penalty <BOOL>] \
-             [--calc-penalty-bspline-accurately <BOOL>] \
-             [--calc-penalty-skfda <BOOL>] \
-             [--n-skip-vols-start <int>] \
-             [--n-skip-vols-end <int>] \
-             [--processed <BOOL>] \
-             [--smooth-size <INT>] \
-             [--highpass <FLOAT>] \
-             [--lowpass <FLOAT>] \
-             [--use-nilearn-filter <BOOL>] \
-             [--n-compcor-nilearn-filter <INT>] \
-             [--smoothing-fwhm-nilearn-filter <INT>] \
-             [--low-mem <BOOL>] \
-             [--n-jobs <INT>]
+   fpca-main \
+     --mode pca-singles \
+     --nii-files /path/to/subject-preproc_bold.nii.gz \
+     --mask-files /path/to/subject-brain_mask.nii.gz \
+     --output-folder /path/to/new_fpca_output \
+     --calc-penalty-skfda \
+     --degree 3 \
+     --n-basis 100 \
+     --num-pca-comp 7 \
+     --TR 0.75 \
+     --low-mem
 
+Use a new output folder. The command creates it. If a ``pca-singles`` output
+folder already exists, the command requires ``--force`` to continue.
+That flag allows existing outputs to be overwritten; it does not clean
+out stale files from an earlier analysis.
 
-Arguments
-~~~~~~~~~
+The example uses the basic preprocessing branch. To use the Nilearn branch
+with the settings used by the shell scripts, add:
 
-\-\-mode `<STR>`
-  The default is `pca-singles`. See the following documentation for additional options.
+.. code-block:: bash
 
-\-\-nii-file `<PATH>`
-  Path to the 4D fMRI NIfTI file (required).
+   --use-nilearn-filter \
+   --n-compcor-nilearn-filter 2 \
+   --smoothing-fwhm-nilearn-filter 4
 
-\-\-mask-file `<PATH>`
-  Path to the 3D binary mask NIfTI file (required).
+These three lines are options to append to the previous command, not a
+separate command. This branch also needs matching fMRIPrep confound files.
 
-\-\-output-folder `<DIR>`
-  Directory where all output maps and plots will be saved (required).
+Inputs and modes
+--------------------------------------------------------------------------------
 
-\-\-force `<BOOL>`
-  If set, existing output files will be overwritten (default: not set).
+``--nii-files``
+   One or more 4D NIfTI recordings. This argument is required. Its name is
+   plural, even for one recording.
 
-\-\-degree `<INT>`
-  Degree of the B-spline basis (default: 3).
+``--mask-files``
+   Matching 3D brain masks, in the same order as the recordings. One mask
+   may be supplied for all recordings only when it really applies to all
+   of them. Otherwise, the two lists must have equal length.
 
-\-\-n-basis `<INT>`
-  Number of B-spline basis functions. Use 0 to determine it as number of timepoints or use several values for finding the best automatically based on the interpolation threshold (default: 100).
+``--output-folder``
+   The parent folder for outputs. Supply it for every run. The program
+   creates a separate child folder for each recording.
 
-\-\-threshold `<FLOAT>`
-  Interpolation error threshold for basis selection (default: 1e-6).
-
-\-\-num-pca-comp `<INT>`
-  Number of principal components to extract (default: 7).
-
-\-\-batch-size `<INT>`
-  Number of voxels processed per batch (default: 200).
-
-\-\-TR `<FLOAT>`
-  Repetition time (TR) in seconds. If not specified, the TR will be inferred from the NIfTI header (default: 0.75).
-
-\-\-lambda-min `<FLOAT>`
-  Minimum value of lambda in log10 scale (i.e., 10^-6) (default: -6).
-
-\-\-lambda-max `<FLOAT>`
-  Maximum value of lambda in log10 scale (i.e., 10^12) (default: 12).
-
-\-\-derivatives-num-p `<INT>`
-  Number of derivatives in calculation of penalty matrix P (default: 2)
-
-\-\-derivatives-num-u `<INT>`
-  Number of derivatives in calculation of penalty matrix U (default: 0)
-
-\-\-no-penalty `<BOOL>`
-  If specified, no penalty will be used (default: not set).
-
-\-\-calc-penalty-bspline-accurately `<BOOL>`
-  If set, the penalty matrix will be calculated using bspline package with an accurate method. If not set, an approximate method of bspline will be used (default: not set).
-
-\-\-calc-penalty-skfda `<BOOL>`
-  If set, the penalty matrix will be calculated using skfda package an accurate method. If not set, an approximate method of bsplie will be used (default: not set).
-
-\-\-n-skip-vols-start `<INT>`
-  Number of initial fMRI volumes to discard from the beginning of the signal (default: 0).
-
-\-\-n-skip-vols-end `<ING>`
-  Number of initial fMRI volumes to discard from the end of the signal (default: 0).
-
-\-\-processed `<optional>`
-  If specified, the input data is assumed to be post-processed (e.g., smoothing, filtering), and no additional post-processing will be applied. If not specified the pipeline will apply basic post-processing steps (default: not set).
-
-\-\-smooth-size `<INT>`
-  Box size of smoothing kernel. Relevant only if --processed is not set (default: 5).
-
-\-\-highpass `<FLOAT>`
-  High-pass filter cutoff frequency in Hz. Filters out slow drifts below this frequency (default: 0.01).
-
-\-\-lowpass `<FLOAT>`
-  Low-pass filter cutoff frequency in Hz. Filters out high-frequency noise above this frequency (default: 0.08).
-
-\-\-use-nilearn-filter `<BOOL>`
-  If set, nilearn's NiftiMasker using confound files will be used for filtering instead of the default method (default: not set).
-
-\-\-n-compcor-nilearn-filter `<INT>`
-  Number of CompCor components to regress out during nilearn filtering (default: 5).
-
-\-\-smoothing-fwhm-nilearn-filter `<INT>`
-  Full-width at half-maximum (FWHM) of the Gaussian smoothing kernel in mm applied during nilearn filtering (default: 6).
-
-\-\-low-mem `<BOOL>`
-  If set, only NPZ/TXT/NIfTI files are written (no PNG plots). (default: not set).
-
-\-\-n-jobs `<INT>`
-  Number of parallel processes to run. Use -1 for all cores (default: 1).
-
-
-Input file naming
-~~~~~~~~~~~~~~~~~
-
-The pipeline expects preprocessed BOLD files and matching masks:
-
-.. code-block:: text
-
-   <sample1>-preproc_bold.nii.gz
-   <sample1>-brain_mask.nii.gz
-
-The subject's outputs are written to a sub-folder named after ``<base>`` (the part before ``-preproc_bold``).
-
-Output directory layout
-~~~~~~~~~~~~~~~~~~~~~~~
-
-After a full training run, the output folder typically looks like:
-
-.. code-block:: text
-
-   output-folder/
-   ├── global_F_U_matrices.npz
-   ├── sample1/
-   │   ├── eigvecs_eigval_F.npz
-   │   ├── original_averaged_signal_intensity.png
-   │   ├── eigenfunction_0_importance_map_group.nii.gz
-   │   ├── eigenfunction_1_importance_map_group.nii.gz
-   │   ├── ...
-   │   ├── eigenfunction_0_best_voxel.txt
-   │   ├── eigenfunction_1_best_voxel.txt
-   │   ├── ...
-   │   ├── temporal_profile_pc_0.txt
-   │   ├── temporal_profile_pc_1.txt
-   │   └── ...
-
-
-
-Per-subject outputs
-~~~~~~~~~~~~~~~~~~~
+``--mode``
+   One of the following modes. Use one mode at a time in the order below.
 
 .. list-table::
    :header-rows: 1
-   :widths: 35 65
+   :widths: 25 75
 
-   * - File
-     - Description
-   * - ``eigvecs_eigval_F.npz``
-     - Compressed archive with ``C`` (coefficient matrix), ``eigvecs_sorted``, ``eigvals_sorted``, ``F``, ``times``. Required input for group modes.
+   * - Mode
+     - Purpose
+   * - ``pca-singles``
+     - Fit each recording and save its coefficients and individual fPCA
+       results. Run this for both training and test participants.
+   * - ``train-pca-group``
+     - Read the saved training coefficients and fit the shared group basis.
+       Pass training recordings and masks only.
+   * - ``test-pca-project``
+     - Read the saved test coefficients and project them using the training
+       group mean and basis. Pass test recordings and masks only.
 
-       For loading the arrays back, use:
+Group fitting and test projection still require the recording and mask
+arguments. They use these paths to locate the matching saved outputs.
+Use matching time grids and spline settings across participants within
+each movement. Keep the two movements in separate fPCA output folders.
 
-         .. code-block:: text
+Parameters used in the current workflow
+--------------------------------------------------------------------------------
 
-            data = np.load("eigvecs_eigval_F.npz")
-            eigvecs_sorted = data['eigvecs_sorted']
-            eigvals_sorted = data['eigvals_sorted']
-            F = data['F']
-            C = data['C']
-            times = data['times']
+The defaults below belong to ``fpca-main``. The wrapper changes some of
+them, as explained in the next section.
 
-   * - ``eigenfunction_<k>_importance_map.nii.gz``
-     - 3D brain map showing voxel-wise importance/loading for principal component ``k``. High values indicate strong contribution to that component's spatial pattern.
-   * - ``temporal_profile_pc_<k>.txt``
-     - Time series showing temporal dynamics of principal component ``k`` across the fMRI scan.
-   * - ``temporal_profile_pc_<k>.png``
-     - Plot of the temporal profile (skipped with ``--low-mem``).
-   * - ``eigenfunction_<k>_importance_map.png``
-     - Middle-slice plot of the importance map (skipped with ``--low-mem``).
-   * - ``eigenfunction_<k>_best_voxel.png`` / ``.txt``
-     - Best-fitting voxel signal for PC ``k`` (skipped with ``--low-mem`` for PNG).
-   * - ``original_averaged_signal_intensity.png`` / ``.txt``
-     - Mean masked signal intensity over time.
+.. list-table::
+   :header-rows: 1
+   :widths: 34 16 50
 
-Examples
-~~~~~~~~
+   * - Option
+     - Default
+     - Meaning
+   * - ``--degree``
+     - ``3``
+     - Polynomial degree of the spline pieces. Degree 3 gives cubic splines.
+   * - ``--n-basis``
+     - ``100``
+     - Number of basis functions. Use one fixed value for the current workflow.
+   * - ``--num-pca-comp``
+     - ``7``
+     - Number of retained components. It must be between 1 and the basis size.
+   * - ``--batch-size``
+     - ``200``
+     - Number of voxels processed together when choosing their smoothing levels.
+   * - ``--TR``
+     - ``0.75``
+     - Time between volumes, in seconds. The default is not automatic
+       detection from the image header. Set the correct value for the data.
+   * - ``--lambda-min`` / ``--lambda-max``
+     - ``-6`` / ``12``
+     - Base-10 exponents for 100 candidate smoothing levels, from
+       :math:`10^{-6}` to :math:`10^{12}`.
+   * - ``--derivatives-num-p``
+     - ``2``
+     - Derivative order used in the smoothing penalty.
+   * - ``--derivatives-num-u``
+     - ``0``
+     - Order used for the functional inner product. Keep 0 for the
+       mathematical method described here.
+   * - ``--calc-penalty-skfda``
+     - Off
+     - Select the scikit-fda spline and Gram-matrix route used in these runs.
+       Supply the flag without a value.
+   * - ``--n-skip-vols-start`` / ``--n-skip-vols-end``
+     - ``0`` / ``0``
+     - Number of volumes removed from the start and end after preprocessing.
+       The current runs remove none.
+   * - ``--smooth-size``
+     - ``5``
+     - Spatial box width in voxels for basic preprocessing. This is not a
+       Gaussian width in millimetres.
+   * - ``--highpass`` / ``--lowpass``
+     - ``0.01`` / ``0.08``
+     - Band-pass limits in Hz for basic preprocessing. They do not define
+       the Nilearn confound-removal branch.
+   * - ``--processed``
+     - Off
+     - Skip the loader's extra preprocessing. The current batch scripts
+       do not set this flag.
+   * - ``--use-nilearn-filter``
+     - Off
+     - Use the Nilearn confound-removal and smoothing branch.
+   * - ``--n-compcor-nilearn-filter``
+     - ``5``
+     - Requested number of CompCor confound components for that branch.
+   * - ``--smoothing-fwhm-nilearn-filter``
+     - ``6.0``
+     - Gaussian smoothing full width at half maximum, in millimetres,
+       for that branch.
+   * - ``--n-jobs``
+     - ``1``
+     - Number of subject workers. ``-1`` requests all available CPU cores.
+   * - ``--low-mem``
+     - Off
+     - Skip fPCA PNG plots while keeping numerical, text, and NIfTI outputs.
+   * - ``--force``
+     - Off
+     - Allow use of an existing output folder.
 
-Run a two-component analysis on a toy dataset:
+The optional ``--threshold`` argument defaults to ``1e-6``. It is used
+only when ``--n-basis`` contains several candidate values: the first value
+whose mean absolute fitting error reaches the threshold is selected.
+If none reaches it, the candidate with the smallest error is selected.
+With a single value such as 100, this search does not run.
+``--n-basis 0`` means one basis function per retained time point; it is
+not a threshold search. Neither alternative is used in the current runs.
+
+Run the two-movement wrapper
+--------------------------------------------------------------------------------
+
+The current filename is ``run_fpca.sh``. Its three required arguments are
+the mode, the input folder, and the fPCA output parent folder:
 
 .. code-block:: bash
 
-   fpca-main \
-     --nii-file tests/test_input/toy50-53_drc144images.nii \
-     --mask-file tests/test_input/toy50-53_mask.nii \
-     --output-folder output/toy_run \
-     --num-pca-comp 2 \
-     --n-basis 300
+   ./run_fpca.sh pca-singles \
+     /path/to/raw_data_train \
+     /path/to/output_pca \
+     --n-jobs 4
 
-Run with all defaults (except output folder):
+There is no environment-directory argument. Activate ``fpca-env`` first.
 
-.. code-block:: bash
+The wrapper reads ``*.nii.gz`` files directly inside the input folder.
+For a recording named ``<base>-preproc_bold.nii.gz``, it looks for
+``<base>-brain_mask.nii.gz``. The base must contain ``-movement1`` or
+``-movement2``. Files without a matching mask are not added to the run.
+Check the reported file counts against your participant list. The current
+wrapper stops if either movement has no matching files.
 
-   fpca-main \
-     --nii-file data/sub-01_task-rest_bold.nii.gz \
-     --mask-file data/sub-01_mask.nii.gz \
-     --output-folder results/sub-01
+It writes movement outputs under ``outputs_mov1`` and ``outputs_mov2``.
+It always adds ``--calc-penalty-skfda``, ``--low-mem``, and ``--force``.
+It also limits numerical-library threads to one per worker. Its default
+worker count is 20, which may be too high for a smaller machine.
 
+The wrapper accepts only these extra options:
 
-Optional: separate preprocessing
---------------------------------
+* ``--n-jobs``
+* ``--use-nilearn-filter``
+* ``--n-compcor-nilearn-filter``
+* ``--smoothing-fwhm-nilearn-filter``
 
-By default, ``fpca-main`` applies temporal filtering and spatial smoothing during ``pca-singles``. To preprocess once and reuse the filtered data across multiple parameter sweeps, use ``preprocess-nii-file`` and then pass ``--processed`` to ``fpca-main``.
+For the Nilearn branch, the wrapper supplies 2 CompCor components and
+4 mm smoothing unless changed. These differ from the direct command's
+defaults. It does not forward arbitrary ``fpca-main`` options. For example,
+to change TR or the number of basis functions, use the direct command or
+update the wrapper explicitly before the run.
 
-**Preprocess a single file**
+Inspect the outputs
+--------------------------------------------------------------------------------
 
-.. code-block:: bash
+Each recording folder contains ``eigvecs_eigval_F.npz``. It stores the
+coefficient matrix, basis values, Gram matrix, eigenvectors, eigenvalues,
+time grid, mask, affine transform, and mean function. It is needed by
+later stages; keep it with the score maps.
 
-   preprocess-nii-file \
-       --nii-file /path/to/subject-preproc_bold.nii.gz \
-       --mask-file /path/to/subject-brain_mask.nii.gz \
-       --output-folder /path/to/preprocessed/ \
-       --TR 0.75 \
-       --smooth-size 5 \
-       --highpass 0.01 \
-       --lowpass 0.08
+Individual outputs include ``eigenfunction_0_importance_map.nii.gz`` and
+``temporal_profile_pc_0.txt``, with corresponding files for other components.
+These indices start at 0. The files called importance maps contain signed
+fPCA scores, not classifier feature importance.
 
-This writes ``<original_name>_filtered.nii.gz`` into the output folder.
+Group fitting also saves ``global_mean.npy``, ``global_eigvecs.npy``,
+group temporal profiles, and participant group score maps. Test projection
+writes maps with the suffix ``_group_test_proj.nii.gz``.
 
-**Then run fpca-main on the filtered file**
-
-.. code-block:: bash
-
-   fpca-main \
-       --mode pca-singles \
-       --nii-files /path/to/preprocessed/subject-preproc_bold_filtered.nii.gz \
-       --mask-files /path/to/subject-brain_mask.nii.gz \
-       --output-folder /path/to/analysis/outputs_mov1 \
-       --processed \
-       ... [other parameters as above]
-
-.. note::
-
-   When using ``--processed``, the input BOLD file must already be filtered/smoothed. The mask file path is still required but no additional smoothing is applied.
-
-
-
-
-The argument *threshold*:
--------------------------
-
-    Maximum allowed mean absolute interpolation error when selecting the number of
-    B-spline basis functions automatically (i.e. when ``--n-basis 0``).
-
-    If you set ``n_basis=0`` (the default “auto” mode), the pipeline will:
-
-    1. Try successive values of ``n_basis`` (from ``degree+1`` up to ``n_timepoints+20`` in steps of 10).
-    2. For each candidate, fit the spline and compute the mean absolute error between the original
-       voxel signals and their spline reconstructions.
-    3. Stop at the first ``n_basis`` whose error ≤ ``threshold``, log that choice, and proceed.
-    4. If none meets the threshold, choose the ``n_basis`` with the smallest observed error,
-       log the achieved mean error, and continue.
-
-    In practice, a smaller ``threshold`` forces more basis functions (and thus a finer interpolation),
-    at the cost of higher computational time; a larger ``threshold`` results in fewer basis
-    functions and a coarser fit.
-
-Notes
------
-
-- Make sure the output folder exists before running; otherwise, the command will raise a `FileNotFoundError`.
-- Output files include:
-
-  - **voxel importance maps** (`eigenfunction_<k>_importance_map.nii.gz`)
-
-  - **intensity plots** (`eigenfunction_<k>_signal_intensity.png`)
-
-  - **best-voxel fit plots** (`eigenfunction_<k>_best_voxel.png`)
+Review the logs after each stage. Numerical warnings about negative
+eigenvalues, invalid smoothing scores, or absent variance require inspection.
+A command finishing does not establish that every recording produced valid
+results. After changing preprocessing, time grids, masks, or code, use a
+new analysis output folder and rebuild the downstream features.
 
